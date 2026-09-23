@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ua.vidbiy.app.VidbiyApplication
+import ua.vidbiy.app.alarm.AlarmScheduler
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlarmsRepository
 import ua.vidbiy.app.data.SelectedRegion
@@ -20,6 +21,7 @@ import ua.vidbiy.app.data.SettingsRepository
 class AlarmsViewModel(
     private val repository: AlarmsRepository,
     private val settings: SettingsRepository,
+    private val scheduler: AlarmScheduler,
 ) : ViewModel() {
 
     val alarms: StateFlow<List<Alarm>> = repository.alarms
@@ -68,18 +70,21 @@ class AlarmsViewModel(
     fun saveDraft() {
         val alarm = _draft.value ?: return
         _draft.value = null
-        viewModelScope.launch { repository.save(alarm) }
+        viewModelScope.launch { scheduler.applyEdit(repository.save(alarm)) }
     }
 
     fun deleteDraft() {
         val alarm = _draft.value ?: return
         _draft.value = null
         if (alarm.id != Alarm.NEW_ID) {
+            scheduler.cancel(alarm.id)
             viewModelScope.launch { repository.delete(alarm.id) }
         }
     }
 
     fun setEnabled(alarm: Alarm, enabled: Boolean) {
+        // schedule() сам скасовує спрацювання вимкненого будильника.
+        scheduler.schedule(alarm.copy(enabled = enabled))
         viewModelScope.launch { repository.setEnabled(alarm.id, enabled) }
     }
 
@@ -87,7 +92,7 @@ class AlarmsViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as VidbiyApplication
-                AlarmsViewModel(app.alarmsRepository, app.settingsRepository)
+                AlarmsViewModel(app.alarmsRepository, app.settingsRepository, app.alarmScheduler)
             }
         }
     }

@@ -26,14 +26,19 @@ class AlarmsRepository(private val context: Context) {
         decode(prefs[key]).sortedWith(compareBy({ it.hour }, { it.minute }, { it.id }))
     }
 
-    /** Додає новий будильник (id = 0) або оновлює наявний. */
-    suspend fun save(alarm: Alarm) = edit { current ->
-        if (alarm.id == Alarm.NEW_ID) {
-            val nextId = (current.maxOfOrNull { it.id } ?: 0L) + 1
-            current + alarm.copy(id = nextId)
-        } else {
-            current.map { if (it.id == alarm.id) alarm else it }
+    /** Додає новий будильник (id = 0) або оновлює наявний. Повертає збережений — уже з id. */
+    suspend fun save(alarm: Alarm): Alarm {
+        var saved = alarm
+        edit { current ->
+            if (alarm.id == Alarm.NEW_ID) {
+                val nextId = (current.maxOfOrNull { it.id } ?: 0L) + 1
+                saved = alarm.copy(id = nextId)
+                current + saved
+            } else {
+                current.map { if (it.id == alarm.id) alarm else it }
+            }
         }
+        return saved
     }
 
     suspend fun delete(id: Long) = edit { current -> current.filterNot { it.id == id } }

@@ -59,4 +59,18 @@
     <string name="region_loading">Завантаження довідника…</string>
     <string name="region_nothing_found">Нічого не знайдено</string>
     <string name="action_back">Назад</string>
+    <string name="channel_alarm">Дзвінок будильника</string>
+    <string name="channel_alarm_description">Сповіщення, що супроводжує дзвінок</string>
+    <string name="ring_title">Будильник</string>
+    <string name="ring_text">Будильник на %1$s</string>
+    <string name="ring_snooze">Відкласти 5 хв</string>
+    <string name="ring_dismiss">Вимкнути</string>
+
+    <string name="warning_notifications_title">Сповіщення вимкнені</string>
+    <string name="warning_notifications_text">Без них екран дзвінка не з’явиться</string>
+    <string name="warning_exact_title">Точні будильники заборонені</string>
+    <string name="warning_exact_text">Система може зсунути дзвінок на кілька хвилин</string>
+    <string name="warning_battery_title">Увімкнено економію батареї</string>
+    <string name="warning_battery_text">Знайди «Відбій» у списку й дозволь роботу без обмежень</string>
+    <string name="warning_action">Налаштувати</string>
 </resources>
