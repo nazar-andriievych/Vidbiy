@@ -21,8 +21,8 @@ import java.time.ZoneId
  * PendingIntent — це «дозвіл» системі запустити наш код від нашого імені; приблизно як
  * делегат, який ми віддаємо назовні. AlarmManager розрізняє спрацювання саме за ним,
  * причому додаткові поля (extras) при порівнянні не враховуються — рахуються дія,
- * компонент і requestCode. Тому звичайне спрацювання й відкладення мають і різну дію,
- * і різний requestCode: інакше відкладення на 5 хв затерло б наступний ранок.
+ * компонент і requestCode. Тому три види спрацювання (звичайне, відкладення, крайній час)
+ * мають і різні дії, і різні requestCode: інакше відкладення на 5 хв затерло б наступний ранок.
  */
 class AlarmScheduler(private val context: Context) {
 
@@ -38,7 +38,7 @@ class AlarmScheduler(private val context: Context) {
             cancel(alarm.id)
             return
         }
-        setAt(alarm.id, alarm.nextTriggerAt(now), isSnooze = false)
+        setAt(alarm.id, alarm.nextTriggerAt(now), Kind.NORMAL)
     }
 
     fun scheduleAll(alarms: List<Alarm>, now: LocalDateTime = LocalDateTime.now()) {
@@ -57,21 +57,33 @@ class AlarmScheduler(private val context: Context) {
 
     /** FR-9: відкладення на [minutes] хвилин. */
     fun snooze(alarmId: Long, minutes: Int, now: LocalDateTime = LocalDateTime.now()) {
-        setAt(alarmId, now.plusMinutes(minutes.toLong()), isSnooze = true)
+        setAt(alarmId, now.plusMinutes(minutes.toLong()), Kind.SNOOZE)
+    }
+
+    /**
+     * FR-7: страхувальне спрацювання на крайній час. Служба очікування відбою може не дожити
+     * до нього (виробник прибив процес, система звільняла пам'ять), а будильник має задзвонити
+     * однаково — тож крайній час живе в AlarmManager окремо від неї.
+     */
+    fun scheduleDeadline(alarmId: Long, at: LocalDateTime) {
+        setAt(alarmId, at, Kind.DEADLINE)
+    }
+
+    fun cancelDeadline(alarmId: Long) {
+        alarmManager.cancel(firePendingIntent(alarmId, Kind.DEADLINE))
     }
 
     fun cancel(alarmId: Long) {
-        alarmManager.cancel(firePendingIntent(alarmId, isSnooze = false))
-        cancelSnooze(alarmId)
+        Kind.entries.forEach { alarmManager.cancel(firePendingIntent(alarmId, it)) }
     }
 
     private fun cancelSnooze(alarmId: Long) {
-        alarmManager.cancel(firePendingIntent(alarmId, isSnooze = true))
+        alarmManager.cancel(firePendingIntent(alarmId, Kind.SNOOZE))
     }
 
-    private fun setAt(alarmId: Long, at: LocalDateTime, isSnooze: Boolean) {
+    private fun setAt(alarmId: Long, at: LocalDateTime, kind: Kind) {
         val triggerAtMillis = at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        val operation = firePendingIntent(alarmId, isSnooze)
+        val operation = firePendingIntent(alarmId, kind)
 
         if (canScheduleExact()) {
             val info = AlarmManager.AlarmClockInfo(triggerAtMillis, showAlarmsPendingIntent())
@@ -84,21 +96,24 @@ class AlarmScheduler(private val context: Context) {
         }
     }
 
-    private fun firePendingIntent(alarmId: Long, isSnooze: Boolean): PendingIntent {
+    private fun firePendingIntent(alarmId: Long, kind: Kind): PendingIntent {
         val intent = Intent(context, AlarmReceiver::class.java).apply {
-            action = if (isSnooze) AlarmReceiver.ACTION_FIRE_SNOOZE else AlarmReceiver.ACTION_FIRE
+            action = kind.action
             putExtra(AlarmReceiver.EXTRA_ALARM_ID, alarmId)
         }
         return PendingIntent.getBroadcast(
             context,
-            requestCode(alarmId, isSnooze),
+            (alarmId * Kind.entries.size + kind.ordinal).toInt(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
 
-    private fun requestCode(alarmId: Long, isSnooze: Boolean): Int =
-        (alarmId * 2 + if (isSnooze) 1 else 0).toInt()
+    private enum class Kind(val action: String) {
+        NORMAL(AlarmReceiver.ACTION_FIRE),
+        SNOOZE(AlarmReceiver.ACTION_FIRE_SNOOZE),
+        DEADLINE(AlarmReceiver.ACTION_FIRE_DEADLINE),
+    }
 
     /** Куди веде дотик до іконки будильника в системному годиннику. */
     private fun showAlarmsPendingIntent(): PendingIntent = PendingIntent.getActivity(

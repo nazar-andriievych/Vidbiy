@@ -14,7 +14,11 @@ object Notifications {
     /** Дзвінок будильника: максимальна важливість, бо тягне за собою повноекранний інтент. */
     const val CHANNEL_ALARM = "alarm"
 
+    /** Очікування відбою: тиха нотифікація, яка просто висить зі станом (FR-8). */
+    const val CHANNEL_WAITING = "waiting"
+
     const val ALARM_NOTIFICATION_ID = 1
+    const val WAITING_NOTIFICATION_ID = 2
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -33,5 +37,16 @@ object Notifications {
             lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
         }
         manager.createNotificationChannel(alarm)
+
+        val waiting = NotificationChannel(
+            CHANNEL_WAITING,
+            context.getString(ua.vidbiy.app.R.string.channel_waiting),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = context.getString(ua.vidbiy.app.R.string.channel_waiting_description)
+            setSound(null, null)
+            enableVibration(false)
+        }
+        manager.createNotificationChannel(waiting)
     }
 }

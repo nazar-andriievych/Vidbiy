@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.data.Alarm
+import java.time.LocalDateTime
 
 /**
  * Сюди система стукає в момент спрацювання будильника.
@@ -22,10 +23,10 @@ import ua.vidbiy.app.data.Alarm
 class AlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != ACTION_FIRE && intent.action != ACTION_FIRE_SNOOZE) return
+        if (intent.action !in HANDLED_ACTIONS) return
 
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, Alarm.NEW_ID)
-        val isSnooze = intent.action == ACTION_FIRE_SNOOZE
+        val isRegularFire = intent.action == ACTION_FIRE
         if (alarmId == Alarm.NEW_ID) return
 
         val app = context.applicationContext as VidbiyApplication
@@ -39,9 +40,9 @@ class AlarmReceiver : BroadcastReceiver() {
                     return@launch
                 }
 
-                // Відкладений дзвінок нічого не переплановує: свій наступний раз
+                // Відкладення й крайній час нічого не переплановують: свій наступний раз
                 // будильник уже отримав, коли задзвонив уперше.
-                if (!isSnooze) {
+                if (isRegularFire) {
                     if (alarm.days.isEmpty()) {
                         app.alarmsRepository.setEnabled(alarm.id, false)
                     } else {
@@ -49,10 +50,19 @@ class AlarmReceiver : BroadcastReceiver() {
                     }
                 }
 
-                // Перемикач «враховувати тривоги» тут поки не діє: будильник дзвонить одразу.
-                // Так само він поводитиметься, коли даних про тривогу немає (NFR-1),
-                // тож це безпечна проміжна поведінка. Очікування відбою — наступний крок.
-                AlarmRingService.startRinging(context, alarm)
+                val region = app.settingsRepository.selectedRegion.first()
+                val waitForAllClear = isRegularFire && alarm.respectAlerts && region != null
+
+                if (waitForAllClear) {
+                    // Перша перевірка тривоги — вже всередині служби: якщо тривоги немає,
+                    // вона задзвонить одразу, а якщо є — чекатиме відбою.
+                    val deadline = alarm.deadlineAt(LocalDateTime.now())
+                    AlarmScheduler(context).scheduleDeadline(alarm.id, deadline)
+                    AlarmWaitService.startWaiting(context, alarm, deadline)
+                } else {
+                    // Регіон не обрано або тривоги не враховуються — звичайний будильник.
+                    AlarmRingService.startRinging(context, alarm)
+                }
             } finally {
                 pendingResult.finish()
             }
@@ -62,6 +72,9 @@ class AlarmReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_FIRE = "ua.vidbiy.app.action.FIRE_ALARM"
         const val ACTION_FIRE_SNOOZE = "ua.vidbiy.app.action.FIRE_SNOOZE"
+        const val ACTION_FIRE_DEADLINE = "ua.vidbiy.app.action.FIRE_DEADLINE"
         const val EXTRA_ALARM_ID = "alarm_id"
+
+        private val HANDLED_ACTIONS = setOf(ACTION_FIRE, ACTION_FIRE_SNOOZE, ACTION_FIRE_DEADLINE)
     }
 }

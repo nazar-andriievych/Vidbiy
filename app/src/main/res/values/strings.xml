@@ -73,4 +73,15 @@
     <string name="warning_battery_title">Увімкнено економію батареї</string>
     <string name="warning_battery_text">Знайди «Відбій» у списку й дозволь роботу без обмежень</string>
     <string name="warning_action">Налаштувати</string>
+    <string name="channel_waiting">Очікування відбою</string>
+    <string name="channel_waiting_description">Тихе сповіщення, поки будильник чекає відбою</string>
+    <string name="waiting_title">Будильник відкладено через тривогу</string>
+    <string name="waiting_alert">Триває тривога, оновлено о %1$s</string>
+    <string name="waiting_checking">Перевіряємо стан тривоги…</string>
+    <string name="waiting_deadline">Задзвонить о %1$s, навіть якщо відбою не буде</string>
+    <string name="waiting_ring_now">Дзвонити зараз</string>
+    <string name="waiting_cancel">Скасувати</string>
+
+    <string name="debug_proxy_title">Проксі (лише debug)</string>
+    <string name="debug_proxy_hint">http://192.168.0.2:8787</string>
 </resources>

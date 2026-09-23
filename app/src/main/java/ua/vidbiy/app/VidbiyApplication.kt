@@ -20,7 +20,8 @@ class VidbiyApplication : Application() {
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(this) }
     val alarmScheduler: AlarmScheduler by lazy { AlarmScheduler(this) }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /** Живе стільки ж, скільки процес: сюди йде робота, яку не можна кидати посеред шляху. */
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
         super.onCreate()
@@ -29,6 +30,6 @@ class VidbiyApplication : Application() {
         // Перестраховка: спрацювання могли загубитися (примусова зупинка застосунку,
         // очищення даних виробником, збій після оновлення). Перезапис уже наявного
         // спрацювання нічого не ламає, тож робимо це на кожному старті.
-        scope.launch { alarmScheduler.scheduleAll(alarmsRepository.alarms.first()) }
+        applicationScope.launch { alarmScheduler.scheduleAll(alarmsRepository.alarms.first()) }
     }
 }

@@ -225,6 +225,9 @@ class AlarmRingService : Service() {
         private const val EXTRA_RINGTONE_URI = "ringtone_uri"
 
         fun startRinging(context: Context, alarm: Alarm) {
+            // Дзвінок і очікування відбою взаємно виключні.
+            AlarmWaitService.stop(context)
+
             val intent = Intent(context, AlarmRingService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_ALARM_ID, alarm.id)

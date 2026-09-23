@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import ua.vidbiy.app.BuildConfig
 import ua.vidbiy.app.R
 import ua.vidbiy.app.alarm.nextTriggerAt
 import ua.vidbiy.app.data.Alarm
@@ -34,10 +35,12 @@ import java.time.LocalDateTime
 fun AlarmListScreen(
     alarms: List<Alarm>,
     region: SelectedRegion?,
+    debugProxyUrl: String,
     onAdd: () -> Unit,
     onEdit: (Alarm) -> Unit,
     onToggle: (Alarm, Boolean) -> Unit,
     onPickRegion: () -> Unit,
+    onDebugProxyUrlChange: (String) -> Unit,
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.alarms_title)) }) },
@@ -52,6 +55,15 @@ fun AlarmListScreen(
         ) {
             item { SystemWarnings(Modifier.fillMaxWidth()) }
             item { RegionCard(region = region, onClick = onPickRegion) }
+            if (BuildConfig.DEBUG) {
+                item {
+                    DebugProxyCard(
+                        url = debugProxyUrl,
+                        onUrlChange = onDebugProxyUrlChange,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
 
             if (alarms.isEmpty()) {
                 item { EmptyState() }

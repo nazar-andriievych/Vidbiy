@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Лише для debug-збірки: локальний воркер (`npm run dev`) працює по http,
+         а з Android 9 звичайний http заборонений. У релізі цього немає. -->
+    <application android:usesCleartextTraffic="true" />
+
+</manifest>
