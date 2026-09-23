@@ -1,3 +1,62 @@
 <resources>
-    <string name="app_name">Vidbiy</string>
+    <string name="app_name">Відбій</string>
+
+    <string name="action_add">Додати</string>
+    <string name="action_save">Зберегти</string>
+    <string name="action_cancel">Скасувати</string>
+    <string name="action_delete">Видалити</string>
+
+    <string name="alarms_title">Відбій</string>
+    <string name="alarms_empty">Будильників ще немає</string>
+    <string name="alarms_empty_hint">Натисни «Додати», щоб створити перший</string>
+
+    <string name="alarm_new_title">Новий будильник</string>
+    <string name="alarm_edit_title">Будильник</string>
+
+    <string name="days_once">Одноразово</string>
+    <string name="days_everyday">Щодня</string>
+    <string name="days_weekdays">Будні</string>
+    <string name="days_weekend">Вихідні</string>
+
+    <string name="next_trigger">Спрацює через %1$s</string>
+    <string name="duration_hours_minutes">%1$d год %2$d хв</string>
+    <string name="duration_hours">%1$d год</string>
+    <string name="duration_minutes">%1$d хв</string>
+    <string name="duration_less_than_minute">менш ніж хвилину</string>
+
+    <string name="respect_alerts">Враховувати тривоги</string>
+    <string name="respect_alerts_on">Під час тривоги в регіоні чекатиме відбою</string>
+    <string name="respect_alerts_off">Звичайний будильник: задзвонить у свій час</string>
+
+    <string name="max_wait">Крайній час очікування</string>
+    <string name="max_wait_hint">Якщо відбою не буде, задзвонить о %1$s</string>
+    <string name="max_wait_30">30 хв</string>
+    <string name="max_wait_60">1 год</string>
+    <string name="max_wait_120">2 год</string>
+    <string name="max_wait_180">3 год</string>
+
+    <string name="vibrate">Вібрація</string>
+    <string name="ringtone">Мелодія</string>
+    <string name="ringtone_default">Типова мелодія будильника</string>
+    <string name="ringtone_picker_title">Мелодія будильника</string>
+
+    <string-array name="day_short_names">
+        <item>Пн</item>
+        <item>Вт</item>
+        <item>Ср</item>
+        <item>Чт</item>
+        <item>Пт</item>
+        <item>Сб</item>
+        <item>Нд</item>
+    </string-array>
+    <string name="region_title">Регіон</string>
+    <string name="region_not_selected">Не обрано</string>
+    <string name="region_hint">Тривога тут відкладає будильник</string>
+    <string name="region_hint_empty">Поки регіон не обрано, будильники дзвонитимуть як звичайні</string>
+    <string name="region_search">Пошук громади, району або області</string>
+    <string name="region_whole_oblast">Обрати всю область</string>
+    <string name="region_whole_raion">Обрати весь район</string>
+    <string name="region_loading">Завантаження довідника…</string>
+    <string name="region_nothing_found">Нічого не знайдено</string>
+    <string name="action_back">Назад</string>
 </resources>
