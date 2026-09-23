@@ -1,9 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
 import { fetchActiveAlerts } from "./alerts-in-ua";
 import { AlertsCache } from "./cache";
-import { MockUpstream, type MockScenario } from "./mock";
+import { MockUpstream, type MockScenario, type MockState } from "./mock";
 import type { AlertsResponse } from "./types";
 import type { Env } from "./index";
+
+const MOCK_STATE_KEY = "mock";
 
 /**
  * Єдина на весь світ точка, яка ходить до alerts.in.ua.
@@ -17,20 +19,30 @@ import type { Env } from "./index";
  * екземпляр. Усі воркери звертаються до нього, тож обмежувач частоти знову
  * стає одним на всіх: 4 запити/хв до апстріму, скільки б не було користувачів.
  *
- * Сховище (SQLite) нам не потрібне — від Durable Object потрібна лише
- * гарантія єдиності. Стан живе в пам'яті; якщо об'єкт вивантажать за
- * непотрібністю, наступний запит просто наповнить кеш заново.
+ * Кешу сховище не потрібне — від Durable Object потрібна лише гарантія єдиності,
+ * а вивантажений кеш наступний запит просто наповнить заново.
+ *
+ * А от сценарій підробки (MOCK=1) зберігати доводиться: об'єкт засинає між запитами,
+ * і оголошена вручну тривога зникала б разом із його пам'яттю — сама собою обертаючись
+ * на відбій. Саме на це й натрапили під час першої перевірки на телефоні.
  */
 export class AlertsHub extends DurableObject<Env> {
   private readonly cache: AlertsCache;
   private readonly mock: MockUpstream | null;
+  private mockRestored: Promise<void> | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
 
     if (env.MOCK === "1" || env.MOCK === "true") {
-      this.mock = new MockUpstream();
-      this.cache = new AlertsCache({ fetchAlerts: this.mock.fetch });
+      const mock = new MockUpstream();
+      this.mock = mock;
+      this.cache = new AlertsCache({
+        fetchAlerts: async () => {
+          await this.restoreMock();
+          return mock.fetch();
+        },
+      });
       return;
     }
 
@@ -49,15 +61,32 @@ export class AlertsHub extends DurableObject<Env> {
     return this.cache.get();
   }
 
-  setMock(scenario: MockScenario, uid?: string): { scenario: MockScenario; uid: string } {
+  async setMock(
+    scenario: MockScenario,
+    uid?: string,
+  ): Promise<{ scenario: MockScenario; uid: string }> {
     if (!this.mock) throw new Error("mock is disabled");
+    await this.restoreMock();
     this.mock.set(scenario, uid);
+    await this.ctx.storage.put(MOCK_STATE_KEY, this.mock.snapshot());
     this.cache.expire();
     return this.mock.state();
   }
 
-  mockState(): { scenario: MockScenario; uid: string } {
+  async mockState(): Promise<{ scenario: MockScenario; uid: string }> {
     if (!this.mock) throw new Error("mock is disabled");
+    await this.restoreMock();
     return this.mock.state();
+  }
+
+  /** Читаємо збережений сценарій один раз на життя об'єкта. */
+  private restoreMock(): Promise<void> {
+    if (!this.mock) return Promise.resolve();
+    this.mockRestored ??= this.ctx.storage
+      .get<MockState>(MOCK_STATE_KEY)
+      .then((saved) => {
+        if (saved) this.mock!.restore(saved);
+      });
+    return this.mockRestored;
   }
 }

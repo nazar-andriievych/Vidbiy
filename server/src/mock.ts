@@ -9,6 +9,13 @@ import type { UpstreamResult } from "./alerts-in-ua";
  */
 export type MockScenario = "clear" | "alert" | "down";
 
+/** Те, що переживає засинання Durable Object: інакше тривога тихо зникала б сама. */
+export interface MockState {
+  scenario: MockScenario;
+  uid: string;
+  startedAt: string;
+}
+
 export function isMockScenario(value: string): value is MockScenario {
   return value === "clear" || value === "alert" || value === "down";
 }
@@ -28,6 +35,16 @@ export class MockUpstream {
 
   state(): { scenario: MockScenario; uid: string } {
     return { scenario: this.scenario, uid: this.uid };
+  }
+
+  snapshot(): MockState {
+    return { scenario: this.scenario, uid: this.uid, startedAt: this.startedAt };
+  }
+
+  restore(state: MockState): void {
+    this.scenario = state.scenario;
+    this.uid = state.uid;
+    this.startedAt = state.startedAt;
   }
 
   fetch = async (): Promise<UpstreamResult> => {
