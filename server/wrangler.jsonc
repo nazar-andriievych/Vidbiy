@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vidbiy-proxy",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-23",
+  "observability": { "enabled": true },
+
+  "workers_dev": true,
+  // Прев'ю-адреси на кожну версію нам не потрібні — менше публічних точок входу.
+  "preview_urls": false,
+
+  // Єдина на весь світ точка, яка ходить до alerts.in.ua (див. src/hub.ts).
+  // Сховище не використовуємо, потрібна лише гарантія єдиності екземпляра.
+  "durable_objects": {
+    "bindings": [{ "name": "ALERTS_HUB", "class_name": "AlertsHub" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AlertsHub"] }]
+
+  // ALERTS_IN_UA_TOKEN — це секрет, він тут не зберігається:
+  //   локально  → server/.dev.vars (у git не потрапляє)
+  //   у хмарі   → npx wrangler secret put ALERTS_IN_UA_TOKEN
+}
