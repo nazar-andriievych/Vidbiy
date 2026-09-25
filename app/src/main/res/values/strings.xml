@@ -79,6 +79,9 @@
     <string name="waiting_alert">Триває тривога, оновлено о %1$s</string>
     <string name="waiting_checking">Перевіряємо стан тривоги…</string>
     <string name="waiting_deadline">Задзвонить о %1$s, навіть якщо відбою не буде</string>
+    <string name="waiting_card_title">Чекає відбою</string>
+    <string name="waiting_card_deadline">Задзвонить одразу після відбою, не пізніше %1$s</string>
+    <string name="waiting_card_skip">Не сьогодні</string>
     <string name="waiting_ring_now">Дзвонити зараз</string>
     <string name="waiting_cancel">Скасувати</string>
 

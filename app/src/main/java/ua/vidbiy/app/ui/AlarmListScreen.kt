@@ -18,7 +18,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -27,18 +29,23 @@ import ua.vidbiy.app.BuildConfig
 import ua.vidbiy.app.R
 import ua.vidbiy.app.alarm.nextTriggerAt
 import ua.vidbiy.app.data.Alarm
+import ua.vidbiy.app.data.PendingWait
 import ua.vidbiy.app.data.SelectedRegion
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlarmListScreen(
     alarms: List<Alarm>,
     region: SelectedRegion?,
+    waiting: PendingWait?,
     debugProxyUrl: String,
     onAdd: () -> Unit,
     onEdit: (Alarm) -> Unit,
     onToggle: (Alarm, Boolean) -> Unit,
+    onCancelWaiting: (Long) -> Unit,
     onPickRegion: () -> Unit,
     onDebugProxyUrlChange: (String) -> Unit,
 ) {
@@ -71,8 +78,10 @@ fun AlarmListScreen(
                 items(alarms, key = { it.id }) { alarm ->
                     AlarmCard(
                         alarm = alarm,
+                        waitingUntilMillis = waiting?.takeIf { it.alarmId == alarm.id }?.deadlineMillis,
                         onClick = { onEdit(alarm) },
                         onToggle = { onToggle(alarm, it) },
+                        onCancelWaiting = { onCancelWaiting(alarm.id) },
                     )
                 }
             }
@@ -126,8 +135,35 @@ private fun EmptyState() {
 }
 
 @Composable
-private fun AlarmCard(alarm: Alarm, onClick: () -> Unit, onToggle: (Boolean) -> Unit) {
-    Card(onClick = onClick) {
+private fun AlarmCard(
+    alarm: Alarm,
+    waitingUntilMillis: Long?,
+    onClick: () -> Unit,
+    onToggle: (Boolean) -> Unit,
+    onCancelWaiting: () -> Unit,
+) {
+    // Поки триває очікування, картка живе окремим життям: будильник не вимкнений
+    // і не «спрацює завтра» — він мовчить саме зараз і задзвонить після відбою.
+    val deadline = remember(waitingUntilMillis) {
+        waitingUntilMillis?.let {
+            LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault())
+        }
+    }
+    val waiting = deadline != null
+    val subtleColor = if (waiting) {
+        MaterialTheme.colorScheme.onTertiaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Card(
+        onClick = onClick,
+        colors = if (waiting) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+        } else {
+            CardDefaults.cardColors()
+        },
+    ) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -140,9 +176,19 @@ private fun AlarmCard(alarm: Alarm, onClick: () -> Unit, onToggle: (Boolean) -> 
                 Text(
                     text = daysLabel(alarm),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = subtleColor,
                 )
-                if (alarm.enabled) {
+                if (deadline != null) {
+                    Text(
+                        text = stringResource(R.string.waiting_card_title),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = stringResource(R.string.waiting_card_deadline, formatTime(deadline)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = subtleColor,
+                    )
+                } else if (alarm.enabled) {
                     val now = LocalDateTime.now()
                     Text(
                         text = stringResource(
@@ -150,10 +196,10 @@ private fun AlarmCard(alarm: Alarm, onClick: () -> Unit, onToggle: (Boolean) -> 
                             durationLabel(now, alarm.nextTriggerAt(now)),
                         ),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = subtleColor,
                     )
                 }
-                if (alarm.respectAlerts) {
+                if (alarm.respectAlerts && !waiting) {
                     Text(
                         text = stringResource(R.string.respect_alerts),
                         style = MaterialTheme.typography.bodySmall,
@@ -161,7 +207,15 @@ private fun AlarmCard(alarm: Alarm, onClick: () -> Unit, onToggle: (Boolean) -> 
                     )
                 }
             }
-            Switch(checked = alarm.enabled, onCheckedChange = onToggle)
+            if (waiting) {
+                // Перемикач тут означав би «вимкнути будильник назавжди», а потрібне
+                // інше: не дзвонити сьогодні. Наступні дні лишаються як були.
+                TextButton(onClick = onCancelWaiting) {
+                    Text(stringResource(R.string.waiting_card_skip))
+                }
+            } else {
+                Switch(checked = alarm.enabled, onCheckedChange = onToggle)
+            }
         }
     }
 }

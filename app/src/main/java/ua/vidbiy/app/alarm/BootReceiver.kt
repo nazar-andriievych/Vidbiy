@@ -40,7 +40,7 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     private suspend fun restoreWaiting(context: Context, app: VidbiyApplication) {
-        val wait = app.settingsRepository.pendingWait() ?: return
+        val wait = app.settingsRepository.currentPendingWait() ?: return
         val alarm = app.alarmsRepository.alarms.first().firstOrNull { it.id == wait.alarmId }
         if (alarm == null) {
             app.settingsRepository.clearPendingWait()

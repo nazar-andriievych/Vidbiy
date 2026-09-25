@@ -13,12 +13,15 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.alarm.AlarmScheduler
+import ua.vidbiy.app.alarm.AlarmWaitService
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlarmsRepository
+import ua.vidbiy.app.data.PendingWait
 import ua.vidbiy.app.data.SelectedRegion
 import ua.vidbiy.app.data.SettingsRepository
 
 class AlarmsViewModel(
+    private val app: VidbiyApplication,
     private val repository: AlarmsRepository,
     private val settings: SettingsRepository,
     private val scheduler: AlarmScheduler,
@@ -29,6 +32,19 @@ class AlarmsViewModel(
 
     val region: StateFlow<SelectedRegion?> = settings.selectedRegion
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * Будильник, який просто зараз чекає відбою. Без цього він у списку виглядав би
+     * вимкненим (одноразовий уже зняв позначку «увімкнено») або «спрацює завтра»,
+     * хоча насправді він саме зараз мовчить через тривогу.
+     */
+    val pendingWait: StateFlow<PendingWait?> = settings.pendingWait
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** «Сьогодні не треба»: те саме, що кнопка «Скасувати» в нотифікації очікування. */
+    fun cancelWaiting(alarmId: Long) {
+        AlarmWaitService.cancelWaiting(app, alarmId)
+    }
 
     /** Чи відкритий екран вибору регіону. */
     private val _pickingRegion = MutableStateFlow(false)
@@ -100,7 +116,7 @@ class AlarmsViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as VidbiyApplication
-                AlarmsViewModel(app.alarmsRepository, app.settingsRepository, app.alarmScheduler)
+                AlarmsViewModel(app, app.alarmsRepository, app.settingsRepository, app.alarmScheduler)
             }
         }
     }

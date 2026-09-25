@@ -40,6 +40,7 @@ fun VidbiyApp(viewModel: AlarmsViewModel = viewModel(factory = AlarmsViewModel.F
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val region by viewModel.region.collectAsStateWithLifecycle()
     val pickingRegion by viewModel.pickingRegion.collectAsStateWithLifecycle()
+    val waiting by viewModel.pendingWait.collectAsStateWithLifecycle()
     val debugProxyUrl by viewModel.debugProxyUrl.collectAsStateWithLifecycle()
 
     RequestNotificationPermission()
@@ -56,10 +57,12 @@ fun VidbiyApp(viewModel: AlarmsViewModel = viewModel(factory = AlarmsViewModel.F
         AlarmListScreen(
             alarms = alarms,
             region = region,
+            waiting = waiting,
             debugProxyUrl = debugProxyUrl,
             onAdd = viewModel::startNew,
             onEdit = viewModel::startEdit,
             onToggle = viewModel::setEnabled,
+            onCancelWaiting = viewModel::cancelWaiting,
             onPickRegion = viewModel::startPickRegion,
             onDebugProxyUrlChange = viewModel::setDebugProxyUrl,
         )

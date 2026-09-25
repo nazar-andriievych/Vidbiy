@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -82,7 +83,9 @@ class AlarmWaitService : Service() {
 
     private suspend fun pollUntilClear(alarmId: Long, deadlineMillis: Long) {
         val app = app()
-        val client = AlertsClient(app.settingsRepository.proxyBaseUrl())
+        val baseUrl = app.settingsRepository.proxyBaseUrl()
+        val client = AlertsClient(baseUrl)
+        Log.i(TAG, "Чекаємо відбою: будильник=$alarmId, проксі=$baseUrl")
 
         while (currentCoroutineContext().isActive) {
             val alarm = app.alarmsRepository.alarms.first().firstOrNull { it.id == alarmId }
@@ -95,11 +98,17 @@ class AlarmWaitService : Service() {
 
             val region = app.settingsRepository.selectedRegion.first()
             val snapshot = client.fetch()
+            val nowElapsed = SystemClock.elapsedRealtime()
             val decision = decideRing(
                 snapshot = snapshot,
-                nowElapsed = SystemClock.elapsedRealtime(),
+                nowElapsed = nowElapsed,
                 region = region,
                 pastDeadline = System.currentTimeMillis() >= deadlineMillis,
+            )
+            Log.i(
+                TAG,
+                "Рішення=$decision, регіон=${region?.uid} (${region?.title}), " +
+                    "тривоги=${snapshot.alertUids}, вік=${snapshot.effectiveAgeSeconds(nowElapsed)}с",
             )
 
             if (decision.shouldRing) {
@@ -215,6 +224,7 @@ class AlarmWaitService : Service() {
     }
 
     companion object {
+        private const val TAG = "VidbiyWait"
         private const val WAKE_LOCK_TAG = "vidbiy:wait"
         private const val MAX_WAKE_LOCK_MILLIS = 6 * 60 * 60 * 1000L
         private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
@@ -238,6 +248,18 @@ class AlarmWaitService : Service() {
                 putExtra(EXTRA_DEADLINE_MILLIS, deadlineMillis)
             }
             context.startForegroundService(intent)
+        }
+
+        /**
+         * «Сьогодні не треба»: те саме, що кнопка «Скасувати» в нотифікації.
+         * Наступні дні лишаються як були.
+         */
+        fun cancelWaiting(context: Context, alarmId: Long) {
+            val intent = Intent(context, AlarmWaitService::class.java).apply {
+                action = ACTION_CANCEL
+                putExtra(EXTRA_ALARM_ID, alarmId)
+            }
+            runCatching { context.startService(intent) }
         }
 
         /** Викликається, коли будильник уже дзвонить: чекати більше нема чого. */

@@ -59,10 +59,18 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { prefs -> prefs[proxyUrlKey] = url }
     }
 
-    suspend fun pendingWait(): PendingWait? {
-        val raw = context.settingsDataStore.data.first()[pendingWaitKey] ?: return null
-        return runCatching { json.decodeFromString<PendingWait>(raw) }.getOrNull()
+    /**
+     * Очікування, яке триває просто зараз. Потоком — щоб список будильників показував
+     * «чекає відбою» рівно доти, доки служба справді чекає, і сам гасив напис,
+     * коли вона зупинилася.
+     */
+    val pendingWait: Flow<PendingWait?> = context.settingsDataStore.data.map { prefs ->
+        prefs[pendingWaitKey]?.let { raw ->
+            runCatching { json.decodeFromString<PendingWait>(raw) }.getOrNull()
+        }
     }
+
+    suspend fun currentPendingWait(): PendingWait? = pendingWait.first()
 
     suspend fun setPendingWait(wait: PendingWait) {
         context.settingsDataStore.edit { prefs -> prefs[pendingWaitKey] = json.encodeToString(wait) }

@@ -3,6 +3,7 @@ package ua.vidbiy.app.alarm
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -53,6 +54,12 @@ class AlarmReceiver : BroadcastReceiver() {
                 val region = app.settingsRepository.selectedRegion.first()
                 val waitForAllClear = isRegularFire && alarm.respectAlerts && region != null
 
+                Log.i(
+                    TAG,
+                    "Спрацювання ${intent.action}: будильник=$alarmId, " +
+                        "враховувати тривоги=${alarm.respectAlerts}, регіон=${region?.uid}",
+                )
+
                 if (waitForAllClear) {
                     // Перша перевірка тривоги — вже всередині служби: якщо тривоги немає,
                     // вона задзвонить одразу, а якщо є — чекатиме відбою.
@@ -70,6 +77,8 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        private const val TAG = "VidbiyAlarm"
+
         const val ACTION_FIRE = "ua.vidbiy.app.action.FIRE_ALARM"
         const val ACTION_FIRE_SNOOZE = "ua.vidbiy.app.action.FIRE_SNOOZE"
         const val ACTION_FIRE_DEADLINE = "ua.vidbiy.app.action.FIRE_DEADLINE"
