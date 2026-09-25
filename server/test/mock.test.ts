@@ -1,55 +1,44 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { MockUpstream } from "../src/mock";
+import { describe, expect, it } from "vitest";
+import { MockAlerts } from "../src/mock";
 
-describe("MockUpstream", () => {
-  afterEach(() => {
-    vi.useRealTimers();
+const NOW = Date.parse("2026-09-24T20:00:00Z");
+
+describe("MockAlerts", () => {
+  it("за замовчуванням тривог немає, дані свіжі", () => {
+    expect(new MockAlerts().response(NOW)).toEqual({
+      v: 2,
+      active: [],
+      heard_at: new Date(NOW).toISOString(),
+      age_seconds: 0,
+    });
   });
 
-  it("за замовчуванням тривог немає", async () => {
-    const mock = new MockUpstream();
-
-    expect(await mock.fetch()).toEqual({ ok: true, alerts: [] });
-  });
-
-  it("оголошує тривогу у вказаному регіоні", async () => {
-    const mock = new MockUpstream();
+  it("оголошує тривогу у вказаному регіоні", () => {
+    const mock = new MockAlerts();
     mock.set("alert", "8");
 
-    const result = await mock.fetch();
-
-    expect(result.ok).toBe(true);
-    expect(result.ok && result.alerts).toEqual([
-      { uid: "8", type: "oblast", started_at: expect.any(String) },
-    ]);
+    expect(mock.response(NOW).active).toEqual(["8"]);
   });
 
-  it("переживає перезапуск: збережений стан відновлюється повністю", async () => {
-    const before = new MockUpstream();
-    before.set("alert", "16");
-    const saved = before.snapshot();
+  it("down: тривога лишається, але дані застарілі — застосунок має дзвонити саме через вік", () => {
+    const mock = new MockAlerts();
+    mock.set("alert", "8");
+    mock.set("down");
 
-    // Durable Object заснув і прокинувся порожнім — саме тут тривога раніше зникала.
-    const after = new MockUpstream();
-    after.restore(saved);
+    const response = mock.response(NOW);
+
+    expect(response.active).toEqual(["8"]);
+    expect(response.age_seconds).toBeGreaterThan(180);
+  });
+
+  it("переживає перезапуск: збережений стан відновлюється повністю", () => {
+    const before = new MockAlerts();
+    before.set("alert", "16");
+
+    const after = new MockAlerts();
+    after.restore(before.state());
 
     expect(after.state()).toEqual({ scenario: "alert", uid: "16" });
-    expect(await after.fetch()).toEqual(await before.fetch());
-  });
-
-  it("нова тривога після відбою починається заново", async () => {
-    // Без керованого годинника обидва виклики потрапляють в одну мілісекунду.
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-09-23T05:00:00.000Z"));
-    const mock = new MockUpstream();
-    mock.set("alert", "8");
-    const firstStart = mock.snapshot().startedAt;
-
-    mock.set("clear");
-    vi.setSystemTime(new Date("2026-09-23T06:30:00.000Z"));
-    mock.set("alert");
-
-    expect(mock.snapshot().startedAt).toBe("2026-09-23T06:30:00.000Z");
-    expect(mock.snapshot().startedAt).not.toBe(firstStart);
+    expect(after.response(NOW)).toEqual(before.response(NOW));
   });
 });

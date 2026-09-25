@@ -9,15 +9,15 @@
   // Прев'ю-адреси на кожну версію нам не потрібні — менше публічних точок входу.
   "preview_urls": false,
 
-  // Єдина на весь світ точка, яка ходить до alerts.in.ua (див. src/hub.ts).
-  // Від нього потрібна гарантія єдиності екземпляра; сховище використовує лише
-  // mock-режим, щоб оголошена вручну тривога не зникала разом із пам'яттю.
+  // Єдина на весь світ точка, де живе стан тривог (див. src/hub.ts): сюди приходять
+  // вебхуки ukrainealarm і звідси читають телефони. Стан лежить у сховищі об'єкта,
+  // бо об'єкт засинає між запитами.
   "durable_objects": {
     "bindings": [{ "name": "ALERTS_HUB", "class_name": "AlertsHub" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AlertsHub"] }]
 
-  // ALERTS_IN_UA_TOKEN — це секрет, він тут не зберігається:
-  //   локально  → server/.dev.vars (у git не потрапляє)
-  //   у хмарі   → npx wrangler secret put ALERTS_IN_UA_TOKEN
+  // UKRAINEALARM_TOKEN — це секрет, він тут не зберігається:
+  //   у хмарі   → npx wrangler secret put UKRAINEALARM_TOKEN
+  //   локально  → не потрібен: працюємо на підробці (MOCK=1 у server/.dev.vars)
 }

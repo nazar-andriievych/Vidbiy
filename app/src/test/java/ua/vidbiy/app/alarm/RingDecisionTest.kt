@@ -61,7 +61,7 @@ class RingDecisionTest {
     }
 
     @Test
-    fun `проксі не має даних від alerts in ua — дзвонимо`() {
+    fun `проксі не має даних від ukrainealarm — дзвонимо`() {
         val decision = decideRing(snapshot(uids = null), now, region, pastDeadline = false)
 
         assertEquals(RingDecision.RING_NO_DATA, decision)

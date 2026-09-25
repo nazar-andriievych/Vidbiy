@@ -2,6 +2,7 @@ package ua.vidbiy.app.data
 
 import android.os.SystemClock
 import android.util.Log
+import ua.vidbiy.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
@@ -19,12 +20,16 @@ object ProxyConfig {
  * Знімок стану тривог у момент відповіді проксі.
  *
  * [alertUids] = null означає «ми не знаємо»: мережі немає, проксі мовчить або сам
- * не має даних від alerts.in.ua. Порожній набір — навпаки, перевірено: тривог немає.
+ * ще не має стану від ukrainealarm. Порожній набір — навпаки, перевірено: тривог немає.
  * Плутати ці два стани не можна, хоч будильник в обох випадках і дзвонить (NFR-1).
  */
 data class AlertsSnapshot(
     val alertUids: Set<String>?,
-    /** Вік даних на сервері в момент відповіді, секунди. */
+    /**
+     * Скільки секунд тому проксі востаннє підтвердив стан: вебхуком від ukrainealarm
+     * або власною перевіркою, коли вебхуків немає. Понад 3 хв без підтверджень —
+     * стану довіряти не можна (NFR-1).
+     */
     val ageSeconds: Long?,
     /** Показник монотонного лічильника телефона в момент отримання відповіді. */
     val receivedAtElapsed: Long,
@@ -57,12 +62,13 @@ class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
     }
 
     private fun request(): AlertsSnapshot {
-        val connection = (URL("$baseUrl/v1/alerts").openConnection() as HttpURLConnection).apply {
+        val connection = (URL("$baseUrl/v2/alerts").openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             // Довге очікування тут шкідливе: поки ми чекаємо, будильник мовчить.
             connectTimeout = TIMEOUT_MS
             readTimeout = TIMEOUT_MS
             setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", USER_AGENT)
         }
 
         try {
@@ -75,7 +81,7 @@ class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             val response = json.decodeFromString<AlertsResponse>(body)
             return AlertsSnapshot(
-                alertUids = response.alerts?.map { it.uid }?.toSet(),
+                alertUids = response.active?.toSet(),
                 ageSeconds = response.ageSeconds,
                 receivedAtElapsed = received,
             )
@@ -87,21 +93,22 @@ class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
     private companion object {
         const val TAG = "AlertsClient"
         const val TIMEOUT_MS = 8_000
+
+        /**
+         * Хто ми такі. Без цього HttpURLConnection представляється системним рядком
+         * Dalvik, а бот-захист Cloudflare перед *.workers.dev на незнайомі рядки вміє
+         * відповідати 403 — запит тоді навіть не доходить до нашого проксі. Спіймали
+         * це на скрипті з типовим `Python-urllib`: 403 у клієнта, порожньо в логах воркера.
+         */
+        val USER_AGENT = "Vidbiy/${BuildConfig.VERSION_NAME} (Android)"
     }
 }
 
 /** Формат відповіді проксі — див. docs/proxy-api.md. */
 @Serializable
 private data class AlertsResponse(
-    val v: Int = 1,
-    @SerialName("upstream_ok") val upstreamOk: Boolean = false,
+    val v: Int = 2,
+    /** ID регіонів із активною повітряною тривогою; null — проксі сам ще не знає стану. */
+    val active: List<String>? = null,
     @SerialName("age_seconds") val ageSeconds: Long? = null,
-    val alerts: List<ActiveAlert>? = null,
-)
-
-@Serializable
-private data class ActiveAlert(
-    val uid: String,
-    val type: String = "unknown",
-    @SerialName("started_at") val startedAt: String? = null,
 )
