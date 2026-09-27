@@ -19,6 +19,7 @@ import ua.vidbiy.app.data.AlarmsRepository
 import ua.vidbiy.app.data.PendingWait
 import ua.vidbiy.app.data.SelectedRegion
 import ua.vidbiy.app.data.SettingsRepository
+import ua.vidbiy.app.ui.theme.ThemeMode
 
 class AlarmsViewModel(
     private val app: VidbiyApplication,
@@ -56,6 +57,14 @@ class AlarmsViewModel(
 
     fun cancelPickRegion() {
         _pickingRegion.value = false
+    }
+
+    /** FR-32: тема застосунку. */
+    val themeMode: StateFlow<ThemeMode> = settings.themeMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.System)
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { settings.setThemeMode(mode) }
     }
 
     /** Адреса локального проксі; порожньо — береться робоча. Лише для debug-збірки. */

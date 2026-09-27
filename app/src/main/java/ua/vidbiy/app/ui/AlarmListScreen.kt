@@ -1,225 +1,254 @@
 package ua.vidbiy.app.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import ua.vidbiy.app.BuildConfig
 import ua.vidbiy.app.R
-import ua.vidbiy.app.alarm.nextTriggerAt
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.PendingWait
 import ua.vidbiy.app.data.SelectedRegion
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneId
+import ua.vidbiy.app.data.WaitFor
+import ua.vidbiy.app.ui.theme.Dimens
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Вкладка «Будильники» (design-spec 3.1): заголовок → попередження → банер очікування →
+ * картки будильників. Рядок разового режиму з'явиться разом із самим режимом (FR-25a).
+ */
 @Composable
-fun AlarmListScreen(
+fun AlarmsTab(
     alarms: List<Alarm>,
     region: SelectedRegion?,
     waiting: PendingWait?,
-    debugProxyUrl: String,
-    onAdd: () -> Unit,
+    contentPadding: PaddingValues,
     onEdit: (Alarm) -> Unit,
     onToggle: (Alarm, Boolean) -> Unit,
     onCancelWaiting: (Long) -> Unit,
-    onPickRegion: () -> Unit,
-    onDebugProxyUrlChange: (String) -> Unit,
 ) {
-    Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.alarms_title)) }) },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(onClick = onAdd) { Text(stringResource(R.string.action_add)) }
-        },
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = contentPadding,
+        verticalArrangement = Arrangement.spacedBy(Dimens.ListGap),
+    ) {
+        item { TabHeader(stringResource(R.string.alarms_title)) }
+        item { SystemWarnings(Modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenPadding)) }
+
+        val waitingAlarm = waiting?.let { wait -> alarms.firstOrNull { it.id == wait.alarmId } }
+        if (waitingAlarm != null) {
+            item {
+                WaitingBanner(
+                    alarm = waitingAlarm,
+                    placeName = region?.title,
+                    onCancel = { onCancelWaiting(waitingAlarm.id) },
+                )
+            }
+        }
+
+        if (alarms.isEmpty()) {
+            item { EmptyAlarms() }
+        } else {
+            items(alarms, key = { it.id }) { alarm ->
+                AlarmCard(
+                    alarm = alarm,
+                    placeName = region?.title,
+                    onClick = { onEdit(alarm) },
+                    onToggle = { onToggle(alarm, it) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Банер «06:45 чекає на відбій тривоги». Повний екран очікування й колір рівня
+ * з'являться разом з ним (design-spec 3.8); поки що звідси можна лише скасувати дзвінок.
+ */
+@Composable
+private fun WaitingBanner(alarm: Alarm, placeName: String?, onCancel: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenPadding),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = stringResource(R.string.waiting_banner_title, formatTime(alarm.hour, alarm.minute)),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                if (placeName != null) {
+                    Text(
+                        text = placeName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.waiting_card_skip)) }
+        }
+    }
+}
+
+/** Картка будильника (design-spec 2, `01-alarms--list`). */
+@Composable
+private fun AlarmCard(
+    alarm: Alarm,
+    placeName: String?,
+    onClick: () -> Unit,
+    onToggle: (Boolean) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenPadding),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 20.dp, top = 16.dp, end = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { SystemWarnings(Modifier.fillMaxWidth()) }
-            item { RegionCard(region = region, onClick = onPickRegion) }
-            if (BuildConfig.DEBUG) {
-                item {
-                    DebugProxyCard(
-                        url = debugProxyUrl,
-                        onUrlChange = onDebugProxyUrlChange,
-                        modifier = Modifier.fillMaxWidth(),
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(
+                    modifier = Modifier.weight(1f).clickable(onClick = onClick),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = formatTime(alarm.hour, alarm.minute),
+                        style = MaterialTheme.typography.displayMedium,
+                        color = if (alarm.enabled) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                    Text(
+                        text = daysLabel(alarm),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Switch(checked = alarm.enabled, onCheckedChange = onToggle)
             }
 
-            if (alarms.isEmpty()) {
-                item { EmptyState() }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            if (alarm.respectAlerts) {
+                AlertSummary(alarm, placeName, Modifier.clickable(onClick = onClick))
             } else {
-                items(alarms, key = { it.id }) { alarm ->
-                    AlarmCard(
-                        alarm = alarm,
-                        waiting = waiting?.takeIf { it.alarmId == alarm.id },
-                        onClick = { onEdit(alarm) },
-                        onToggle = { onToggle(alarm, it) },
-                        onCancelWaiting = { onCancelWaiting(alarm.id) },
-                    )
-                }
+                Text(
+                    text = stringResource(R.string.card_plain),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
 }
 
+/** «📍 Дім ●● будь-яка тривога» + «Одразу після відбою · без крайнього часу». */
 @Composable
-private fun RegionCard(region: SelectedRegion?, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
-    ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(
-                text = stringResource(R.string.region_title),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+private fun AlertSummary(alarm: Alarm, placeName: String?, modifier: Modifier = Modifier) {
+    val subtle = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                painter = painterResource(R.drawable.ic_location_on),
+                contentDescription = null,
+                tint = subtle,
+                modifier = Modifier.size(18.dp),
             )
             Text(
-                text = region?.title ?: stringResource(R.string.region_not_selected),
-                style = MaterialTheme.typography.titleMedium,
+                text = placeName ?: stringResource(R.string.card_no_region),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 8.dp).weight(1f, fill = false),
             )
+            LevelDots(alarm.waitFor, Modifier.padding(start = 14.dp, end = 8.dp))
             Text(
-                text = region?.path?.takeIf { it.isNotEmpty() }
-                    ?: stringResource(
-                        if (region == null) R.string.region_hint_empty else R.string.region_hint
-                    ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = stringResource(
+                    if (alarm.waitFor == WaitFor.RED_ONLY) R.string.card_level_red_only
+                    else R.string.card_level_any
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = subtle,
+                maxLines = 1,
             )
         }
-    }
-}
-
-@Composable
-private fun EmptyState() {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(stringResource(R.string.alarms_empty), style = MaterialTheme.typography.titleMedium)
+        val deadline = alarm.deadlineMinute?.let { stringResource(R.string.card_deadline, formatTime(it / 60, it % 60)) }
+            ?: stringResource(R.string.card_no_deadline)
         Text(
-            text = stringResource(R.string.alarms_empty_hint),
+            text = stringResource(R.string.card_right_after) + " · " + deadline,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = subtle,
+            modifier = Modifier.padding(start = 26.dp),
         )
     }
 }
 
+/** Порожній стан (`02-empty--alarms-empty`). */
 @Composable
-private fun AlarmCard(
-    alarm: Alarm,
-    waiting: PendingWait?,
-    onClick: () -> Unit,
-    onToggle: (Boolean) -> Unit,
-    onCancelWaiting: () -> Unit,
-) {
-    // Поки триває очікування, картка живе окремим життям: будильник не вимкнений
-    // і не «спрацює завтра» — він мовчить саме зараз і задзвонить після відбою.
-    val deadline = remember(waiting) {
-        waiting?.deadlineMillis?.let {
-            LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault())
-        }
-    }
-    val isWaiting = waiting != null
-    val subtleColor = if (isWaiting) {
-        MaterialTheme.colorScheme.onTertiaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Card(
-        onClick = onClick,
-        colors = if (isWaiting) {
-            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
-        } else {
-            CardDefaults.cardColors()
-        },
+private fun EmptyAlarms() {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 96.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Box(
+            modifier = Modifier
+                .size(88.dp)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+            contentAlignment = Alignment.Center,
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = formatTime(alarm.hour, alarm.minute),
-                    style = MaterialTheme.typography.displaySmall,
-                )
-                Text(
-                    text = daysLabel(alarm),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = subtleColor,
-                )
-                if (isWaiting) {
-                    Text(
-                        text = stringResource(R.string.waiting_card_title),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Text(
-                        text = if (deadline != null) {
-                            stringResource(R.string.waiting_card_deadline, formatTime(deadline))
-                        } else {
-                            stringResource(R.string.waiting_card_no_deadline)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = subtleColor,
-                    )
-                } else if (alarm.enabled) {
-                    val now = LocalDateTime.now()
-                    Text(
-                        text = stringResource(
-                            R.string.next_trigger,
-                            durationLabel(now, alarm.nextTriggerAt(now)),
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = subtleColor,
-                    )
-                }
-                if (alarm.respectAlerts && !isWaiting) {
-                    Text(
-                        text = stringResource(R.string.respect_alerts),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-            if (isWaiting) {
-                // Перемикач тут означав би «вимкнути будильник назавжди», а потрібне
-                // інше: не дзвонити сьогодні. Наступні дні лишаються як були.
-                TextButton(onClick = onCancelWaiting) {
-                    Text(stringResource(R.string.waiting_card_skip))
-                }
-            } else {
-                Switch(checked = alarm.enabled, onCheckedChange = onToggle)
-            }
+            Icon(
+                painter = painterResource(R.drawable.ic_alarm),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(36.dp),
+            )
         }
+        Text(
+            text = stringResource(R.string.alarms_empty),
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(
+            text = stringResource(R.string.alarms_empty_hint),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
 }

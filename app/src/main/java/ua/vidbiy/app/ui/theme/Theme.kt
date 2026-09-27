@@ -1,5 +1,6 @@
 package ua.vidbiy.app.ui.theme
 
+import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -7,6 +8,9 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
 // Потрібен androidx.compose.material3 ≥ 1.2 (ролі surfaceContainer*).
 // Dynamic color (Material You) навмисно вимкнений: кольори тривог мають бути передбачуваними.
@@ -77,6 +81,18 @@ fun VidbiyTheme(
         ThemeMode.System -> isSystemInDarkTheme()
         ThemeMode.Light -> false
         ThemeMode.Dark -> true
+    }
+    // Значки статус-бару й навігації мають бути темними на світлій темі й світлими на темній.
+    // enableEdgeToEdge() орієнтується на тему системи, тож коли в застосунку обрано іншу — поправляємо.
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
     }
     CompositionLocalProvider(LocalAlertColors provides if (dark) DarkAlertColors else LightAlertColors) {
         MaterialTheme(

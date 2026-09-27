@@ -9,6 +9,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Color
+import ua.vidbiy.app.ui.theme.Dimens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +33,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerState
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -94,7 +102,7 @@ fun AlarmEditScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    TimePicker(state = timeState)
+                    VidbiyTimePicker(state = timeState)
                 }
 
                 DaysRow(
@@ -160,19 +168,33 @@ fun AlarmEditScreen(
     }
 }
 
+/** «Повторювати»: сім круглих чипів (design-spec 2, «Чипи вибору»). */
 @Composable
 private fun DaysRow(selected: Set<Int>, onToggleDay: (Int) -> Unit) {
     val names = stringArrayResource(R.array.day_short_names)
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         for (day in 1..7) {
-            FilterChip(
-                selected = day in selected,
+            val isSelected = day in selected
+            Surface(
+                selected = isSelected,
                 onClick = { onToggleDay(day) },
-                label = { Text(names[day - 1]) },
-            )
+                shape = CircleShape,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                contentColor = if (isSelected) {
+                    MaterialTheme.colorScheme.onPrimary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                modifier = Modifier.size(Dimens.ChipHeight - 2.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(names[day - 1], style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                }
+            }
         }
     }
 }
@@ -246,7 +268,7 @@ private fun DeadlineSection(deadlineMinute: Int?, alarmMinute: Int, onChange: (I
         AlertDialog(
             onDismissRequest = { picking = false },
             title = { Text(stringResource(R.string.deadline)) },
-            text = { TimePicker(state = state) },
+            text = { VidbiyTimePicker(state = state) },
             confirmButton = {
                 TextButton(onClick = {
                     onChange(state.hour * 60 + state.minute)
@@ -332,5 +354,18 @@ private fun SettingSwitch(
             }
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/**
+ * M3 TimePicker малює години й хвилини стилем displayLarge, а в нашій темі це 88 sp
+ * для великого часу — цифри не влазять. Дизайн дає для полів вибору часу displaySmall (52).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VidbiyTimePicker(state: TimePickerState) {
+    val typography = MaterialTheme.typography
+    MaterialTheme(typography = typography.copy(displayLarge = typography.displaySmall)) {
+        TimePicker(state = state)
     }
 }

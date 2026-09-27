@@ -2,21 +2,43 @@
     <string name="app_name">Відбій</string>
 
     <string name="action_add">Додати</string>
+    <string name="action_new_alarm">Новий будильник</string>
     <string name="action_save">Зберегти</string>
     <string name="action_cancel">Скасувати</string>
     <string name="action_delete">Видалити</string>
 
-    <string name="alarms_title">Відбій</string>
+    <string name="alarms_title">Будильники</string>
+    <string name="places_title">Мої місця</string>
+    <string name="settings_title">Налаштування</string>
+    <string name="nav_alarms">Будильники</string>
+    <string name="nav_places">Мої місця</string>
+    <string name="nav_settings">Налаштування</string>
     <string name="alarms_empty">Будильників ще немає</string>
-    <string name="alarms_empty_hint">Натисни «Додати», щоб створити перший</string>
+    <string name="alarms_empty_hint">Створіть будильник — він не дзвонитиме під час тривоги й розбудить вас після відбою.</string>
+
+    <string name="card_level_any">будь-яка тривога</string>
+    <string name="card_level_red_only">лише червона</string>
+    <string name="card_right_after">Одразу після відбою</string>
+    <string name="card_no_deadline">без крайнього часу</string>
+    <string name="card_deadline">крайній час %1$s</string>
+    <string name="card_plain">Звичайний будильник — тривоги не враховуються</string>
+    <string name="card_no_region">Регіон не обрано</string>
+    <string name="waiting_banner_title">%1$s чекає на відбій тривоги</string>
+
+    <string name="theme_title">Тема</string>
+    <string name="theme_system">Системна</string>
+    <string name="theme_light">Світла</string>
+    <string name="theme_dark">Темна</string>
+    <string name="theme_hint">«Системна» — як у налаштуваннях телефона, разом із нічним режимом.</string>
+    <string name="privacy_note">Дані про тривоги — з офіційного API «Повітряна тривога». Без реєстрації, геолокації та аналітики: ваші місця й будильники не залишають телефон. Якщо свіжих даних немає, будильник дзвонить.</string>
 
     <string name="alarm_new_title">Новий будильник</string>
     <string name="alarm_edit_title">Будильник</string>
 
-    <string name="days_once">Одноразово</string>
+    <string name="days_once">Один раз</string>
     <string name="days_everyday">Щодня</string>
-    <string name="days_weekdays">Будні</string>
-    <string name="days_weekend">Вихідні</string>
+    <string name="days_weekdays">Пн–Пт</string>
+    <string name="days_weekend">Сб, Нд</string>
 
     <string name="next_trigger">Спрацює через %1$s</string>
     <string name="duration_hours_minutes">%1$d год %2$d хв</string>

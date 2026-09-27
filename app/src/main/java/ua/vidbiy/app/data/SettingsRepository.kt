@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import ua.vidbiy.app.BuildConfig
+import ua.vidbiy.app.ui.theme.ThemeMode
 
 /**
  * Очікування відбою, яке триває просто зараз. Зберігається на диск, бо перезавантаження
@@ -43,13 +44,23 @@ data class PendingWait(
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-/** Налаштування застосунку. Поки тут лише обраний регіон. */
+/** Налаштування застосунку: регіон, тема, стан очікування, адреса проксі для розробки. */
 class SettingsRepository(private val context: Context) {
 
     private val json = Json { ignoreUnknownKeys = true }
     private val regionKey = stringPreferencesKey("selected_region")
     private val proxyUrlKey = stringPreferencesKey("debug_proxy_url")
     private val pendingWaitKey = stringPreferencesKey("pending_wait")
+    private val themeModeKey = stringPreferencesKey("theme_mode")
+
+    /** FR-32: тема застосунку; за замовчуванням — як у системі. */
+    val themeMode: Flow<ThemeMode> = context.settingsDataStore.data.map { prefs ->
+        ThemeMode.entries.firstOrNull { it.name == prefs[themeModeKey] } ?: ThemeMode.System
+    }
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        context.settingsDataStore.edit { prefs -> prefs[themeModeKey] = mode.name }
+    }
 
     val selectedRegion: Flow<SelectedRegion?> = context.settingsDataStore.data.map { prefs ->
         prefs[regionKey]?.let { raw ->
