@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -42,6 +43,25 @@ data class PendingWait(
     }
 }
 
+/**
+ * Що зараз бачить служба очікування — для екрана очікування, банера й сповіщення.
+ * Служба перезаписує його після кожної перевірки.
+ */
+@Serializable
+data class WaitStatus(
+    val alarmId: Long,
+    /** Найвищий рівень, на який чекаємо; null — ще перевіряємо або триває пауза після відбою. */
+    val level: AlertLevel? = null,
+    /** Текст причини від ukrainealarm, якщо є (FR-28: лише для показу). */
+    val reason: String? = null,
+    /** Коли сервер востаннє підтвердив дані, за годинником телефона. */
+    val confirmedAtMillis: Long? = null,
+    /** Відбій під час очікування — почалася пауза (FR-14). */
+    val allClearAtMillis: Long? = null,
+    /** Коли задзвонить, якщо тривога не повернеться. */
+    val ringAtMillis: Long? = null,
+)
+
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 /** Налаштування застосунку: тема, стан очікування, адреса проксі для розробки. */
@@ -52,6 +72,25 @@ class SettingsRepository(private val context: Context) {
     private val proxyUrlKey = stringPreferencesKey("debug_proxy_url")
     private val pendingWaitKey = stringPreferencesKey("pending_wait")
     private val themeModeKey = stringPreferencesKey("theme_mode")
+    private val waitStatusKey = stringPreferencesKey("wait_status")
+    private val snoozeMinutesKey = intPreferencesKey("snooze_minutes")
+
+    /** FR-19: тривалість відкладення, одна на весь застосунок. */
+    val snoozeMinutes: Flow<Int> = context.settingsDataStore.data.map { prefs ->
+        prefs[snoozeMinutesKey] ?: DEFAULT_SNOOZE_MINUTES
+    }
+
+    suspend fun setSnoozeMinutes(minutes: Int) {
+        context.settingsDataStore.edit { prefs -> prefs[snoozeMinutesKey] = minutes }
+    }
+
+    val waitStatus: Flow<WaitStatus?> = context.settingsDataStore.data.map { prefs ->
+        prefs[waitStatusKey]?.let { raw -> runCatching { json.decodeFromString<WaitStatus>(raw) }.getOrNull() }
+    }
+
+    suspend fun setWaitStatus(status: WaitStatus) {
+        context.settingsDataStore.edit { prefs -> prefs[waitStatusKey] = json.encodeToString(status) }
+    }
 
     /** FR-32: тема застосунку; за замовчуванням — як у системі. */
     val themeMode: Flow<ThemeMode> = context.settingsDataStore.data.map { prefs ->
@@ -109,6 +148,14 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun clearPendingWait() {
-        context.settingsDataStore.edit { prefs -> prefs.remove(pendingWaitKey) }
+        context.settingsDataStore.edit { prefs ->
+            prefs.remove(pendingWaitKey)
+            prefs.remove(waitStatusKey)
+        }
+    }
+
+    companion object {
+        /** design-spec 3.6: за замовчуванням 10 хв. */
+        const val DEFAULT_SNOOZE_MINUTES = 10
     }
 }

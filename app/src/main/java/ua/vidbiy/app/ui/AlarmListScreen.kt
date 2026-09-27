@@ -20,7 +20,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,7 +33,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ua.vidbiy.app.R
 import ua.vidbiy.app.data.Alarm
+import ua.vidbiy.app.data.AlertLevel
 import ua.vidbiy.app.data.PendingWait
+import ua.vidbiy.app.data.WaitStatus
+import ua.vidbiy.app.ui.theme.alertColors
 import ua.vidbiy.app.data.PlacesState
 import ua.vidbiy.app.data.shortTitle
 import ua.vidbiy.app.data.WaitFor
@@ -49,10 +51,11 @@ fun AlarmsTab(
     alarms: List<Alarm>,
     places: PlacesState,
     waiting: PendingWait?,
+    waitStatus: WaitStatus?,
     contentPadding: PaddingValues,
     onEdit: (Alarm) -> Unit,
     onToggle: (Alarm, Boolean) -> Unit,
-    onCancelWaiting: (Long) -> Unit,
+    onOpenWaiting: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -68,7 +71,8 @@ fun AlarmsTab(
                 WaitingBanner(
                     alarm = waitingAlarm,
                     placeName = placeName(waitingAlarm, places),
-                    onCancel = { onCancelWaiting(waitingAlarm.id) },
+                    status = waitStatus?.takeIf { it.alarmId == waitingAlarm.id },
+                    onOpen = onOpenWaiting,
                 )
             }
         }
@@ -89,39 +93,67 @@ fun AlarmsTab(
 }
 
 /** Назва місця, а якщо місця немає (обрано напряму чи видалено) — коротка назва регіону. */
-private fun placeName(alarm: Alarm, places: PlacesState): String? =
+fun placeName(alarm: Alarm, places: PlacesState): String? =
     places.byId(alarm.placeId)?.name ?: alarm.region?.shortTitle
 
 /**
- * Банер «06:45 чекає на відбій тривоги». Повний екран очікування й колір рівня
- * з'являться разом з ним (design-spec 3.8); поки що звідси можна лише скасувати дзвінок.
+ * Банер очікування (design-spec 2): контейнер кольору рівня, крапка, «06:45 чекає на відбій
+ * тривоги», «Червона тривога · Дім · оновлено щойно», шеврон → екран очікування.
  */
 @Composable
-private fun WaitingBanner(alarm: Alarm, placeName: String?, onCancel: () -> Unit) {
+private fun WaitingBanner(alarm: Alarm, placeName: String?, status: WaitStatus?, onOpen: () -> Unit) {
+    val now = rememberNowMillis()
+    val colors = MaterialTheme.alertColors
+    val phase = status.phase
+    val level = status?.level
+    val (container, content) = when {
+        phase == WaitPhase.PAUSE -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        level == AlertLevel.RED -> colors.redContainer to colors.onRedContainer
+        level == AlertLevel.YELLOW -> colors.yellowContainer to colors.onYellowContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh to MaterialTheme.colorScheme.onSurface
+    }
+    val time = formatTime(alarm.hour, alarm.minute)
+    val title = when (phase) {
+        WaitPhase.ALERT -> stringResource(R.string.banner_alert_title, time)
+        WaitPhase.PAUSE -> stringResource(R.string.banner_pause_title, time, formatClock(status!!.ringAtMillis!!))
+        WaitPhase.CHECKING -> stringResource(R.string.banner_checking_title, time)
+    }
+    val updated = status?.confirmedAtMillis?.let { confirmed ->
+        val minutes = ((now - confirmed) / 60_000L).toInt()
+        if (minutes < 1) stringResource(R.string.banner_updated_now) else stringResource(R.string.banner_updated_ago, minutes)
+    }
+    val subtitle = listOfNotNull(
+        level?.let { stringResource(if (it == AlertLevel.RED) R.string.level_red else R.string.level_yellow) },
+        placeName,
+        updated,
+    ).joinToString(" · ")
+
     Surface(
+        onClick = onOpen,
         modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenPadding),
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.secondaryContainer,
+        color = container,
+        contentColor = content,
     ) {
         Row(
-            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
+            modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 16.dp, end = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = stringResource(R.string.waiting_banner_title, formatTime(alarm.hour, alarm.minute)),
-                    style = MaterialTheme.typography.titleSmall,
+            when {
+                level != null && phase == WaitPhase.ALERT -> Box(
+                    Modifier.size(12.dp).background(if (level == AlertLevel.RED) colors.red else colors.yellow, CircleShape),
                 )
-                if (placeName != null) {
-                    Text(
-                        text = placeName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                phase == WaitPhase.PAUSE -> Icon(painterResource(R.drawable.ic_schedule), null, Modifier.size(20.dp))
+                else -> Icon(painterResource(R.drawable.ic_bedtime), null, Modifier.size(20.dp))
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                if (subtitle.isNotEmpty()) {
+                    Text(subtitle, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
-            TextButton(onClick = onCancel) { Text(stringResource(R.string.waiting_card_skip)) }
+            Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null)
         }
     }
 }

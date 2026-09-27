@@ -23,6 +23,7 @@ import ua.vidbiy.app.data.PlacesRepository
 import ua.vidbiy.app.data.PlacesState
 import ua.vidbiy.app.data.SelectedRegion
 import ua.vidbiy.app.data.SettingsRepository
+import ua.vidbiy.app.data.WaitStatus
 import ua.vidbiy.app.ui.theme.ThemeMode
 
 /** Повноекранний підекран, що перекриває вкладки (навігаційна бібліотека тут надлишкова). */
@@ -34,6 +35,9 @@ sealed interface Overlay {
     data object AddPlace : Overlay
 
     data class PlaceRegion(val placeId: Long) : Overlay
+
+    /** Екран очікування (design-spec 3.8). */
+    data object Waiting : Overlay
 }
 
 class AlarmsViewModel(
@@ -60,9 +64,28 @@ class AlarmsViewModel(
     val pendingWait: StateFlow<PendingWait?> = settings.pendingWait
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** «Сьогодні не треба»: те саме, що кнопка «Скасувати» в нотифікації очікування. */
+    /** Що зараз бачить служба очікування: рівень, причина, свіжість, пауза. */
+    val waitStatus: StateFlow<WaitStatus?> = settings.waitStatus
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** FR-19: тривалість відкладення. */
+    val snoozeMinutes: StateFlow<Int> = settings.snoozeMinutes
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsRepository.DEFAULT_SNOOZE_MINUTES)
+
+    fun openWaiting() {
+        _overlay.value = Overlay.Waiting
+    }
+
+    /** «Сьогодні не дзвони» (утриманням на екрані очікування). */
     fun cancelWaiting(alarmId: Long) {
+        _overlay.value = null
         AlarmWaitService.cancelWaiting(app, alarmId)
+    }
+
+    /** «Подзвони через X хв»: задзвонить через X хв, навіть якщо тривога триває (FR-20). */
+    fun snoozeWaiting(alarmId: Long) {
+        _overlay.value = null
+        AlarmWaitService.snooze(app, alarmId)
     }
 
     private val _overlay = MutableStateFlow<Overlay?>(null)

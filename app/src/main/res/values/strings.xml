@@ -23,7 +23,6 @@
     <string name="card_deadline">крайній час %1$s</string>
     <string name="card_plain">Звичайний будильник — тривоги не враховуються</string>
     <string name="card_no_region">Регіон не обрано</string>
-    <string name="waiting_banner_title">%1$s чекає на відбій тривоги</string>
 
     <string name="theme_title">Тема</string>
     <string name="theme_system">Системна</string>
@@ -77,17 +76,6 @@
     <string name="warning_action">Налаштувати</string>
     <string name="channel_waiting">Очікування відбою</string>
     <string name="channel_waiting_description">Тихе сповіщення, поки будильник чекає відбою</string>
-    <string name="waiting_title">Будильник відкладено через тривогу</string>
-    <string name="waiting_alert">Триває тривога, оновлено о %1$s</string>
-    <string name="waiting_checking">Перевіряємо стан тривоги…</string>
-    <string name="waiting_deadline">Задзвонить о %1$s, навіть якщо відбою не буде</string>
-    <string name="waiting_no_deadline">Задзвонить одразу після відбою</string>
-    <string name="waiting_card_title">Чекає відбою</string>
-    <string name="waiting_card_deadline">Задзвонить одразу після відбою, не пізніше %1$s</string>
-    <string name="waiting_card_no_deadline">Задзвонить одразу після відбою</string>
-    <string name="waiting_card_skip">Не сьогодні</string>
-    <string name="waiting_ring_now">Дзвонити зараз</string>
-    <string name="waiting_cancel">Скасувати</string>
 
     <string name="debug_proxy_title">Проксі (лише debug)</string>
     <string name="debug_proxy_hint">http://192.168.0.2:8787</string>
@@ -171,4 +159,44 @@
     <string name="place_region_used_one">Будильник %1$s теж чекатиме на тривоги в новому регіоні.</string>
     <string name="place_region_used_many">Будильники %1$s теж чекатимуть на тривоги в новому регіоні.</string>
     <string name="action_understood">Зрозуміло</string>
+
+    <!-- Очікування відбою (design-spec 2, 3.8, 3.9) -->
+    <string name="level_red">Червона тривога</string>
+    <string name="level_yellow">Жовта тривога</string>
+    <string name="level_red_full">Червона тривога · ракетна загроза</string>
+    <string name="level_yellow_full">Жовта тривога · дронова загроза</string>
+    <string name="waiting_title_checking_generic">Будильник перевіряє тривогу…</string>
+    <string name="waiting_notif_title">Будильник %1$s чекає на відбій тривоги</string>
+    <string name="waiting_notif_title_checking">Будильник %1$s перевіряє тривогу…</string>
+    <string name="waiting_notif_title_pause">Будильник %1$s: відбій, задзвоню о %2$s</string>
+    <string name="waiting_notif_updated">оновлено %1$s</string>
+    <string name="waiting_notif_deadline">крайній час %1$s</string>
+    <string name="waiting_notif_snooze">Через %1$d хв</string>
+    <string name="waiting_notif_skip">Не дзвонити…</string>
+    <string name="waiting_screen_title">Будильник %1$s · %2$s</string>
+    <string name="waiting_screen_title_no_place">Будильник %1$s</string>
+    <string name="waiting_state_alert">Чекаю на відбій тривоги</string>
+    <string name="waiting_state_pause">Відбій тривоги о %1$s</string>
+    <string name="waiting_state_checking">Перевіряю тривогу…</string>
+    <string name="waiting_chip_pause">Чекаю %1$d хв після відбою</string>
+    <string name="waiting_row_reason">Причина</string>
+    <string name="waiting_row_updated">Оновлено</string>
+    <string name="waiting_row_deadline">Крайній час</string>
+    <string name="waiting_updated_now">%1$s, щойно</string>
+    <string name="waiting_updated_ago">%1$s, %2$d хв тому</string>
+    <string name="waiting_plan_pause">Задзвоню через %1$d хв після відбою.</string>
+    <string name="waiting_plan_pause_deadline">Задзвоню через %1$d хв після відбою, але не пізніше %2$s.</string>
+    <string name="waiting_plan_now">Задзвоню одразу після відбою.</string>
+    <string name="waiting_plan_now_deadline">Задзвоню одразу після відбою, але не пізніше %1$s.</string>
+    <string name="waiting_plan_in_pause">Задзвоню о %1$s, якщо тривога не почнеться знову.</string>
+    <string name="waiting_stale_title">Немає зв’язку з сервісом</string>
+    <string name="waiting_stale_text">Якщо дані не оновляться ще хвилину — задзвоню, щоб ви не проспали.</string>
+    <string name="waiting_snooze">Подзвони через %1$d хв</string>
+    <string name="waiting_skip">Сьогодні не дзвони</string>
+    <string name="waiting_skip_hint">Утримуйте секунду, щоб скасувати дзвінок</string>
+    <string name="banner_alert_title">%1$s чекає на відбій тривоги</string>
+    <string name="banner_pause_title">%1$s: відбій, задзвоню о %2$s</string>
+    <string name="banner_checking_title">%1$s перевіряє тривогу…</string>
+    <string name="banner_updated_now">оновлено щойно</string>
+    <string name="banner_updated_ago">оновлено %1$d хв тому</string>
 </resources>

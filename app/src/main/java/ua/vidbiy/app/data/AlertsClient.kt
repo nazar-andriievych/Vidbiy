@@ -17,7 +17,8 @@ object ProxyConfig {
     const val BASE_URL = "https://vidbiy-proxy.nazar-dev.workers.dev"
 }
 
-/** Жовтий — дронова загроза, червоний — ракетна (див. docs/proxy-api.md). */
+/** Жовтий — дронова загроза, червоний — ракетна (див. docs/proxy-api.md). Червоний — першим: він «вищий». */
+@Serializable
 enum class AlertLevel { RED, YELLOW }
 
 /** Один рівень тривоги в регіоні. */

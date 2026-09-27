@@ -82,3 +82,15 @@ private fun WaitFor.counts(level: AlertLevel): Boolean = when (this) {
     WaitFor.RED_AND_YELLOW -> true
     WaitFor.RED_ONLY -> level == AlertLevel.RED
 }
+
+/**
+ * Найвищий рівень, на який зараз чекає будильник (FR-27), — для показу на екрані очікування
+ * і в сповіщенні. Серед однакових рівнів беремо той, де є текстова причина.
+ */
+fun SelectedRegion.strongestLevel(
+    alerts: Map<String, List<ActiveLevel>>,
+    waitFor: WaitFor,
+    nowMillis: Long,
+): ActiveLevel? = levelsOver(alerts)
+    .filter { waitFor.counts(it.level) && nowMillis - it.sinceMillis < MAX_ALERT_AGE_MILLIS }
+    .minWithOrNull(compareBy<ActiveLevel>({ it.level.ordinal }, { it.reason.isNullOrBlank() }))

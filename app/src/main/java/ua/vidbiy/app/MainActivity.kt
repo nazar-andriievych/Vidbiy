@@ -8,6 +8,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
+import android.content.Intent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
@@ -44,19 +46,39 @@ import ua.vidbiy.app.ui.RegionPick
 import ua.vidbiy.app.ui.PlacesTab
 import ua.vidbiy.app.ui.RegionPickerScreen
 import ua.vidbiy.app.ui.SettingsTab
+import ua.vidbiy.app.ui.WaitingScreen
+import ua.vidbiy.app.ui.placeName
 import ua.vidbiy.app.ui.theme.VidbiyTheme
 
 class MainActivity : ComponentActivity() {
+    private val viewModel: AlarmsViewModel by viewModels { AlarmsViewModel.Factory }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Лише на першому створенні: після повороту екрана Intent той самий, а стан уже відновлено.
+        if (savedInstanceState == null) handleIntent(intent)
         setContent {
-            val viewModel: AlarmsViewModel = viewModel(factory = AlarmsViewModel.Factory)
             val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
             VidbiyTheme(mode = themeMode) {
                 VidbiyApp(viewModel)
             }
         }
+    }
+
+    // Активність уже відкрита, а користувач натиснув сповіщення очікування.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.action == ACTION_SHOW_WAITING) viewModel.openWaiting()
+    }
+
+    companion object {
+        /** Відкрити екран очікування: зі сповіщення («Не дзвонити…» або натиск на нього). */
+        const val ACTION_SHOW_WAITING = "ua.vidbiy.app.action.SHOW_WAITING"
     }
 }
 
@@ -74,6 +96,8 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val overlay by viewModel.overlay.collectAsStateWithLifecycle()
     val waiting by viewModel.pendingWait.collectAsStateWithLifecycle()
+    val waitStatus by viewModel.waitStatus.collectAsStateWithLifecycle()
+    val snoozeMinutes by viewModel.snoozeMinutes.collectAsStateWithLifecycle()
     val debugProxyUrl by viewModel.debugProxyUrl.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     // rememberSaveable переживає поворот екрана й повернення до застосунку, як стан у Bundle.
@@ -85,7 +109,26 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
     // (редагування, вибір регіону, нове місце) перекривають вкладки, поки відкриті.
     val editing = draft
     val current = overlay
+    val waitingAlarm = waiting?.let { wait -> alarms.firstOrNull { it.id == wait.alarmId } }
     when {
+        current == Overlay.Waiting -> {
+            val wait = waiting
+            if (wait != null && waitingAlarm != null) {
+                WaitingScreen(
+                    alarm = waitingAlarm,
+                    placeName = placeName(waitingAlarm, places),
+                    wait = wait,
+                    status = waitStatus?.takeIf { it.alarmId == wait.alarmId },
+                    snoozeMinutes = snoozeMinutes,
+                    onBack = viewModel::closeOverlay,
+                    onSnooze = { viewModel.snoozeWaiting(wait.alarmId) },
+                    onSkip = { viewModel.cancelWaiting(wait.alarmId) },
+                )
+            } else {
+                // Очікування закінчилося (задзвонив, скасували) — екрану більше нема що показувати.
+                LaunchedEffect(Unit) { viewModel.closeOverlay() }
+            }
+        }
         current == Overlay.AlarmRegion && editing != null -> RegionPickerScreen(
             title = stringResource(R.string.region_title),
             confirmLabel = stringResource(R.string.action_done),
@@ -142,10 +185,11 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                     alarms = alarms,
                     places = places,
                     waiting = waiting,
+                    waitStatus = waitStatus,
                     contentPadding = content,
                     onEdit = viewModel::startEdit,
                     onToggle = viewModel::setEnabled,
-                    onCancelWaiting = viewModel::cancelWaiting,
+                    onOpenWaiting = viewModel::openWaiting,
                 )
                 Tab.Places -> PlacesTab(
                     places = places,
