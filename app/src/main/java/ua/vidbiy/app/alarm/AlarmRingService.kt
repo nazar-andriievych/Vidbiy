@@ -25,7 +25,11 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ua.vidbiy.app.R
+import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.Json
+import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.data.Alarm
+import ua.vidbiy.app.data.SettingsRepository
 import ua.vidbiy.app.ui.AlarmRingActivity
 
 /**
@@ -42,6 +46,7 @@ class AlarmRingService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var autoStopJob: Job? = null
     private var ringingAlarmId: Long = Alarm.NEW_ID
+    private var snoozeMinutes: Int = SettingsRepository.DEFAULT_SNOOZE_MINUTES
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -51,7 +56,7 @@ class AlarmRingService : Service() {
             ACTION_SNOOZE -> {
                 AlarmScheduler(this).snooze(
                     alarmId = intent.getLongExtra(EXTRA_ALARM_ID, ringingAlarmId),
-                    minutes = SNOOZE_MINUTES,
+                    minutes = snoozeMinutes,
                 )
                 stopEverything()
             }
@@ -68,9 +73,11 @@ class AlarmRingService : Service() {
         val minute = intent.getIntExtra(EXTRA_MINUTE, 0)
         val vibrate = intent.getBooleanExtra(EXTRA_VIBRATE, true)
         val ringtoneUri = intent.getStringExtra(EXTRA_RINGTONE_URI)
+        val reasonJson = intent.getStringExtra(EXTRA_REASON)
         ringingAlarmId = alarmId
+        snoozeMinutes = intent.getIntExtra(EXTRA_SNOOZE_MINUTES, SettingsRepository.DEFAULT_SNOOZE_MINUTES)
 
-        startForegroundNotification(alarmId, hour, minute)
+        startForegroundNotification(alarmId, hour, minute, reasonJson)
         acquireWakeLock()
         startSound(ringtoneUri)
         if (vibrate) startVibration()
@@ -84,11 +91,11 @@ class AlarmRingService : Service() {
         }
     }
 
-    private fun startForegroundNotification(alarmId: Long, hour: Int, minute: Int) {
+    private fun startForegroundNotification(alarmId: Long, hour: Int, minute: Int, reasonJson: String?) {
         val fullScreen = PendingIntent.getActivity(
             this,
             alarmId.toInt(),
-            AlarmRingActivity.intent(this, alarmId, hour, minute),
+            AlarmRingActivity.intent(this, alarmId, hour, minute, reasonJson, snoozeMinutes),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
@@ -103,7 +110,7 @@ class AlarmRingService : Service() {
             .setAutoCancel(false)
             .setContentIntent(fullScreen)
             .setFullScreenIntent(fullScreen, true)
-            .addAction(0, getString(R.string.ring_snooze), servicePendingIntent(ACTION_SNOOZE, alarmId))
+            .addAction(0, getString(R.string.ring_snooze, snoozeMinutes), servicePendingIntent(ACTION_SNOOZE, alarmId))
             .addAction(0, getString(R.string.ring_dismiss), servicePendingIntent(ACTION_DISMISS, alarmId))
             .build()
 
@@ -211,9 +218,6 @@ class AlarmRingService : Service() {
         private const val WAKE_LOCK_TAG = "vidbiy:ring"
         private const val AUTO_STOP_MINUTES = 10L
 
-        /** FR-9: відкладення на 5 хвилин. */
-        const val SNOOZE_MINUTES = 5
-
         const val ACTION_START = "ua.vidbiy.app.action.START_RINGING"
         const val ACTION_SNOOZE = "ua.vidbiy.app.action.SNOOZE"
         const val ACTION_DISMISS = "ua.vidbiy.app.action.DISMISS"
@@ -223,10 +227,19 @@ class AlarmRingService : Service() {
         private const val EXTRA_MINUTE = "minute"
         private const val EXTRA_VIBRATE = "vibrate"
         private const val EXTRA_RINGTONE_URI = "ringtone_uri"
+        private const val EXTRA_REASON = "reason"
+        private const val EXTRA_SNOOZE_MINUTES = "snooze_minutes"
+        private val json = Json { ignoreUnknownKeys = true }
 
-        fun startRinging(context: Context, alarm: Alarm) {
+        /**
+         * Почати дзвінок. [reason] показується на екрані дзвінка (FR-21); тривалість
+         * відкладення (FR-19) читаємо тут, щоб кнопки й сповіщення знали її одразу.
+         */
+        suspend fun startRinging(context: Context, alarm: Alarm, reason: RingReason = RingReason.Plain) {
             // Дзвінок і очікування відбою взаємно виключні.
             AlarmWaitService.stop(context)
+            val app = context.applicationContext as VidbiyApplication
+            val snooze = app.settingsRepository.snoozeMinutes.first()
 
             val intent = Intent(context, AlarmRingService::class.java).apply {
                 action = ACTION_START
@@ -235,6 +248,8 @@ class AlarmRingService : Service() {
                 putExtra(EXTRA_MINUTE, alarm.minute)
                 putExtra(EXTRA_VIBRATE, alarm.vibrate)
                 putExtra(EXTRA_RINGTONE_URI, alarm.ringtoneUri)
+                putExtra(EXTRA_REASON, json.encodeToString(reason))
+                putExtra(EXTRA_SNOOZE_MINUTES, snooze)
             }
             context.startForegroundService(intent)
         }

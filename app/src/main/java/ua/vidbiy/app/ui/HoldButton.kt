@@ -54,8 +54,11 @@ fun HoldButton(
     onConfirmed: () -> Unit,
     modifier: Modifier = Modifier,
     icon: Int? = null,
+    accent: Boolean = false,
     holdMillis: Int = 1_000,
 ) {
+    val border = if (accent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+    val content = if (accent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
     val progress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
@@ -67,7 +70,7 @@ fun HoldButton(
             .fillMaxWidth()
             .height(Dimens.ButtonHeight)
             .clip(CircleShape)
-            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+            .border(if (accent) 1.5.dp else 1.dp, border, CircleShape)
             .drawBehind {
                 drawRect(fill, size = Size(size.width * progress.value, size.height))
             }
@@ -99,8 +102,8 @@ fun HoldButton(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (icon != null) Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(20.dp))
-            Text(text, style = MaterialTheme.typography.labelLarge)
+            if (icon != null) Icon(painterResource(icon), contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
+            Text(text, style = MaterialTheme.typography.labelLarge, color = content)
         }
     }
 }

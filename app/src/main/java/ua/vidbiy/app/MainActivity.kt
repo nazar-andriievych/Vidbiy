@@ -201,6 +201,8 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                     onDelete = viewModel::deletePlace,
                 )
                 Tab.Settings -> SettingsTab(
+                    snoozeMinutes = snoozeMinutes,
+                    onSnoozeChange = viewModel::setSnoozeMinutes,
                     themeMode = themeMode,
                     debugProxyUrl = debugProxyUrl,
                     contentPadding = content,

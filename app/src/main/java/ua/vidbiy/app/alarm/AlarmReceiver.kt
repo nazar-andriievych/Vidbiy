@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.PendingWait
+import ua.vidbiy.app.data.shortTitle
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -39,6 +40,9 @@ class AlarmReceiver : BroadcastReceiver() {
             try {
                 app.dataReady.await()
                 val alarm = app.alarmsRepository.alarms.first().firstOrNull { it.id == alarmId }
+                // Прочитати до дзвінка: дзвінок зупиняє службу очікування, і вона стирає свій стан.
+                val wait = app.settingsRepository.currentPendingWait()?.takeIf { it.alarmId == alarmId }
+                val lastLevel = app.settingsRepository.waitStatus.first()?.takeIf { it.alarmId == alarmId }?.level
                 if (alarm == null) {
                     // Будильник видалили, а спрацювання лишилося — просто мовчимо.
                     return@launch
@@ -76,8 +80,22 @@ class AlarmReceiver : BroadcastReceiver() {
                     AlarmScheduler(context).scheduleDeadline(alarm.id, wait.giveUpAtMillis())
                     AlarmWaitService.startWaiting(context, wait)
                 } else {
-                    // Регіон не обрано або тривоги не враховуються — звичайний будильник.
-                    AlarmRingService.startRinging(context, alarm)
+                    // Регіон не обрано, тривоги не враховуються, відкладений дзвінок
+                    // або страховка очікування (крайній час / доба).
+                    val reason = if (intent.action == ACTION_FIRE_DEADLINE && wait != null) {
+                        val placeName = app.placesRepository.current().byId(alarm.placeId)?.name
+                            ?: region?.shortTitle
+                        val deadline = wait.deadlineMillis
+                        // Крайній час — якщо він настав; інакше спрацювала доба очікування (FR-17).
+                        if (deadline != null && System.currentTimeMillis() >= deadline - 60_000L) {
+                            RingReason(RingReason.Kind.DEADLINE, placeName, lastLevel, deadlineMillis = deadline)
+                        } else {
+                            RingReason(RingReason.Kind.TOO_LONG, placeName, lastLevel)
+                        }
+                    } else {
+                        RingReason.Plain
+                    }
+                    AlarmRingService.startRinging(context, alarm, reason)
                 }
             } finally {
                 pendingResult.finish()

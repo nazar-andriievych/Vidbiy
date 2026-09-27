@@ -49,7 +49,13 @@ class BootReceiver : BroadcastReceiver() {
         if (System.currentTimeMillis() >= restored.giveUpAtMillis()) {
             // Крайній час настав, поки телефон завантажувався — дзвонимо одразу (FR-16).
             app.settingsRepository.clearPendingWait()
-            AlarmRingService.startRinging(context, alarm)
+            val deadline = restored.deadlineMillis
+            val reason = if (deadline != null && System.currentTimeMillis() >= deadline) {
+                RingReason(RingReason.Kind.DEADLINE, deadlineMillis = deadline)
+            } else {
+                RingReason(RingReason.Kind.TOO_LONG)
+            }
+            AlarmRingService.startRinging(context, alarm, reason)
             return
         }
 

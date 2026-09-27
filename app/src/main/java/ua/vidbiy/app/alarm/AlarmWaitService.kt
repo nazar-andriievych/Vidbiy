@@ -160,8 +160,19 @@ class AlarmWaitService : Service() {
             val step = nextWaitStep(decision, sawAlert, allClearAtElapsed, alarm.pauseMinutes, nowElapsed)
             if (step is WaitStep.Ring) {
                 Log.i(TAG, "Дзвонимо: ${step.reason}")
+                val strongest = region?.let { r -> snapshot.alerts?.let { r.strongestLevel(it, alarm.waitFor, nowMillis) } }
+                val reason = ringReasonFor(
+                    decision = step.reason,
+                    sawAlert = sawAlert,
+                    placeName = app.placesRepository.current().byId(alarm.placeId)?.name ?: region?.shortTitle,
+                    level = strongest?.level ?: app.settingsRepository.waitStatus.first()?.level,
+                    allClearAtMillis = allClearAtMillis,
+                    pauseMinutes = alarm.pauseMinutes,
+                    deadlineMillis = wait.deadlineMillis,
+                    nowMillis = nowMillis,
+                )
                 AlarmScheduler(this).cancelDeadline(wait.alarmId)
-                AlarmRingService.startRinging(this, alarm)
+                AlarmRingService.startRinging(this, alarm, reason)
                 stopEverything()
                 return
             }

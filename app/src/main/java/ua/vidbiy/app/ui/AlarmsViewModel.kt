@@ -72,6 +72,10 @@ class AlarmsViewModel(
     val snoozeMinutes: StateFlow<Int> = settings.snoozeMinutes
         .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsRepository.DEFAULT_SNOOZE_MINUTES)
 
+    fun setSnoozeMinutes(minutes: Int) {
+        viewModelScope.launch { settings.setSnoozeMinutes(minutes) }
+    }
+
     fun openWaiting() {
         _overlay.value = Overlay.Waiting
     }

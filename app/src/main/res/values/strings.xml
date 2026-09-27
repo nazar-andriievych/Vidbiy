@@ -64,7 +64,7 @@
     <string name="channel_alarm_description">Сповіщення, що супроводжує дзвінок</string>
     <string name="ring_title">Будильник</string>
     <string name="ring_text">Будильник на %1$s</string>
-    <string name="ring_snooze">Відкласти 5 хв</string>
+    <string name="ring_snooze">Відкласти на %1$d хв</string>
     <string name="ring_dismiss">Вимкнути</string>
 
     <string name="warning_notifications_title">Сповіщення вимкнені</string>
@@ -199,4 +199,29 @@
     <string name="banner_checking_title">%1$s перевіряє тривогу…</string>
     <string name="banner_updated_now">оновлено щойно</string>
     <string name="banner_updated_ago">оновлено %1$d хв тому</string>
+
+    <!-- Екран дзвінка (design-spec 3.10, FR-21) -->
+    <string name="ring_label">Будильник %1$s · %2$s</string>
+    <string name="ring_label_no_place">Будильник %1$s</string>
+    <string name="ring_dismiss_hint">Утримуйте секунду, щоб вимкнути</string>
+    <string name="ring_region_fallback">обраний регіон</string>
+    <string name="ring_all_clear_title">Відбій тривоги</string>
+    <string name="ring_all_clear_text">Тривога в регіоні «%1$s» закінчилася о %2$s. Минуло %3$d хв після відбою.</string>
+    <string name="ring_all_clear_text_no_pause">Тривога в регіоні «%1$s» закінчилася о %2$s.</string>
+    <string name="ring_deadline_title">Настав крайній час</string>
+    <string name="ring_deadline_text">Тривога ще триває, але ви просили розбудити не пізніше %1$s.</string>
+    <string name="ring_no_connection_title">Немає зв’язку з сервісом</string>
+    <string name="ring_no_connection_text">Не вдалося отримати свіжі дані про тривогу, тому будильник дзвонить.</string>
+    <string name="ring_stale_text">Свіжих даних про тривогу немає понад 3 хвилини, тому будильник дзвонить.</string>
+    <string name="ring_too_long_title">Тривога триває понад добу</string>
+    <string name="ring_too_long_text">Будильник більше не чекає на відбій у регіоні «%1$s».</string>
+    <string name="ring_no_alert_title">Тривоги немає</string>
+    <string name="ring_no_alert_text">У регіоні «%1$s» зараз немає тривоги, тому будильник дзвонить вчасно.</string>
+    <string name="level_red_ongoing">Червона тривога триває</string>
+    <string name="level_yellow_ongoing">Жовта тривога триває</string>
+
+    <!-- Налаштування: відкладення (design-spec 3.6, FR-19) -->
+    <string name="snooze_title">Відкласти дзвінок на</string>
+    <string name="snooze_option">%1$d хв</string>
+    <string name="snooze_hint">Для кнопок «Відкласти» на екрані дзвінка і «Подзвони через %1$d хв» під час очікування. Задзвонить через цей час, навіть якщо тривога ще триває. Одне значення для всіх будильників.</string>
 </resources>
