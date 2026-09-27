@@ -95,6 +95,8 @@ fun WaitingScreen(
     onBack: () -> Unit,
     onSnooze: () -> Unit,
     onSkip: () -> Unit,
+    oneShot: Boolean = false,
+    justEnabled: Boolean = false,
 ) {
     BackHandler(onBack = onBack)
     val now = rememberNowMillis()
@@ -108,7 +110,9 @@ fun WaitingScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (placeName != null) {
+                        text = if (oneShot) {
+                            stringResource(R.string.waiting_screen_title_one_shot, placeName.orEmpty())
+                        } else if (placeName != null) {
                             stringResource(R.string.waiting_screen_title, time, placeName)
                         } else {
                             stringResource(R.string.waiting_screen_title_no_place, time)
@@ -157,6 +161,7 @@ fun WaitingScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            if (justEnabled) EnabledNote()
             StateCircle(phase, status?.level)
             Text(
                 text = when (phase) {
@@ -199,6 +204,29 @@ fun WaitingScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 8.dp),
                 )
+            }
+        }
+    }
+}
+
+/** «✓ Увімкнено · Можна спати — розбуджу після відбою» (`09-one-shot--2`). */
+@Composable
+private fun EnabledNote() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(painterResource(R.drawable.ic_check), contentDescription = null, modifier = Modifier.size(22.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(stringResource(R.string.one_shot_enabled_title), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.one_shot_enabled_text), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

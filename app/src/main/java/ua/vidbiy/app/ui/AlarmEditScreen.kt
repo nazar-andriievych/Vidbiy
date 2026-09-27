@@ -251,15 +251,7 @@ private fun AlertsCard(
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             FieldLabel(stringResource(R.string.pause_title))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                for (minutes in Alarm.PAUSE_OPTIONS) {
-                    ChoiceChip(
-                        text = minutes.toString(),
-                        selected = alarm.pauseMinutes == minutes,
-                        onClick = { onChange { it.copy(pauseMinutes = minutes) } },
-                    )
-                }
-            }
+            PauseChips(alarm.pauseMinutes) { minutes -> onChange { it.copy(pauseMinutes = minutes) } }
             FieldHint(stringResource(R.string.pause_hint))
         }
 
@@ -271,10 +263,20 @@ private fun AlertsCard(
     }
 }
 
+/** «Чекати після відбою, хв»: 0, 2, 5, 10, 15, 30 (design-spec 3.2). */
+@Composable
+fun PauseChips(selected: Int, onSelect: (Int) -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        for (minutes in Alarm.PAUSE_OPTIONS) {
+            ChoiceChip(text = minutes.toString(), selected = selected == minutes, onClick = { onSelect(minutes) })
+        }
+    }
+}
+
 /** Сегменти «●● Будь-яка» / «● Лише червона» (design-spec 2). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LevelSelector(selected: WaitFor, onSelect: (WaitFor) -> Unit) {
+fun LevelSelector(selected: WaitFor, onSelect: (WaitFor) -> Unit) {
     val options = listOf(
         WaitFor.RED_AND_YELLOW to R.string.wait_for_any,
         WaitFor.RED_ONLY to R.string.wait_for_red_only,

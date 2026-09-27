@@ -160,8 +160,11 @@ private fun RingScreen(
     ) {
         Spacer(Modifier.heightIn(min = 48.dp))
         Text(
-            text = reason.placeName?.let { stringResource(R.string.ring_label, time, it) }
-                ?: stringResource(R.string.ring_label_no_place, time),
+            text = when {
+                reason.oneShot -> stringResource(R.string.ring_label_one_shot, reason.placeName.orEmpty())
+                reason.placeName != null -> stringResource(R.string.ring_label, time, reason.placeName)
+                else -> stringResource(R.string.ring_label_no_place, time)
+            },
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -227,7 +230,8 @@ private fun ReasonBlock(reason: RingReason) {
         )
         RingReason.Kind.STALE -> Triple(
             R.drawable.ic_cloud_off,
-            stringResource(R.string.ring_no_connection_title),
+            // FR-24: у разовому режимі — «Немає даних», а не «Немає зв'язку».
+            stringResource(if (reason.oneShot) R.string.ring_no_data_title else R.string.ring_no_connection_title),
             stringResource(R.string.ring_stale_text),
         )
         RingReason.Kind.TOO_LONG -> Triple(

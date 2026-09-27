@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ua.vidbiy.app.alarm.AlarmScheduler
 import ua.vidbiy.app.alarm.Notifications
+import ua.vidbiy.app.alarm.OneShot
+import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlarmsRepository
 import ua.vidbiy.app.data.LegacyMigration
 import ua.vidbiy.app.data.PlacesEditor
@@ -37,6 +39,21 @@ class VidbiyApplication : Application() {
      */
     lateinit var dataReady: Deferred<Unit>
         private set
+
+    /**
+     * Будильник за id, включно з віртуальним будильником разового режиму (OneShot):
+     * його немає в сховищі, він збирається з налаштувань режиму й основного місця.
+     */
+    suspend fun findAlarm(id: Long): Alarm? {
+        if (id == OneShot.ONE_SHOT_ID) {
+            return OneShot.alarm(
+                primary = placesRepository.current().primary,
+                waitFor = settingsRepository.oneShotWaitFor.first(),
+                pauseMinutes = settingsRepository.oneShotPauseMinutes.first(),
+            )
+        }
+        return alarmsRepository.alarms.first().firstOrNull { it.id == id }
+    }
 
     override fun onCreate() {
         super.onCreate()

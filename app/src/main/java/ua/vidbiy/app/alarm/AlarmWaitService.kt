@@ -118,7 +118,7 @@ class AlarmWaitService : Service() {
 
         app.dataReady.await()
         while (currentCoroutineContext().isActive) {
-            val alarm = app.alarmsRepository.alarms.first().firstOrNull { it.id == wait.alarmId }
+            val alarm = app.findAlarm(wait.alarmId)
             if (alarm == null) {
                 // Будильник видалили, поки ми чекали — чекати більше нема для кого.
                 AlarmScheduler(this).cancelDeadline(wait.alarmId)
@@ -170,7 +170,7 @@ class AlarmWaitService : Service() {
                     pauseMinutes = alarm.pauseMinutes,
                     deadlineMillis = wait.deadlineMillis,
                     nowMillis = nowMillis,
-                )
+                ).copy(oneShot = alarm.id == OneShot.ONE_SHOT_ID)
                 AlarmScheduler(this).cancelDeadline(wait.alarmId)
                 AlarmRingService.startRinging(this, alarm, reason)
                 stopEverything()
@@ -250,7 +250,10 @@ class AlarmWaitService : Service() {
     ): Notification {
         val time = alarm?.let { formatTime(it.hour, it.minute) }
         val pauseRingAt = status?.ringAtMillis
+        val oneShot = wait.alarmId == OneShot.ONE_SHOT_ID
         val title = when {
+            oneShot && pauseRingAt != null -> getString(R.string.one_shot_notif_title_pause, formatMillis(pauseRingAt))
+            oneShot -> getString(R.string.one_shot_notif_title)
             time == null -> getString(R.string.waiting_title_checking_generic)
             pauseRingAt != null -> getString(R.string.waiting_notif_title_pause, time, formatMillis(pauseRingAt))
             status?.level != null -> getString(R.string.waiting_notif_title, time)

@@ -224,4 +224,35 @@
     <string name="snooze_title">Відкласти дзвінок на</string>
     <string name="snooze_option">%1$d хв</string>
     <string name="snooze_hint">Для кнопок «Відкласти» на екрані дзвінка і «Подзвони через %1$d хв» під час очікування. Задзвонить через цей час, навіть якщо тривога ще триває. Одне значення для всіх будильників.</string>
+
+    <!-- Разовий режим «Розбуди після відбою» (design-spec 4, FR-22 … FR-25) -->
+    <string name="one_shot_title">Розбуди після відбою</string>
+    <string name="one_shot_idle">Разово · %1$s · %2$s · %3$s</string>
+    <string name="one_shot_level_any">будь-яка</string>
+    <string name="one_shot_level_red">лише червона</string>
+    <string name="one_shot_pause_none">одразу</string>
+    <string name="one_shot_pause">%1$d хв</string>
+    <string name="one_shot_enable">Увімкнути «Розбуди після відбою»</string>
+    <string name="one_shot_checking">Перевіряю тривогу…</string>
+    <string name="one_shot_checking_sub">%1$s · зазвичай кілька секунд</string>
+    <string name="one_shot_cancel_check">Скасувати перевірку</string>
+    <string name="one_shot_no_alert">Зараз тривоги немає</string>
+    <string name="one_shot_no_alert_sub">%1$s · режим не потрібен</string>
+    <string name="one_shot_no_data">Немає даних</string>
+    <string name="one_shot_no_data_sub">Режим не ввімкнено</string>
+    <string name="one_shot_retry">Повторити</string>
+    <string name="one_shot_no_place">Спершу додайте основне місце в «Мої місця»</string>
+    <string name="one_shot_banner_title">Розбуджу після відбою</string>
+    <string name="one_shot_banner_pause">Відбій · задзвоню о %1$s</string>
+    <string name="one_shot_enabled_title">Увімкнено</string>
+    <string name="one_shot_enabled_text">Можна спати — розбуджу після відбою</string>
+    <string name="waiting_screen_title_one_shot">Розбуди після відбою · %1$s</string>
+    <string name="one_shot_notif_title">Разовий режим: чекаю на відбій тривоги</string>
+    <string name="one_shot_notif_title_pause">Разовий режим: відбій, задзвоню о %1$s</string>
+    <string name="ring_label_one_shot">Розбуди після відбою · %1$s</string>
+    <string name="ring_no_data_title">Немає даних</string>
+    <string name="one_shot_settings_hint">Налаштування разового режиму. Крайнього часу в ньому немає.</string>
+    <string name="one_shot_region_label">Регіон — основне місце</string>
+    <string name="one_shot_pause_hint">Після відбою почекати стільки хвилин, щоб переконатися, що тривога не повториться. Повториться — чекатиму далі.</string>
+    <string name="one_shot_banner_pause_plus">+%1$d хв</string>
 </resources>

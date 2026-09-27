@@ -5,7 +5,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import android.os.SystemClock
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,6 +18,13 @@ import kotlinx.coroutines.launch
 import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.alarm.AlarmScheduler
 import ua.vidbiy.app.alarm.AlarmWaitService
+import ua.vidbiy.app.alarm.OneShot
+import ua.vidbiy.app.alarm.OneShotCheck
+import ua.vidbiy.app.alarm.decideRing
+import ua.vidbiy.app.alarm.oneShotCheck
+import ua.vidbiy.app.data.AlertsClient
+import ua.vidbiy.app.data.AlertsSnapshot
+import ua.vidbiy.app.data.WaitFor
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlarmsRepository
 import ua.vidbiy.app.data.PendingWait
@@ -72,6 +83,87 @@ class AlarmsViewModel(
     val snoozeMinutes: StateFlow<Int> = settings.snoozeMinutes
         .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsRepository.DEFAULT_SNOOZE_MINUTES)
 
+    // ---- Разовий режим «Розбуди після відбою» (FR-22 … FR-25) ----
+
+    val oneShotWaitFor: StateFlow<WaitFor> = settings.oneShotWaitFor
+        .stateIn(viewModelScope, SharingStarted.Eagerly, WaitFor.RED_AND_YELLOW)
+
+    val oneShotPauseMinutes: StateFlow<Int> = settings.oneShotPauseMinutes
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    fun setOneShotWaitFor(waitFor: WaitFor) {
+        viewModelScope.launch { settings.setOneShotWaitFor(waitFor) }
+    }
+
+    fun setOneShotPauseMinutes(minutes: Int) {
+        viewModelScope.launch { settings.setOneShotPauseMinutes(minutes) }
+    }
+
+    /** Віртуальний будильник режиму — для екрана очікування. */
+    val oneShotAlarm: StateFlow<Alarm> = combine(places, oneShotWaitFor, oneShotPauseMinutes) { p, waitFor, pause ->
+        OneShot.alarm(p.primary, waitFor, pause)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, OneShot.alarm(null, WaitFor.RED_AND_YELLOW, 0))
+
+    private val _oneShotRow = MutableStateFlow(OneShotRowState.IDLE)
+    val oneShotRow: StateFlow<OneShotRowState> = _oneShotRow.asStateFlow()
+
+    /** Режим щойно ввімкнули: екран очікування показує «Увімкнено · Можна спати». */
+    private val _oneShotJustEnabled = MutableStateFlow(false)
+    val oneShotJustEnabled: StateFlow<Boolean> = _oneShotJustEnabled.asStateFlow()
+
+    private var oneShotJob: Job? = null
+
+    /**
+     * FR-23: та сама перевірка, що в момент будильника, — до 30 с спроб. Тривога є —
+     * починаємо очікування; немає тривоги чи даних — показуємо це в рядку ~10 с.
+     */
+    fun startOneShot() {
+        val region = places.value.primary?.region ?: return
+        oneShotJob?.cancel()
+        _oneShotRow.value = OneShotRowState.CHECKING
+        oneShotJob = viewModelScope.launch {
+            val client = AlertsClient(settings.proxyBaseUrl())
+            val started = SystemClock.elapsedRealtime()
+            var known: AlertsSnapshot? = null
+            var check: OneShotCheck
+            while (true) {
+                known = client.fetch().orPrevious(known)
+                val decision = decideRing(
+                    snapshot = known,
+                    nowElapsed = SystemClock.elapsedRealtime(),
+                    nowMillis = System.currentTimeMillis(),
+                    region = region,
+                    waitFor = oneShotWaitFor.value,
+                    pastDeadline = false,
+                )
+                check = oneShotCheck(decision)
+                if (check != OneShotCheck.NO_DATA || SystemClock.elapsedRealtime() - started >= ONE_SHOT_CHECK_MILLIS) break
+                delay(ONE_SHOT_RETRY_MILLIS)
+            }
+            when (check) {
+                OneShotCheck.ALERT -> {
+                    val wait = PendingWait(alarmId = OneShot.ONE_SHOT_ID, startedAtMillis = System.currentTimeMillis())
+                    scheduler.scheduleDeadline(OneShot.ONE_SHOT_ID, wait.giveUpAtMillis())
+                    AlarmWaitService.startWaiting(app, wait)
+                    _oneShotRow.value = OneShotRowState.IDLE
+                    _oneShotJustEnabled.value = true
+                    _overlay.value = Overlay.Waiting
+                }
+                OneShotCheck.NO_ALERT, OneShotCheck.NO_DATA -> {
+                    _oneShotRow.value = if (check == OneShotCheck.NO_ALERT) OneShotRowState.NO_ALERT else OneShotRowState.NO_DATA
+                    // Відкриті питання requirements: повідомлення тримається ~10 с.
+                    delay(ONE_SHOT_MESSAGE_MILLIS)
+                    _oneShotRow.value = OneShotRowState.IDLE
+                }
+            }
+        }
+    }
+
+    fun cancelOneShotCheck() {
+        oneShotJob?.cancel()
+        _oneShotRow.value = OneShotRowState.IDLE
+    }
+
     fun setSnoozeMinutes(minutes: Int) {
         viewModelScope.launch { settings.setSnoozeMinutes(minutes) }
     }
@@ -97,6 +189,7 @@ class AlarmsViewModel(
 
     fun closeOverlay() {
         _overlay.value = null
+        _oneShotJustEnabled.value = false
     }
 
     /** FR-32: тема застосунку. */
@@ -202,6 +295,10 @@ class AlarmsViewModel(
     }
 
     companion object {
+        private const val ONE_SHOT_CHECK_MILLIS = 30_000L
+        private const val ONE_SHOT_RETRY_MILLIS = 2_000L
+        private const val ONE_SHOT_MESSAGE_MILLIS = 10_000L
+
         val Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as VidbiyApplication

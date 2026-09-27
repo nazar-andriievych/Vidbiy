@@ -74,6 +74,24 @@ class SettingsRepository(private val context: Context) {
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val waitStatusKey = stringPreferencesKey("wait_status")
     private val snoozeMinutesKey = intPreferencesKey("snooze_minutes")
+    private val oneShotWaitForKey = stringPreferencesKey("one_shot_wait_for")
+    private val oneShotPauseKey = intPreferencesKey("one_shot_pause_minutes")
+
+    /** FR-22: рівень для разового режиму, задається один раз у налаштуваннях. */
+    val oneShotWaitFor: Flow<WaitFor> = context.settingsDataStore.data.map { prefs ->
+        WaitFor.entries.firstOrNull { it.name == prefs[oneShotWaitForKey] } ?: WaitFor.RED_AND_YELLOW
+    }
+
+    suspend fun setOneShotWaitFor(waitFor: WaitFor) {
+        context.settingsDataStore.edit { prefs -> prefs[oneShotWaitForKey] = waitFor.name }
+    }
+
+    /** FR-22: пауза після відбою для разового режиму; як і в будильника, за замовчуванням 0 (FR-5). */
+    val oneShotPauseMinutes: Flow<Int> = context.settingsDataStore.data.map { prefs -> prefs[oneShotPauseKey] ?: 0 }
+
+    suspend fun setOneShotPauseMinutes(minutes: Int) {
+        context.settingsDataStore.edit { prefs -> prefs[oneShotPauseKey] = minutes }
+    }
 
     /** FR-19: тривалість відкладення, одна на весь застосунок. */
     val snoozeMinutes: Flow<Int> = context.settingsDataStore.data.map { prefs ->

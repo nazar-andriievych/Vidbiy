@@ -35,7 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import androidx.lifecycle.viewmodel.compose.viewModel
+import ua.vidbiy.app.alarm.OneShot
 import ua.vidbiy.app.ui.AlarmEditScreen
 import ua.vidbiy.app.ui.AlarmsTab
 import ua.vidbiy.app.ui.AlarmsViewModel
@@ -82,6 +84,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Скільки екран очікування чекає, поки служба запише щойно почате очікування. */
+private const val WAIT_APPEAR_GRACE_MILLIS = 3_000L
+
 /** Вкладки нижньої навігації (design-spec 2). */
 private enum class Tab(@StringRes val label: Int, @DrawableRes val icon: Int) {
     Alarms(R.string.nav_alarms, R.drawable.ic_alarm),
@@ -98,6 +103,11 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
     val waiting by viewModel.pendingWait.collectAsStateWithLifecycle()
     val waitStatus by viewModel.waitStatus.collectAsStateWithLifecycle()
     val snoozeMinutes by viewModel.snoozeMinutes.collectAsStateWithLifecycle()
+    val oneShotRow by viewModel.oneShotRow.collectAsStateWithLifecycle()
+    val oneShotWaitFor by viewModel.oneShotWaitFor.collectAsStateWithLifecycle()
+    val oneShotPause by viewModel.oneShotPauseMinutes.collectAsStateWithLifecycle()
+    val oneShotAlarm by viewModel.oneShotAlarm.collectAsStateWithLifecycle()
+    val oneShotJustEnabled by viewModel.oneShotJustEnabled.collectAsStateWithLifecycle()
     val debugProxyUrl by viewModel.debugProxyUrl.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     // rememberSaveable переживає поворот екрана й повернення до застосунку, як стан у Bundle.
@@ -109,7 +119,9 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
     // (редагування, вибір регіону, нове місце) перекривають вкладки, поки відкриті.
     val editing = draft
     val current = overlay
-    val waitingAlarm = waiting?.let { wait -> alarms.firstOrNull { it.id == wait.alarmId } }
+    val waitingAlarm = waiting?.let { wait ->
+        if (wait.alarmId == OneShot.ONE_SHOT_ID) oneShotAlarm else alarms.firstOrNull { it.id == wait.alarmId }
+    }
     when {
         current == Overlay.Waiting -> {
             val wait = waiting
@@ -123,10 +135,18 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                     onBack = viewModel::closeOverlay,
                     onSnooze = { viewModel.snoozeWaiting(wait.alarmId) },
                     onSkip = { viewModel.cancelWaiting(wait.alarmId) },
+                    oneShot = wait.alarmId == OneShot.ONE_SHOT_ID,
+                    justEnabled = oneShotJustEnabled,
                 )
             } else {
                 // Очікування закінчилося (задзвонив, скасували) — екрану більше нема що показувати.
-                LaunchedEffect(Unit) { viewModel.closeOverlay() }
+                // Невелика затримка: щойно ввімкнений режим відкриває екран раніше, ніж служба
+                // встигає записати своє очікування. Щойно воно з'явиться, ця гілка зникне
+                // з композиції разом з ефектом.
+                LaunchedEffect(Unit) {
+                    delay(WAIT_APPEAR_GRACE_MILLIS)
+                    viewModel.closeOverlay()
+                }
             }
         }
         current == Overlay.AlarmRegion && editing != null -> RegionPickerScreen(
@@ -190,6 +210,12 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                     onEdit = viewModel::startEdit,
                     onToggle = viewModel::setEnabled,
                     onOpenWaiting = viewModel::openWaiting,
+                    oneShotRow = oneShotRow,
+                    oneShotWaitFor = oneShotWaitFor,
+                    oneShotPauseMinutes = oneShotPause,
+                    onStartOneShot = viewModel::startOneShot,
+                    onCancelOneShotCheck = viewModel::cancelOneShotCheck,
+                    onNeedPlace = { tab = Tab.Places },
                 )
                 Tab.Places -> PlacesTab(
                     places = places,
@@ -203,6 +229,12 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                 Tab.Settings -> SettingsTab(
                     snoozeMinutes = snoozeMinutes,
                     onSnoozeChange = viewModel::setSnoozeMinutes,
+                    primaryPlace = places.primary,
+                    oneShotWaitFor = oneShotWaitFor,
+                    oneShotPauseMinutes = oneShotPause,
+                    onOneShotWaitFor = viewModel::setOneShotWaitFor,
+                    onOneShotPause = viewModel::setOneShotPauseMinutes,
+                    onOpenPlaces = { tab = Tab.Places },
                     themeMode = themeMode,
                     debugProxyUrl = debugProxyUrl,
                     contentPadding = content,

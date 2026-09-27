@@ -32,6 +32,8 @@ class AlarmReceiver : BroadcastReceiver() {
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, Alarm.NEW_ID)
         val isRegularFire = intent.action == ACTION_FIRE
         if (alarmId == Alarm.NEW_ID) return
+        // Разовий режим не має власного розкладу: сюди він потрапляє лише з відкладення
+        // або страховки очікування.
 
         val app = context.applicationContext as VidbiyApplication
         val pendingResult = goAsync()
@@ -39,7 +41,7 @@ class AlarmReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
                 app.dataReady.await()
-                val alarm = app.alarmsRepository.alarms.first().firstOrNull { it.id == alarmId }
+                val alarm = app.findAlarm(alarmId)
                 // Прочитати до дзвінка: дзвінок зупиняє службу очікування, і вона стирає свій стан.
                 val wait = app.settingsRepository.currentPendingWait()?.takeIf { it.alarmId == alarmId }
                 val lastLevel = app.settingsRepository.waitStatus.first()?.takeIf { it.alarmId == alarmId }?.level
@@ -90,12 +92,12 @@ class AlarmReceiver : BroadcastReceiver() {
                         if (deadline != null && System.currentTimeMillis() >= deadline - 60_000L) {
                             RingReason(RingReason.Kind.DEADLINE, placeName, lastLevel, deadlineMillis = deadline)
                         } else {
-                            RingReason(RingReason.Kind.TOO_LONG, placeName, lastLevel)
+                            RingReason(RingReason.Kind.TOO_LONG, placeName, lastLevel, oneShot = alarm.id == OneShot.ONE_SHOT_ID)
                         }
                     } else {
                         RingReason.Plain
                     }
-                    AlarmRingService.startRinging(context, alarm, reason)
+                    AlarmRingService.startRinging(context, alarm, reason.copy(oneShot = alarm.id == OneShot.ONE_SHOT_ID))
                 }
             } finally {
                 pendingResult.finish()

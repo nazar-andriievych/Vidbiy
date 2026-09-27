@@ -30,6 +30,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ua.vidbiy.app.BuildConfig
 import ua.vidbiy.app.R
+import ua.vidbiy.app.data.Place
+import ua.vidbiy.app.data.WaitFor
+import ua.vidbiy.app.data.label
+import androidx.compose.foundation.layout.Column
 import ua.vidbiy.app.ui.theme.Dimens
 import ua.vidbiy.app.ui.theme.ThemeMode
 
@@ -41,6 +45,12 @@ import ua.vidbiy.app.ui.theme.ThemeMode
 fun SettingsTab(
     snoozeMinutes: Int,
     onSnoozeChange: (Int) -> Unit,
+    primaryPlace: Place?,
+    oneShotWaitFor: WaitFor,
+    oneShotPauseMinutes: Int,
+    onOneShotWaitFor: (WaitFor) -> Unit,
+    onOneShotPause: (Int) -> Unit,
+    onOpenPlaces: () -> Unit,
     themeMode: ThemeMode,
     debugProxyUrl: String,
     contentPadding: PaddingValues,
@@ -64,6 +74,37 @@ fun SettingsTab(
                     }
                 }
                 FieldHint(stringResource(R.string.snooze_hint, snoozeMinutes))
+            }
+        }
+        item {
+            // «Розбуди після відбою» (design-spec 3.6): регіон — основне місце, рівень, пауза.
+            SectionCard(modifier = Modifier.padding(horizontal = Dimens.ScreenPadding)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(stringResource(R.string.one_shot_title), style = MaterialTheme.typography.titleMedium)
+                    FieldHint(stringResource(R.string.one_shot_settings_hint))
+                }
+                ValueRow(
+                    icon = R.drawable.ic_location_on,
+                    label = stringResource(R.string.one_shot_region_label),
+                    value = primaryPlace?.name ?: stringResource(R.string.region_not_selected),
+                    detail = primaryPlace?.region?.label,
+                    onClick = onOpenPlaces,
+                ) {
+                    Icon(
+                        painterResource(R.drawable.ic_chevron_right),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    FieldLabel(stringResource(R.string.wait_for))
+                    LevelSelector(oneShotWaitFor, onOneShotWaitFor)
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    FieldLabel(stringResource(R.string.pause_title))
+                    PauseChips(oneShotPauseMinutes, onOneShotPause)
+                    FieldHint(stringResource(R.string.one_shot_pause_hint))
+                }
             }
         }
         item {

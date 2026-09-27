@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ua.vidbiy.app.R
 import ua.vidbiy.app.data.Alarm
+import ua.vidbiy.app.alarm.OneShot
 import ua.vidbiy.app.data.AlertLevel
 import ua.vidbiy.app.data.PendingWait
 import ua.vidbiy.app.data.WaitStatus
@@ -56,6 +57,12 @@ fun AlarmsTab(
     onEdit: (Alarm) -> Unit,
     onToggle: (Alarm, Boolean) -> Unit,
     onOpenWaiting: () -> Unit,
+    oneShotRow: OneShotRowState,
+    oneShotWaitFor: WaitFor,
+    oneShotPauseMinutes: Int,
+    onStartOneShot: () -> Unit,
+    onCancelOneShotCheck: () -> Unit,
+    onNeedPlace: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -73,6 +80,29 @@ fun AlarmsTab(
                     placeName = placeName(waitingAlarm, places),
                     status = waitStatus?.takeIf { it.alarmId == waitingAlarm.id },
                     onOpen = onOpenWaiting,
+                )
+            }
+        }
+
+        // Порядок з design-spec 3.1: банер очікування → рядок разового режиму → картки.
+        // Коли режим активний, його рядок сам стає банером.
+        item {
+            if (waiting?.alarmId == OneShot.ONE_SHOT_ID) {
+                OneShotBanner(
+                    placeName = places.primary?.name,
+                    pauseMinutes = oneShotPauseMinutes,
+                    status = waitStatus?.takeIf { it.alarmId == OneShot.ONE_SHOT_ID },
+                    onOpen = onOpenWaiting,
+                )
+            } else {
+                OneShotRow(
+                    state = oneShotRow,
+                    primary = places.primary,
+                    waitFor = oneShotWaitFor,
+                    pauseMinutes = oneShotPauseMinutes,
+                    onStart = onStartOneShot,
+                    onCancelCheck = onCancelOneShotCheck,
+                    onNeedPlace = onNeedPlace,
                 )
             }
         }

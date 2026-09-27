@@ -18,6 +18,8 @@ data class RingReason(
     val allClearAtMillis: Long? = null,
     val pauseMinutes: Int = 0,
     val deadlineMillis: Long? = null,
+    /** Дзвонить разовий режим (FR-24): інший заголовок, «Немає даних» замість «Немає зв'язку». */
+    val oneShot: Boolean = false,
 ) {
     enum class Kind {
         /** Звичайний будильник або відкладений дзвінок: блоку причини немає. */
