@@ -1,6 +1,4 @@
-import { labAccess, upstreamPaused } from "./lab";
 import { isMockScenario } from "./mock";
-import { sha256Hex } from "./probe";
 import { importPublicKey, parseWebhook, verifyWebhook, WEBHOOK_PUBLIC_KEY_PEM } from "./ukrainealarm";
 import type { AlertsHub } from "./hub";
 import type { AlertsResponse } from "./types";
@@ -18,12 +16,6 @@ export interface Env {
    * на розгорнутому воркері, не ризикуючи ключем. Див. `budget.ts`.
    */
   FAKE_UPSTREAM?: string;
-  /** `N` — кожну N-ту подію вебхука відповідаємо 503, щоб побачити, чи повторять. Див. `probe.ts`. */
-  WEBHOOK_RETRY_PROBE?: string;
-  /** `"1"` — пауза на час дослідів: сам до ukrainealarm не ходимо, вебхуки приймаємо. */
-  UPSTREAM_PAUSED?: string;
-  /** Секрет для `/lab/call`. Не задано — маршруту не існує. Див. `lab.ts`. */
-  LAB_KEY?: string;
   /** Єдина точка, де живе стан тривог. Див. `hub.ts`. */
   ALERTS_HUB: DurableObjectNamespace<AlertsHub>;
 }
@@ -45,9 +37,7 @@ export default {
       return handleMock(url, env);
     }
 
-    // `/v2/webhook` — адреса, на яку оформлена поточна підписка в ukrainealarm.
-    // Прибрати, щойно підписку переоформлять на `/webhook`.
-    if (url.pathname === "/webhook" || url.pathname === "/v2/webhook") {
+    if (url.pathname === "/webhook") {
       return request.method === "POST"
         ? handleWebhook(request, env)
         : json({ error: "method_not_allowed" }, 405);
@@ -62,18 +52,12 @@ export default {
         return json(await getAlerts(env));
       case "/stats":
         return json(await hub(env).stats());
-      case "/lab/call": {
-        const access = labAccess(env.LAB_KEY, request.headers.get("x-lab-key"), url.searchParams.get("path"));
-        if (!access.ok) return json({ error: access.error }, access.status);
-        return json(await hub(env).labCall(access.path));
-      }
       case "/health":
         return json({
           ok: true,
           mock: mockEnabled(env),
           configured: mockEnabled(env) || Boolean(env.UKRAINEALARM_TOKEN),
           fake_upstream: env.FAKE_UPSTREAM === "1",
-          paused: upstreamPaused(env.UPSTREAM_PAUSED),
         });
       default:
         return json({ error: "not_found" }, 404);
@@ -133,11 +117,7 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
   }
 
   try {
-    const { outcome, refuse } = await hub(env).receive(event, Date.now(), await sha256Hex(raw));
-    if (refuse) {
-      // Подію застосовано; відмова навмисна — перевіряємо, чи повторять доставку.
-      return json({ error: "retry_probe", outcome }, 503);
-    }
+    const outcome = await hub(env).receive(event, Date.now());
     return json({ ok: true, outcome });
   } catch (error) {
     // Не 200: якщо ukrainealarm повторює доставку, хай спробує ще раз.

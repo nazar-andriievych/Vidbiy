@@ -179,25 +179,7 @@ export type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;
 
 export type ApiFailure = { ok: false; status: number | null; detail?: string };
 
-export type StatusResult = { ok: true; index: string } | ApiFailure;
-
 export type SnapshotResult = { ok: true; regions: Map<string, RegionState> } | ApiFailure;
-
-/**
- * Номер останньої зміни (`/api/v3/alerts/status`). Найдешевший запит: кілька байтів,
- * а відповідає на питання «чи змінилося щось відтоді, як ми дивилися».
- */
-export async function fetchStatus(token: string, fetchImpl: Fetcher = fetch): Promise<StatusResult> {
-  const response = await get("alerts/status", token, fetchImpl);
-  if (!response.ok) return response;
-
-  // Число більше за 2^53: JSON.parse його спотворить (639258728888077549 стало б
-  // ...077550), і ми вважали б, що стан змінився, хоча він той самий. Тому беремо цифри з тексту.
-  const match = /"lastActionIndex"\s*:\s*"?(\d+)"?/.exec(response.body);
-  return match
-    ? { ok: true, index: match[1] }
-    : { ok: false, status: response.status, detail: "malformed" };
-}
 
 /**
  * Повний список тривог. Вебхук надсилає лише зміни, тож з чогось треба почати —
@@ -217,37 +199,6 @@ export async function fetchSnapshot(token: string, fetchImpl: Fetcher = fetch): 
   return regions
     ? { ok: true, regions }
     : { ok: false, status: response.status, detail: "malformed" };
-}
-
-/** Сира відповідь для дослідів ліміту: нас цікавлять код і заголовки, а не дані. */
-export interface RawCall {
-  status: number | null;
-  took_ms: number;
-  bytes: number;
-  headers: Record<string, string>;
-  /** Початок тіла — лише коли відповідь не 200, бо 200 — це сотні кілобайтів тривог. */
-  body_head?: string;
-  error?: string;
-}
-
-/** Один запит до ukrainealarm без розбору — для `/lab/call`. */
-export async function fetchRaw(path: string, token: string, fetchImpl: Fetcher = fetch): Promise<RawCall> {
-  const startedAt = Date.now();
-  try {
-    const response = await fetchImpl(`${API_BASE}/${path}`, {
-      headers: { Authorization: token, Accept: "application/json", "User-Agent": USER_AGENT },
-    });
-    const body = await response.text().catch(() => "");
-    return {
-      status: response.status,
-      took_ms: Date.now() - startedAt,
-      bytes: body.length,
-      headers: Object.fromEntries(response.headers),
-      ...(response.status === 200 ? {} : { body_head: body.slice(0, 300) }),
-    };
-  } catch (error) {
-    return { status: null, took_ms: Date.now() - startedAt, bytes: 0, headers: {}, error: String(error) };
-  }
 }
 
 async function get(
@@ -314,25 +265,4 @@ function parseTime(value: unknown): number | null {
   if (typeof value !== "string") return null;
   const time = Date.parse(value);
   return Number.isNaN(time) ? null : time;
-}
-
-// ---------------------------------------------------------------------------
-// Номер останньої зміни
-// ---------------------------------------------------------------------------
-
-/** .NET `DateTime.Ticks` (100 нс від 0001-01-01) у момент 1970-01-01 UTC. */
-const TICKS_AT_UNIX_EPOCH = 621_355_968_000_000_000n;
-
-/**
- * Час останньої зміни, зашитий у `lastActionIndex`, мс.
- *
- * ukrainealarm цього не документує, але номер — це .NET `DateTime.Ticks` моменту зміни
- * за UTC: номер, отриманий 2026-09-24 о 23:21:01, розшифровується як 23:20:58.
- * Якщо вони колись змінять формат, функція поверне `null` (число поза розумними межами),
- * і проксі просто повернеться до повного завантаження списку — частіше, але правильно.
- */
-export function indexToTime(index: string): number | null {
-  if (!/^\d{17,20}$/.test(index)) return null;
-  const ms = Number((BigInt(index) - TICKS_AT_UNIX_EPOCH) / 10_000n);
-  return ms > Date.UTC(2022, 0, 1) && ms < Date.UTC(2100, 0, 1) ? ms : null;
 }

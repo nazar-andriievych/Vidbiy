@@ -1,9 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   fetchSnapshot,
-  fetchStatus,
   importPublicKey,
-  indexToTime,
   parseSnapshot,
   parseWebhook,
   toAppRegionId,
@@ -297,36 +295,5 @@ describe("fetchSnapshot", () => {
     });
 
     expect(result).toEqual({ ok: false, status: null });
-  });
-});
-
-describe("indexToTime", () => {
-  it("розшифровує номер зміни як .NET ticks за UTC", () => {
-    // Номер, отриманий о 23:21:01, — зміна о 23:20:58.
-    expect(new Date(indexToTime("639258888587901446")!).toISOString()).toBe("2026-09-24T23:20:58.790Z");
-  });
-
-  it("на незнайомий формат повертає null, а не вигадану дату", () => {
-    expect(indexToTime("42")).toBeNull();
-    expect(indexToTime("fake")).toBeNull();
-    expect(indexToTime("99999999999999999999")).toBeNull();
-  });
-});
-
-describe("fetchStatus", () => {
-  it("не спотворює номер, більший за 2^53", async () => {
-    const result = await fetchStatus(
-      "secret",
-      async () => new Response('{"lastActionIndex":639258728888077549}'),
-    );
-
-    // JSON.parse дав би 639258728888077600 — і ми щоразу бачили б «зміну».
-    expect(result).toEqual({ ok: true, index: "639258728888077549" });
-  });
-
-  it("незрозуміла відповідь — невдача, а не порожній номер", async () => {
-    const result = await fetchStatus("secret", async () => new Response("{}"));
-
-    expect(result).toEqual({ ok: false, status: 200, detail: "malformed" });
   });
 });

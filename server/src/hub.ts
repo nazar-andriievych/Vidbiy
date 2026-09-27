@@ -1,28 +1,18 @@
 import { DurableObject } from "cloudflare:workers";
 import { CallBudget, type BudgetState, type CallPath } from "./budget";
-import { ShadowCompare, type CompareState } from "./compare";
 import { MockAlerts, type MockOptions, type MockScenario, type MockState } from "./mock";
-import { upstreamPaused, type LabPath } from "./lab";
-import { RetryProbe, type ProbeState } from "./probe";
 import { ReloadSchedule, type ReloadState } from "./reload";
 import { AlertBoard, type Meta, type ReceiveOutcome, type StateStore } from "./state";
-import {
-  fetchRaw,
-  fetchSnapshot,
-  type ApiFailure,
-  type RawCall,
-  type SnapshotResult,
-  type StatusResult,
-} from "./ukrainealarm";
+import { fetchSnapshot, type ApiFailure, type SnapshotResult } from "./ukrainealarm";
 import type { AlertEvent, AlertsResponse, RegionState } from "./types";
 import type { Env } from "./index";
 
 const MOCK_STATE_KEY = "mock";
 const META_KEY = "meta";
 const BUDGET_KEY = "budget";
-const PROBE_KEY = "probe";
 const RELOAD_KEY = "reload";
-const COMPARE_KEY = "compare";
+/** Ключі прибраних дослідів (2026-09-27): стираємо, якщо ще лежать. */
+const LEGACY_KEYS = ["probe", "compare"];
 const REGION_PREFIX = "r:";
 
 /**
@@ -56,9 +46,7 @@ export class AlertsHub extends DurableObject<Env> {
   private mockRestored: Promise<void> | null = null;
   private extrasRestored: Promise<void> | null = null;
   private budget = new CallBudget();
-  private probe = new RetryProbe();
   private reload = ReloadSchedule.restore(undefined);
-  private compare = new ShadowCompare();
   private checking: Promise<void> | null = null;
   private alarmArmed = false;
 
@@ -76,25 +64,18 @@ export class AlertsHub extends DurableObject<Env> {
     await this.restore();
     await this.armAlarm();
     // Поки знімка немає, телефон, що спитав, може дочекатися першого завантаження.
-    // Частоту стримують nextCheckAt і запобіжник, скільки б телефонів не питало.
+    // Частоту стримують розклад знімків і запобіжник, скільки б телефонів не питало.
     if (this.board.syncedAt === null) await this.check();
     return this.board.response(Date.now());
   }
 
-  async receive(
-    event: AlertEvent,
-    receivedAt: number,
-    bodyHash: string,
-  ): Promise<{ outcome: ReceiveOutcome; refuse: boolean }> {
+  async receive(event: AlertEvent, receivedAt: number): Promise<ReceiveOutcome> {
     await this.restore();
     const outcome = await this.board.receive(event, receivedAt);
-    const { refuse } = this.probe.onDelivery(bodyHash, receivedAt, this.probeEvery());
-    await this.ctx.storage.put(PROBE_KEY, this.probe.snapshot());
-    if (this.compare.apply(event)) await this.ctx.storage.put(COMPARE_KEY, this.compare.snapshot());
     await this.armAlarm();
     // Перший вебхук — теж привід завантажити знімок, якщо його ще немає.
     if (this.board.syncedAt === null) await this.check();
-    return { outcome, refuse };
+    return outcome;
   }
 
   async stats() {
@@ -104,18 +85,10 @@ export class AlertsHub extends DurableObject<Env> {
     return {
       ...this.board.stats(now),
       upstream: {
-        mode: upstreamPaused(this.env.UPSTREAM_PAUSED)
-          ? "paused"
-          : this.env.FAKE_UPSTREAM === "1"
-            ? "fake"
-            : this.env.UKRAINEALARM_TOKEN
-              ? "live"
-              : "no_token",
+        mode: this.env.FAKE_UPSTREAM === "1" ? "fake" : this.env.UKRAINEALARM_TOKEN ? "live" : "no_token",
         ...this.budget.stats(now),
       },
       reload: this.reload.stats(now),
-      webhooks_vs_alerts: this.compare.stats(now),
-      retry_probe: this.probe.stats(this.probeEvery()),
     };
   }
 
@@ -149,10 +122,6 @@ export class AlertsHub extends DurableObject<Env> {
   }
 
   private async checkOnce(): Promise<void> {
-    // Пауза на час дослідів: сам воркер ліміт ключа не витрачає.
-    if (upstreamPaused(this.env.UPSTREAM_PAUSED)) return;
-    // `/alerts/status` більше не питаємо (див. `reload.ts`); `runCheck` лишається
-    // в коді на випадок, якщо номер зміни колись стане корисним.
     const asOf = Date.now();
     if (!this.reload.due(asOf)) return;
 
@@ -162,11 +131,7 @@ export class AlertsHub extends DurableObject<Env> {
     if (wasFast && !this.reload.fast(asOf)) {
       console.error(`щохвилинний /alerts вимкнено на годину: ${this.reload.snapshot().tripped?.reason}`);
     }
-    if (snapshot.ok) {
-      this.compare.compare(snapshot.regions, asOf);
-      await this.board.loadSnapshot(snapshot.regions, asOf);
-      await this.ctx.storage.put(COMPARE_KEY, this.compare.snapshot());
-    }
+    if (snapshot.ok) await this.board.loadSnapshot(snapshot.regions, asOf);
     await this.ctx.storage.put(RELOAD_KEY, this.reload.snapshot());
   }
 
@@ -174,7 +139,7 @@ export class AlertsHub extends DurableObject<Env> {
    * Єдиний шлях до ukrainealarm. Спершу запобіжник, потім — ключ.
    * Без ключа або з `FAKE_UPSTREAM=1` запит лише рахується, назовні нічого не йде.
    */
-  private async call<T extends StatusResult | SnapshotResult>(
+  private async call<T extends SnapshotResult>(
     path: CallPath,
     request: (token: string) => Promise<T>,
   ): Promise<T | ApiFailure> {
@@ -189,9 +154,7 @@ export class AlertsHub extends DurableObject<Env> {
     if (this.env.FAKE_UPSTREAM === "1") {
       this.budget.record(now, path, "ok");
       await this.saveBudget();
-      return (path === "alerts/status"
-        ? { ok: true, index: "fake" }
-        : { ok: true, regions: new Map<string, RegionState>() }) as T;
+      return { ok: true, regions: new Map<string, RegionState>() } as T;
     }
 
     const token = this.env.UKRAINEALARM_TOKEN;
@@ -212,48 +175,21 @@ export class AlertsHub extends DurableObject<Env> {
     return result;
   }
 
-  /**
-   * Один запит до ukrainealarm для досліду ліміту (`/lab/call`). Іде через той самий
-   * запобіжник, що й робочі запити, і на паузу не зважає: дослід — це і є мета паузи.
-   */
-  async labCall(path: LabPath): Promise<RawCall | { error: string }> {
-    await this.restore();
-    const token = this.env.UKRAINEALARM_TOKEN;
-    if (!token) return { error: "no_token" };
-    const now = Date.now();
-    if (!this.budget.take(now)) {
-      this.budget.record(now, path, "over_budget");
-      await this.saveBudget();
-      return { error: "over_budget" };
-    }
-    const result = await fetchRaw(path, token);
-    this.budget.record(Date.now(), path, result.status === 200 ? "ok" : "failed", result.status);
-    await this.saveBudget();
-    return result;
-  }
-
   private saveBudget(): Promise<void> {
     return this.ctx.storage.put(BUDGET_KEY, this.budget.snapshot());
   }
 
-  private probeEvery(): number {
-    const every = Number(this.env.WEBHOOK_RETRY_PROBE ?? 0);
-    return Number.isInteger(every) && every > 0 ? every : 0;
-  }
-
-  /** Стан, запобіжник і перевірку повторів читаємо зі сховища раз на життя об'єкта. */
+  /** Стан, запобіжник і розклад знімків читаємо зі сховища раз на життя об'єкта. */
   private restore(): Promise<void> {
     this.extrasRestored ??= Promise.all([
       this.board.restore(),
       this.ctx.storage.get<BudgetState>(BUDGET_KEY),
-      this.ctx.storage.get<ProbeState>(PROBE_KEY),
       this.ctx.storage.get<ReloadState>(RELOAD_KEY),
-      this.ctx.storage.get<CompareState>(COMPARE_KEY),
-    ]).then(([, budget, probe, reload, compare]) => {
+      this.ctx.storage.get(LEGACY_KEYS),
+    ]).then(async ([, budget, reload, legacy]) => {
       if (budget) this.budget = new CallBudget(budget);
-      if (probe) this.probe = new RetryProbe(probe);
       this.reload = ReloadSchedule.restore(reload);
-      if (compare) this.compare = new ShadowCompare(compare);
+      if (legacy.size > 0) await this.ctx.storage.delete([...legacy.keys()]);
     });
     return this.extrasRestored;
   }

@@ -107,8 +107,6 @@ confirmed_at = max(остання звірка, min(останній вебху�
 ## `POST /webhook`
 
 Сюди ukrainealarm надсилає події. Застосунок цим маршрутом не користується.
-`POST /v2/webhook` — тимчасовий синонім: на нього оформлена поточна підписка.
-Прибрати, коли підписку переоформлять на `/webhook` (`server/README.md`, крок 3).
 
 Підпис (RSA-SHA256 над `{X-Webhook-Timestamp}.{сире тіло}`) перевіряється публічним ключем
 ukrainealarm ще у воркері, до Durable Object. Повідомлення, старші за 5 хв, відкидаються.
@@ -118,7 +116,6 @@ ukrainealarm ще у воркері, до Durable Object. Повідомленн
 | `200 {"ok": true, "outcome": ...}` | Подію прийнято. `outcome`: `changed`, `unchanged`, `out_of_order` або `ignored` (не повітряна тривога чи тестовий регіон) |
 | `401` | Немає підпису, він не сходиться або повідомлення застаріле |
 | `400` | Підпис правильний, але тіло не схоже на подію |
-| `503 {"error": "retry_probe"}` | Навмисна відмова, коли ввімкнено `WEBHOOK_RETRY_PROBE`. Подію при цьому застосовано |
 | `503` | Не вдалося зберегти. Якщо ukrainealarm повторює доставку, хай повторить |
 
 Стан регіону завжди **замінюється** на `activeAlertLevels` з події: `DEACTIVATE` може зняти
@@ -129,14 +126,13 @@ ukrainealarm ще у воркері, до Durable Object. Повідомленн
 ## `GET /stats`
 
 Діагностика для нас: потік вебхуків (`webhooks`: кількість, паузи, затримка, останні 30),
-запити до ukrainealarm (`upstream`), розклад знімків (`reload`), порівняння стану з вебхуків
-зі знімками (`webhooks_vs_alerts`), `confirmed_at`. Лише публічна інформація про тривоги,
+запити до ukrainealarm (`upstream`), розклад знімків (`reload`), `confirmed_at`. Лише публічна інформація про тривоги,
 нічого про користувачів.
 
 ## `GET /health`
 
 ```json
-{ "ok": true, "mock": false, "configured": true, "fake_upstream": false, "paused": false }
+{ "ok": true, "mock": false, "configured": true, "fake_upstream": false }
 ```
 
 `configured: false` — на воркері не заданий `UKRAINEALARM_TOKEN`: знімок неможливий,

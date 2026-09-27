@@ -11,15 +11,15 @@
  * Так розклад можна перевірити на розгорнутому воркері, не ризикуючи ключем.
  */
 
-/** Нормальна робота — до 2/хв (`status` + `alerts`); третій — запас на повтор знімка. */
+/** Нормальна робота — 1/хв (знімок `/alerts`); решта — запас на повтор. */
 export const PER_MINUTE = 3;
-/** 2/хв цілодобово — це 2880; більше за добу означає, що щось пішло не так. */
+/** 1/хв цілодобово — це 1440; удвічі більше за добу означає, що щось пішло не так. */
 export const PER_DAY = 3000;
 
 const MINUTE_MS = 60_000;
 const RECENT_LIMIT = 20;
 
-export type CallPath = "alerts/status" | "alerts";
+export type CallPath = "alerts";
 
 export type CallOutcome =
   | "ok"
