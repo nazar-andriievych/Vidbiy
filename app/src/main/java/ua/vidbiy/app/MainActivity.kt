@@ -37,6 +37,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ua.vidbiy.app.ui.AlarmEditScreen
 import ua.vidbiy.app.ui.AlarmsTab
 import ua.vidbiy.app.ui.AlarmsViewModel
+import ua.vidbiy.app.ui.AddPlaceScreen
+import ua.vidbiy.app.ui.Overlay
+import ua.vidbiy.app.ui.PlaceRegionScreen
+import ua.vidbiy.app.ui.RegionPick
 import ua.vidbiy.app.ui.PlacesTab
 import ua.vidbiy.app.ui.RegionPickerScreen
 import ua.vidbiy.app.ui.SettingsTab
@@ -66,9 +70,9 @@ private enum class Tab(@StringRes val label: Int, @DrawableRes val icon: Int) {
 @Composable
 fun VidbiyApp(viewModel: AlarmsViewModel) {
     val alarms by viewModel.alarms.collectAsStateWithLifecycle()
+    val places by viewModel.places.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
-    val region by viewModel.region.collectAsStateWithLifecycle()
-    val pickingRegion by viewModel.pickingRegion.collectAsStateWithLifecycle()
+    val overlay by viewModel.overlay.collectAsStateWithLifecycle()
     val waiting by viewModel.pendingWait.collectAsStateWithLifecycle()
     val debugProxyUrl by viewModel.debugProxyUrl.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
@@ -78,37 +82,53 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
     RequestNotificationPermission()
 
     // Екранів небагато, тож навігаційна бібліотека надлишкова: повноекранні підекрани
-    // (вибір регіону, редагування) перекривають вкладки, поки відкриті.
+    // (редагування, вибір регіону, нове місце) перекривають вкладки, поки відкриті.
     val editing = draft
+    val current = overlay
     when {
-        pickingRegion -> RegionPickerScreen(
-            onSelect = viewModel::selectRegion,
-            onCancel = viewModel::cancelPickRegion,
+        current == Overlay.AlarmRegion && editing != null -> RegionPickerScreen(
+            title = stringResource(R.string.region_title),
+            confirmLabel = stringResource(R.string.action_done),
+            initial = editing.region?.let { RegionPick(it, editing.placeId) },
+            places = places.ordered,
+            primaryPlaceId = places.primary?.id,
+            onConfirm = viewModel::setDraftRegion,
+            onBack = viewModel::closeOverlay,
         )
+        current == Overlay.AddPlace -> AddPlaceScreen(
+            onSave = viewModel::addPlace,
+            onBack = viewModel::closeOverlay,
+        )
+        current is Overlay.PlaceRegion -> {
+            val place = places.byId(current.placeId)
+            if (place != null) {
+                PlaceRegionScreen(
+                    place = place,
+                    usedBy = alarms.filter { it.placeId == place.id },
+                    onSave = { region -> viewModel.changePlaceRegion(place.id, region) },
+                    onBack = viewModel::closeOverlay,
+                )
+            } else {
+                // Місце зникло, поки екран був відкритий.
+                LaunchedEffect(current) { viewModel.closeOverlay() }
+            }
+        }
         editing != null -> AlarmEditScreen(
             alarm = editing,
+            placeName = places.byId(editing.placeId)?.name,
             onChange = viewModel::updateDraft,
-            onSave = { hour, minute ->
-                viewModel.updateDraft { it.copy(hour = hour, minute = minute, enabled = true) }
-                viewModel.saveDraft()
-            },
+            onPickRegion = viewModel::startPickAlarmRegion,
+            onSave = viewModel::saveDraft,
             onDelete = viewModel::deleteDraft,
             onCancel = viewModel::cancelEdit,
         )
         else -> Scaffold(
             bottomBar = { VidbiyNavigationBar(selected = tab, onSelect = { tab = it }) },
             floatingActionButton = {
-                if (tab == Tab.Alarms) {
-                    ExtendedFloatingActionButton(
-                        onClick = viewModel::startNew,
-                        shape = MaterialTheme.shapes.small,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        icon = { Icon(painterResource(R.drawable.ic_add), contentDescription = null) },
-                        text = {
-                            Text(stringResource(R.string.action_new_alarm), style = MaterialTheme.typography.labelLarge)
-                        },
-                    )
+                when (tab) {
+                    Tab.Alarms -> VidbiyFab(R.string.action_new_alarm, viewModel::startNew)
+                    Tab.Places -> VidbiyFab(R.string.places_add, viewModel::startAddPlace)
+                    Tab.Settings -> Unit
                 }
             },
         ) { padding ->
@@ -120,7 +140,7 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
             when (tab) {
                 Tab.Alarms -> AlarmsTab(
                     alarms = alarms,
-                    region = region,
+                    places = places,
                     waiting = waiting,
                     contentPadding = content,
                     onEdit = viewModel::startEdit,
@@ -128,9 +148,13 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                     onCancelWaiting = viewModel::cancelWaiting,
                 )
                 Tab.Places -> PlacesTab(
-                    region = region,
+                    places = places,
+                    alarms = alarms,
                     contentPadding = content,
-                    onPickRegion = viewModel::startPickRegion,
+                    onMakePrimary = viewModel::makePrimary,
+                    onRename = viewModel::renamePlace,
+                    onChangeRegion = viewModel::startChangePlaceRegion,
+                    onDelete = viewModel::deletePlace,
                 )
                 Tab.Settings -> SettingsTab(
                     themeMode = themeMode,
@@ -142,6 +166,19 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
             }
         }
     }
+}
+
+/** Extended FAB: primaryContainer, радіус 16 (design-spec 2). */
+@Composable
+private fun VidbiyFab(@StringRes label: Int, onClick: () -> Unit) {
+    ExtendedFloatingActionButton(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.small,
+        containerColor = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        icon = { Icon(painterResource(R.drawable.ic_add), contentDescription = null) },
+        text = { Text(stringResource(label), style = MaterialTheme.typography.labelLarge) },
+    )
 }
 
 /** NavigationBar: висота 80, фон surfaceContainer, активний підпис 700, неактивні 500. */

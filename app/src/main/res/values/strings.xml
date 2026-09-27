@@ -46,23 +46,6 @@
     <string name="duration_minutes">%1$d хв</string>
     <string name="duration_less_than_minute">менш ніж хвилину</string>
 
-    <string name="respect_alerts">Враховувати тривоги</string>
-    <string name="respect_alerts_on">Під час тривоги в регіоні чекатиме відбою</string>
-    <string name="respect_alerts_off">Звичайний будильник: задзвонить у свій час</string>
-
-    <string name="wait_for">Чекати відбою</string>
-    <string name="wait_for_red_and_yellow">Червоної й жовтої</string>
-    <string name="wait_for_red_only">Лише червоної</string>
-    <string name="wait_for_red_and_yellow_hint">Мовчатиме і під час ракетної, і під час дронової загрози</string>
-    <string name="wait_for_red_only_hint">Мовчатиме лише під час ракетної загрози; дронова не заважатиме</string>
-
-    <string name="deadline">Крайній час</string>
-    <string name="deadline_none">Не заданий: чекатиме відбою, скільки б він не тривав</string>
-    <string name="deadline_set">Задзвонить о %1$s, навіть якщо відбою не буде</string>
-    <string name="deadline_set_next_day">Задзвонить о %1$s наступного дня, навіть якщо відбою не буде</string>
-    <string name="deadline_pick">Задати</string>
-    <string name="deadline_clear">Прибрати</string>
-    <string name="action_done">Готово</string>
 
     <string name="vibrate">Вібрація</string>
     <string name="ringtone">Мелодія</string>
@@ -78,16 +61,6 @@
         <item>Сб</item>
         <item>Нд</item>
     </string-array>
-    <string name="region_title">Регіон</string>
-    <string name="region_not_selected">Не обрано</string>
-    <string name="region_hint">Тривога тут відкладає будильник</string>
-    <string name="region_hint_empty">Поки регіон не обрано, будильники дзвонитимуть як звичайні</string>
-    <string name="region_search">Пошук громади, району або області</string>
-    <string name="region_whole_oblast">Обрати всю область</string>
-    <string name="region_whole_raion">Обрати весь район</string>
-    <string name="region_loading">Завантаження довідника…</string>
-    <string name="region_nothing_found">Нічого не знайдено</string>
-    <string name="action_back">Назад</string>
     <string name="channel_alarm">Дзвінок будильника</string>
     <string name="channel_alarm_description">Сповіщення, що супроводжує дзвінок</string>
     <string name="ring_title">Будильник</string>
@@ -118,4 +91,84 @@
 
     <string name="debug_proxy_title">Проксі (лише debug)</string>
     <string name="debug_proxy_hint">http://192.168.0.2:8787</string>
+
+    <!-- Редагування будильника (design-spec 3.2) -->
+    <string name="action_close_without_saving">Закрити без збереження</string>
+    <string name="action_done">Готово</string>
+    <string name="action_back">Назад</string>
+    <string name="time_hint">Торкніться, щоб змінити час</string>
+    <string name="time_dialog_title">Час будильника</string>
+    <string name="time_input_keyboard">Ввести з клавіатури</string>
+    <string name="time_input_dial">Вибрати на циферблаті</string>
+    <string name="repeat_title">Повторювати</string>
+    <string name="repeat_once">Без повторів — задзвонить один раз</string>
+    <string name="repeat_weekdays">Щобудня</string>
+    <string name="repeat_weekend">У вихідні</string>
+    <string name="respect_alerts">Враховувати тривоги</string>
+    <string name="respect_alerts_on">Мовчить, поки в регіоні триває повітряна тривога, і дзвонить після відбою</string>
+    <string name="respect_alerts_off">Дзвонитиме в заданий час, як звичайний будильник.</string>
+    <string name="region_label">Регіон</string>
+    <string name="region_not_selected">Не обрано</string>
+    <string name="region_not_selected_hint">Без регіону будильник дзвонить як звичайний</string>
+    <string name="wait_for">Чекати, поки триває</string>
+    <string name="wait_for_any">Будь-яка</string>
+    <string name="wait_for_red_only">Лише червона</string>
+    <string name="wait_for_any_hint">Жовта — дронова загроза, червона — ракетна. Будильник чекатиме, поки триває будь-яка з них.</string>
+    <string name="wait_for_red_only_hint">Будильник чекатиме лише на ракетну загрозу. Якщо червона зміниться на жовту — це вже відбій.</string>
+    <string name="pause_title">Чекати після відбою, хв</string>
+    <string name="pause_hint">Скільки чекати після відбою, перш ніж дзвонити. Якщо за цей час тривога почнеться знову — чекатиму далі.</string>
+    <string name="deadline">Крайній час</string>
+    <string name="deadline_none">Не задано</string>
+    <string name="deadline_none_hint">Не задано — будильник чекатиме на відбій без обмеження.</string>
+    <string name="deadline_hint">Задзвонить о %1$s, навіть якщо відбою не буде.</string>
+    <string name="deadline_hint_next_day">Задзвонить о %1$s наступної доби, навіть якщо відбою не буде.</string>
+    <string name="deadline_set">Задати крайній час</string>
+    <string name="deadline_clear">Прибрати крайній час</string>
+    <string name="alarm_delete">Видалити будильник</string>
+    <string name="card_pause">%1$d хв після відбою</string>
+
+    <!-- Вибір регіону (design-spec 3.3, 3.5) -->
+    <string name="region_title">Регіон</string>
+    <string name="region_search">Область, район або громада</string>
+    <string name="region_my_places">Мої місця</string>
+    <string name="region_other">Інший регіон</string>
+    <string name="region_oblast_header">Область</string>
+    <string name="region_all_oblasts">Усі області</string>
+    <string name="region_whole_oblast">Уся %1$s</string>
+    <string name="region_whole_raion">Увесь %1$s</string>
+    <string name="region_primary_suffix">%1$s · основне місце</string>
+    <string name="region_loading">Завантаження довідника…</string>
+    <string name="region_nothing_found">Нічого не знайдено</string>
+    <string name="region_coverage_note">Будильник враховує тривоги в обраній громаді, у її районі та в області. Тривоги в сусідніх громадах і районах не враховуються.</string>
+    <string name="region_now">Зараз</string>
+    <string name="region_for_place">Регіон · %1$s</string>
+
+    <!-- Мої місця (design-spec 3.4, 3.5) -->
+    <string name="places_intro">Основне місце підставляється в новий будильник і в «Розбуди після відбою». Місця зберігаються лише на цьому телефоні.</string>
+    <string name="places_primary">Основне</string>
+    <string name="places_menu">Дії з місцем «%1$s»</string>
+    <string name="places_make_primary">Зробити основним</string>
+    <string name="places_rename">Перейменувати</string>
+    <string name="places_change_region">Змінити регіон</string>
+    <string name="places_delete">Видалити</string>
+    <string name="places_add">Додати місце</string>
+    <string name="places_empty">Місць ще немає</string>
+    <string name="places_empty_hint">Додайте дім або інше місце, щоб вибирати його в будильнику одним дотиком. Перше місце стане основним.</string>
+    <string name="place_new_title">Нове місце</string>
+    <string name="place_step1">Крок 1 з 2</string>
+    <string name="place_step2">Крок 2 з 2</string>
+    <string name="action_next">Далі</string>
+    <string name="place_name_title">Назвіть місце</string>
+    <string name="place_rename_title">Перейменувати місце</string>
+    <string name="place_name_label">Назва</string>
+    <string name="place_name_hint">Наприклад: Дім, Дача, Робота</string>
+    <string name="place_delete_title">Видалити «%1$s»?</string>
+    <string name="place_delete_primary_title">Це основне місце</string>
+    <string name="place_delete_primary_text">Спочатку зробіть основним інше місце — тоді «%1$s» можна буде видалити.</string>
+    <string name="place_delete_unused">Це місце не використовується в жодному будильнику.</string>
+    <string name="place_delete_used_one">Будильник %1$s і далі чекатиме на тривоги в регіоні «%2$s» — лише без назви «%3$s».</string>
+    <string name="place_delete_used_many">Будильники %1$s і далі чекатимуть на тривоги в регіоні «%2$s» — лише без назви «%3$s».</string>
+    <string name="place_region_used_one">Будильник %1$s теж чекатиме на тривоги в новому регіоні.</string>
+    <string name="place_region_used_many">Будильники %1$s теж чекатимуть на тривоги в новому регіоні.</string>
+    <string name="action_understood">Зрозуміло</string>
 </resources>

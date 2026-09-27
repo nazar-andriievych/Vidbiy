@@ -9,276 +9,407 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Surface
-import androidx.compose.ui.graphics.Color
-import ua.vidbiy.app.ui.theme.Dimens
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimeInput
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TimePickerState
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.IntentCompat
 import ua.vidbiy.app.R
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.WaitFor
+import ua.vidbiy.app.data.label
+import ua.vidbiy.app.data.shortTitle
+import ua.vidbiy.app.ui.theme.Dimens
+import ua.vidbiy.app.ui.theme.alertColors
 
+/**
+ * Редагування / новий будильник (design-spec 3.2, `03-edit-alarm`).
+ * [placeName] — назва місця, з якого взято регіон; null — регіон обрано напряму.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlarmEditScreen(
     alarm: Alarm,
+    placeName: String?,
     onChange: ((Alarm) -> Alarm) -> Unit,
-    onSave: (hour: Int, minute: Int) -> Unit,
+    onPickRegion: () -> Unit,
+    onSave: () -> Unit,
     onDelete: () -> Unit,
     onCancel: () -> Unit,
 ) {
     BackHandler(onBack = onCancel)
+    var pickingTime by rememberSaveable { mutableStateOf(false) }
 
-    // Стан пікера прив’язаний до конкретного будильника: інший id — інший початковий час.
-    key(alarm.id) {
-        val timeState = rememberTimePickerState(
-            initialHour = alarm.hour,
-            initialMinute = alarm.minute,
-            is24Hour = true,
-        )
-
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            stringResource(
-                                if (alarm.id == Alarm.NEW_ID) R.string.alarm_new_title
-                                else R.string.alarm_edit_title
-                            )
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(
+                            if (alarm.id == Alarm.NEW_ID) R.string.alarm_new_title else R.string.alarm_edit_title
+                        ),
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onCancel) {
+                        Icon(
+                            painterResource(R.drawable.ic_close),
+                            contentDescription = stringResource(R.string.action_close_without_saving),
                         )
-                    },
-                    navigationIcon = {
-                        TextButton(onClick = onCancel) { Text(stringResource(R.string.action_cancel)) }
-                    },
-                    actions = {
-                        TextButton(onClick = { onSave(timeState.hour, timeState.minute) }) {
-                            Text(stringResource(R.string.action_save))
-                        }
-                    },
-                )
-            },
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    VidbiyTimePicker(state = timeState)
-                }
+                    }
+                },
+                actions = {
+                    TextButton(onClick = onSave) {
+                        Text(stringResource(R.string.action_save), style = MaterialTheme.typography.labelLarge)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+            )
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.ScreenPadding)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            TimeHeader(alarm.hour, alarm.minute, onClick = { pickingTime = true })
 
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                FieldLabel(stringResource(R.string.repeat_title), Modifier.padding(horizontal = 4.dp))
                 DaysRow(
                     selected = alarm.days,
                     onToggleDay = { day ->
                         onChange { current ->
-                            val days =
-                                if (day in current.days) current.days - day else current.days + day
-                            current.copy(days = days)
+                            current.copy(days = if (day in current.days) current.days - day else current.days + day)
                         }
                     },
                 )
+                FieldHint(repeatSummary(alarm), Modifier.padding(horizontal = 4.dp))
+            }
 
-                HorizontalDivider()
+            AlertsCard(alarm, placeName, onChange, onPickRegion)
 
-                SettingSwitch(
-                    title = stringResource(R.string.respect_alerts),
-                    subtitle = stringResource(
-                        if (alarm.respectAlerts) R.string.respect_alerts_on
-                        else R.string.respect_alerts_off
-                    ),
-                    checked = alarm.respectAlerts,
-                    onCheckedChange = { checked -> onChange { it.copy(respectAlerts = checked) } },
-                )
-
-                if (alarm.respectAlerts) {
-                    WaitForSection(
-                        selected = alarm.waitFor,
-                        onSelect = { waitFor -> onChange { it.copy(waitFor = waitFor) } },
-                    )
-                    DeadlineSection(
-                        deadlineMinute = alarm.deadlineMinute,
-                        alarmMinute = timeState.hour * 60 + timeState.minute,
-                        onChange = { minute -> onChange { it.copy(deadlineMinute = minute) } },
-                    )
-                }
-
-                HorizontalDivider()
-
+            // Мелодії й вібрації в макеті немає, але вони вже були в застосунку — лишаємо окремою карткою.
+            SectionCard {
                 RingtoneRow(
                     uri = alarm.ringtoneUri,
                     onPicked = { picked -> onChange { it.copy(ringtoneUri = picked) } },
                 )
-
                 SettingSwitch(
                     title = stringResource(R.string.vibrate),
-                    subtitle = null,
                     checked = alarm.vibrate,
                     onCheckedChange = { checked -> onChange { it.copy(vibrate = checked) } },
                 )
+            }
 
-                if (alarm.id != Alarm.NEW_ID) {
-                    HorizontalDivider()
-                    TextButton(onClick = onDelete) {
-                        Text(
-                            text = stringResource(R.string.action_delete),
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
+            if (alarm.id != Alarm.NEW_ID) {
+                TextButton(
+                    onClick = onDelete,
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.alertColors.red),
+                ) {
+                    Icon(painterResource(R.drawable.ic_delete), contentDescription = null, modifier = Modifier.size(20.dp))
+                    Text(
+                        text = stringResource(R.string.alarm_delete),
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
                 }
             }
         }
     }
+
+    if (pickingTime) {
+        TimePickerDialog(
+            title = stringResource(R.string.time_dialog_title),
+            initialMinute = alarm.hour * 60 + alarm.minute,
+            onConfirm = { minute -> onChange { it.copy(hour = minute / 60, minute = minute % 60) } },
+            onDismiss = { pickingTime = false },
+        )
+    }
+}
+
+/** Час великим шрифтом + «Торкніться, щоб змінити час». */
+@Composable
+private fun TimeHeader(hour: Int, minute: Int, onClick: () -> Unit) {
+    val hint = stringResource(R.string.time_hint)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClickLabel = hint, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(formatTime(hour, minute), style = MaterialTheme.typography.displayLarge, maxLines = 1)
+        FieldHint(hint)
+    }
+}
+
+/** Картка «Враховувати тривоги» з регіоном, рівнем, паузою й крайнім часом. */
+@Composable
+private fun AlertsCard(
+    alarm: Alarm,
+    placeName: String?,
+    onChange: ((Alarm) -> Alarm) -> Unit,
+    onPickRegion: () -> Unit,
+) {
+    SectionCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(
+                modifier = Modifier.weight(1f).padding(end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(stringResource(R.string.respect_alerts), style = MaterialTheme.typography.titleMedium)
+                FieldHint(stringResource(R.string.respect_alerts_on))
+            }
+            Switch(
+                checked = alarm.respectAlerts,
+                onCheckedChange = { checked -> onChange { it.copy(respectAlerts = checked) } },
+            )
+        }
+
+        if (!alarm.respectAlerts) {
+            FieldHint(stringResource(R.string.respect_alerts_off))
+            return@SectionCard
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        val region = alarm.region
+        ValueRow(
+            icon = R.drawable.ic_location_on,
+            label = stringResource(R.string.region_label),
+            value = placeName ?: region?.shortTitle ?: stringResource(R.string.region_not_selected),
+            detail = when {
+                region == null -> stringResource(R.string.region_not_selected_hint)
+                placeName != null -> region.label
+                else -> region.label.substringAfter(" · ", missingDelimiterValue = "").ifEmpty { null }
+            },
+            onClick = onPickRegion,
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_chevron_right),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            FieldLabel(stringResource(R.string.wait_for))
+            LevelSelector(alarm.waitFor) { waitFor -> onChange { it.copy(waitFor = waitFor) } }
+            FieldHint(
+                stringResource(
+                    if (alarm.waitFor == WaitFor.RED_ONLY) R.string.wait_for_red_only_hint
+                    else R.string.wait_for_any_hint
+                )
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            FieldLabel(stringResource(R.string.pause_title))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                for (minutes in Alarm.PAUSE_OPTIONS) {
+                    ChoiceChip(
+                        text = minutes.toString(),
+                        selected = alarm.pauseMinutes == minutes,
+                        onClick = { onChange { it.copy(pauseMinutes = minutes) } },
+                    )
+                }
+            }
+            FieldHint(stringResource(R.string.pause_hint))
+        }
+
+        DeadlineRow(
+            deadlineMinute = alarm.deadlineMinute,
+            alarmMinute = alarm.hour * 60 + alarm.minute,
+            onChange = { minute -> onChange { it.copy(deadlineMinute = minute) } },
+        )
+    }
+}
+
+/** Сегменти «●● Будь-яка» / «● Лише червона» (design-spec 2). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LevelSelector(selected: WaitFor, onSelect: (WaitFor) -> Unit) {
+    val options = listOf(
+        WaitFor.RED_AND_YELLOW to R.string.wait_for_any,
+        WaitFor.RED_ONLY to R.string.wait_for_red_only,
+    )
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (waitFor, label) ->
+            SegmentedButton(
+                selected = selected == waitFor,
+                onClick = { onSelect(waitFor) },
+                shape = SegmentedButtonDefaults.itemShape(index, options.size),
+                modifier = Modifier.height(Dimens.SegmentHeight),
+                colors = SegmentedButtonDefaults.colors(
+                    activeBorderColor = MaterialTheme.colorScheme.outline,
+                    inactiveBorderColor = MaterialTheme.colorScheme.outline,
+                ),
+                icon = { LevelDots(waitFor, Modifier.padding(end = 4.dp)) },
+                label = { Text(stringResource(label), style = MaterialTheme.typography.labelLarge, maxLines = 1) },
+            )
+        }
+    }
+}
+
+/** «Щобудня», «У вихідні», «Щодня», «Без повторів — задзвонить один раз» або перелік днів. */
+@Composable
+private fun repeatSummary(alarm: Alarm): String = when {
+    alarm.days.isEmpty() -> stringResource(R.string.repeat_once)
+    alarm.days == WEEKDAYS -> stringResource(R.string.repeat_weekdays)
+    alarm.days == WEEKEND -> stringResource(R.string.repeat_weekend)
+    else -> daysLabel(alarm)
 }
 
 /** «Повторювати»: сім круглих чипів (design-spec 2, «Чипи вибору»). */
 @Composable
 private fun DaysRow(selected: Set<Int>, onToggleDay: (Int) -> Unit) {
     val names = stringArrayResource(R.array.day_short_names)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         for (day in 1..7) {
-            val isSelected = day in selected
-            Surface(
-                selected = isSelected,
-                onClick = { onToggleDay(day) },
-                shape = CircleShape,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                contentColor = if (isSelected) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                modifier = Modifier.size(Dimens.ChipHeight - 2.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(names[day - 1], style = MaterialTheme.typography.labelLarge, maxLines = 1)
-                }
-            }
+            ChoiceChip(text = names[day - 1], selected = day in selected, onClick = { onToggleDay(day) })
         }
-    }
-}
-
-@Composable
-private fun WaitForSection(selected: WaitFor, onSelect: (WaitFor) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(R.string.wait_for), style = MaterialTheme.typography.titleSmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = selected == WaitFor.RED_AND_YELLOW,
-                onClick = { onSelect(WaitFor.RED_AND_YELLOW) },
-                label = { Text(stringResource(R.string.wait_for_red_and_yellow)) },
-            )
-            FilterChip(
-                selected = selected == WaitFor.RED_ONLY,
-                onClick = { onSelect(WaitFor.RED_ONLY) },
-                label = { Text(stringResource(R.string.wait_for_red_only)) },
-            )
-        }
-        Text(
-            text = stringResource(
-                if (selected == WaitFor.RED_ONLY) R.string.wait_for_red_only_hint
-                else R.string.wait_for_red_and_yellow_hint
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
 /** FR-6: абсолютний крайній час; за замовчуванням не заданий. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DeadlineSection(deadlineMinute: Int?, alarmMinute: Int, onChange: (Int?) -> Unit) {
-    var picking by remember { mutableStateOf(false) }
+private fun DeadlineRow(deadlineMinute: Int?, alarmMinute: Int, onChange: (Int?) -> Unit) {
+    var picking by rememberSaveable { mutableStateOf(false) }
+    val subtle = MaterialTheme.colorScheme.onSurfaceVariant
+    val time = deadlineMinute?.let { formatTime(it / 60, it % 60) }
 
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(stringResource(R.string.deadline), style = MaterialTheme.typography.titleSmall)
-            Text(
-                text = when {
-                    deadlineMinute == null -> stringResource(R.string.deadline_none)
-                    deadlineMinute > alarmMinute -> stringResource(
-                        R.string.deadline_set,
-                        formatTime(deadlineMinute / 60, deadlineMinute % 60),
-                    )
-                    else -> stringResource(
-                        R.string.deadline_set_next_day,
-                        formatTime(deadlineMinute / 60, deadlineMinute % 60),
-                    )
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ValueRow(
+            icon = R.drawable.ic_schedule,
+            label = stringResource(R.string.deadline),
+            value = time ?: stringResource(R.string.deadline_none),
+            onClick = { picking = true },
+        ) {
+            if (deadlineMinute == null) {
+                IconButton(onClick = { picking = true }) {
+                    Icon(painterResource(R.drawable.ic_add), stringResource(R.string.deadline_set), tint = subtle)
+                }
+            } else {
+                IconButton(onClick = { onChange(null) }) {
+                    Icon(painterResource(R.drawable.ic_close), stringResource(R.string.deadline_clear), tint = subtle)
+                }
+            }
         }
-        if (deadlineMinute != null) {
-            TextButton(onClick = { onChange(null) }) { Text(stringResource(R.string.deadline_clear)) }
-        }
-        TextButton(onClick = { picking = true }) { Text(stringResource(R.string.deadline_pick)) }
+        FieldHint(
+            text = when {
+                time == null -> stringResource(R.string.deadline_none_hint)
+                deadlineMinute > alarmMinute -> stringResource(R.string.deadline_hint, time)
+                else -> stringResource(R.string.deadline_hint_next_day, time)
+            },
+            modifier = Modifier.padding(start = Dimens.IconCircle + 16.dp),
+        )
     }
 
     if (picking) {
-        // Порожнє поле пропонує час будильника + 2 год — лише як відправну точку в пікері.
-        val initial = deadlineMinute ?: ((alarmMinute + 120) % (24 * 60))
-        val state = rememberTimePickerState(
-            initialHour = initial / 60,
-            initialMinute = initial % 60,
-            is24Hour = true,
+        TimePickerDialog(
+            title = stringResource(R.string.deadline),
+            // Порожнє поле пропонує час будильника + 2 год — лише як відправну точку.
+            initialMinute = deadlineMinute ?: ((alarmMinute + 120) % (24 * 60)),
+            onConfirm = onChange,
+            onDismiss = { picking = false },
         )
-        AlertDialog(
-            onDismissRequest = { picking = false },
-            title = { Text(stringResource(R.string.deadline)) },
-            text = { VidbiyTimePicker(state = state) },
-            confirmButton = {
-                TextButton(onClick = {
-                    onChange(state.hour * 60 + state.minute)
-                    picking = false
-                }) { Text(stringResource(R.string.action_done)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { picking = false }) { Text(stringResource(R.string.action_cancel)) }
-            },
-        )
+    }
+}
+
+/**
+ * Діалог вибору часу: M3 TimePicker / TimeInput у 24-годинному форматі з перемикачем
+ * «циферблат ↔ клавіатура» (design-spec 2, «Вибір часу»).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimePickerDialog(
+    title: String,
+    initialMinute: Int,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val state = rememberTimePickerState(
+        initialHour = initialMinute / 60,
+        initialMinute = initialMinute % 60,
+        is24Hour = true,
+    )
+    var keyboard by rememberSaveable { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.padding(horizontal = 24.dp),
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                FieldLabel(title, Modifier.padding(bottom = 20.dp))
+                Box(modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    if (keyboard) VidbiyTimeInput(state) else VidbiyTimePicker(state)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { keyboard = !keyboard }) {
+                        Icon(
+                            painterResource(if (keyboard) R.drawable.ic_schedule else R.drawable.ic_keyboard),
+                            contentDescription = stringResource(
+                                if (keyboard) R.string.time_input_dial else R.string.time_input_keyboard
+                            ),
+                        )
+                    }
+                    Box(Modifier.weight(1f))
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+                    TextButton(onClick = {
+                        onConfirm(state.hour * 60 + state.minute)
+                        onDismiss()
+                    }) { Text(stringResource(R.string.action_done)) }
+                }
+            }
+        }
     }
 }
 
@@ -303,15 +434,11 @@ private fun RingtoneRow(uri: String?, onPicked: (String?) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { launcher.launch(ringtonePickerIntent(pickerTitle, uri)) }
-            .padding(vertical = 8.dp),
+            .clickable { launcher.launch(ringtonePickerIntent(pickerTitle, uri)) },
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(stringResource(R.string.ringtone), style = MaterialTheme.typography.titleSmall)
-        Text(
-            text = ringtoneTitle(context, uri),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        FieldHint(ringtoneTitle(context, uri))
     }
 }
 
@@ -336,23 +463,9 @@ private fun ringtoneTitle(context: Context, uri: String?): String {
 }
 
 @Composable
-private fun SettingSwitch(
-    title: String,
-    subtitle: String?,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
+private fun SettingSwitch(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall)
-            if (subtitle != null) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
@@ -367,5 +480,14 @@ private fun VidbiyTimePicker(state: TimePickerState) {
     val typography = MaterialTheme.typography
     MaterialTheme(typography = typography.copy(displayLarge = typography.displaySmall)) {
         TimePicker(state = state)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VidbiyTimeInput(state: TimePickerState) {
+    val typography = MaterialTheme.typography
+    MaterialTheme(typography = typography.copy(displayLarge = typography.displaySmall)) {
+        TimeInput(state = state)
     }
 }

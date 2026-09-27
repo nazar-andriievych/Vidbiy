@@ -52,3 +52,44 @@ fun Hromada.toSelection(oblast: Oblast, raion: Raion) = SelectedRegion(
     path = "${oblast.title} · ${raion.title}",
     coveringUids = setOf(uid, raion.uid, oblast.uid),
 )
+
+/**
+ * Короткі назви для інтерфейсу (design-spec 3.3): у довіднику «Обухівський район» і
+ * «Козинська територіальна громада», а на екрані — «Обухівський р-н», «Козинська громада».
+ */
+object RegionNames {
+    private const val HROMADA = " територіальна громада"
+    private const val RAION = " район"
+    private const val OBLAST = " область"
+
+    fun short(title: String): String = when {
+        title.endsWith(HROMADA) -> title.removeSuffix(HROMADA) + " громада"
+        title.endsWith(RAION) -> title.removeSuffix(RAION) + " р-н"
+        title.endsWith(OBLAST) -> title.removeSuffix(OBLAST) + " обл."
+        else -> title
+    }
+
+    /** У списку областей слово «область» зайве: «Вінницька», «м. Київ». */
+    fun inOblastList(title: String): String = title.removeSuffix(OBLAST)
+
+    /**
+     * Порядок областей у списку: столиця першою, тимчасово окуповані Крим і Севастополь
+     * останніми, решта — як у довіднику (за абеткою).
+     */
+    fun oblastOrder(oblasts: List<Oblast>): List<Oblast> = oblasts.sortedBy {
+        when (it.title) {
+            "м. Київ" -> 0
+            "Автономна Республіка Крим", "м. Севастополь" -> 2
+            else -> 1
+        }
+    }
+}
+
+/** «Козинська громада · Обухівський р-н · Київська обл.» — від вужчого до ширшого. */
+val SelectedRegion.label: String
+    get() = (listOf(title) + path.split(" · ").filter { it.isNotBlank() }.reversed())
+        .joinToString(" · ") { RegionNames.short(it) }
+
+/** Лише назва самого регіону, коротко: «Козинська громада». */
+val SelectedRegion.shortTitle: String
+    get() = RegionNames.short(title)

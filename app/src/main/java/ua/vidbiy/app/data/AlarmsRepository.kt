@@ -47,6 +47,11 @@ class AlarmsRepository(private val context: Context) {
         current.map { if (it.id == id) it.copy(enabled = enabled) else it }
     }
 
+    /** Змінює всі будильники, що підходять під [predicate], однією транзакцією. */
+    suspend fun updateWhere(predicate: (Alarm) -> Boolean, transform: (Alarm) -> Alarm) = edit { current ->
+        current.map { if (predicate(it)) transform(it) else it }
+    }
+
     private suspend fun edit(block: (List<Alarm>) -> List<Alarm>) {
         context.alarmsDataStore.edit { prefs ->
             prefs[key] = json.encodeToString(block(decode(prefs[key])))

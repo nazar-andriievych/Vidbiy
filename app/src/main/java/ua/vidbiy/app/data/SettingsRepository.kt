@@ -44,7 +44,7 @@ data class PendingWait(
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-/** Налаштування застосунку: регіон, тема, стан очікування, адреса проксі для розробки. */
+/** Налаштування застосунку: тема, стан очікування, адреса проксі для розробки. */
 class SettingsRepository(private val context: Context) {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -62,16 +62,16 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { prefs -> prefs[themeModeKey] = mode.name }
     }
 
-    val selectedRegion: Flow<SelectedRegion?> = context.settingsDataStore.data.map { prefs ->
-        prefs[regionKey]?.let { raw ->
-            runCatching { json.decodeFromString<SelectedRegion>(raw) }.getOrNull()
-        }
+    /**
+     * Регіон з версій до «Моїх місць», один на весь застосунок. Лише читається під час
+     * перенесення ([LegacyMigration]) і після нього стирається.
+     */
+    suspend fun legacyRegion(): SelectedRegion? = context.settingsDataStore.data.first()[regionKey]?.let { raw ->
+        runCatching { json.decodeFromString<SelectedRegion>(raw) }.getOrNull()
     }
 
-    suspend fun setRegion(region: SelectedRegion) {
-        context.settingsDataStore.edit { prefs ->
-            prefs[regionKey] = json.encodeToString(region)
-        }
+    suspend fun clearLegacyRegion() {
+        context.settingsDataStore.edit { prefs -> prefs.remove(regionKey) }
     }
 
     /**

@@ -96,6 +96,7 @@ class AlarmWaitService : Service() {
         var known: AlertsSnapshot? = null
         Log.i(TAG, "Чекаємо відбою: будильник=${wait.alarmId}, проксі=$baseUrl")
 
+        app.dataReady.await()
         while (currentCoroutineContext().isActive) {
             val alarm = app.alarmsRepository.alarms.first().firstOrNull { it.id == wait.alarmId }
             if (alarm == null) {
@@ -105,7 +106,7 @@ class AlarmWaitService : Service() {
                 return
             }
 
-            val region = app.settingsRepository.selectedRegion.first()
+            val region = alarm.region
             val snapshot = client.fetch().orPrevious(known)
             known = snapshot
             val nowElapsed = SystemClock.elapsedRealtime()

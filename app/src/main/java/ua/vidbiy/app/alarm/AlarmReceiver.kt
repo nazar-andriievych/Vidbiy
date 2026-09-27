@@ -37,6 +37,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
+                app.dataReady.await()
                 val alarm = app.alarmsRepository.alarms.first().firstOrNull { it.id == alarmId }
                 if (alarm == null) {
                     // Будильник видалили, а спрацювання лишилося — просто мовчимо.
@@ -53,7 +54,7 @@ class AlarmReceiver : BroadcastReceiver() {
                     }
                 }
 
-                val region = app.settingsRepository.selectedRegion.first()
+                val region = alarm.region
                 val waitForAllClear = isRegularFire && alarm.respectAlerts && region != null
 
                 Log.i(

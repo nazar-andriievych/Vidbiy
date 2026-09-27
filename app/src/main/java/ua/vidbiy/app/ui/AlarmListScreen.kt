@@ -35,7 +35,8 @@ import androidx.compose.ui.unit.dp
 import ua.vidbiy.app.R
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.PendingWait
-import ua.vidbiy.app.data.SelectedRegion
+import ua.vidbiy.app.data.PlacesState
+import ua.vidbiy.app.data.shortTitle
 import ua.vidbiy.app.data.WaitFor
 import ua.vidbiy.app.ui.theme.Dimens
 
@@ -46,7 +47,7 @@ import ua.vidbiy.app.ui.theme.Dimens
 @Composable
 fun AlarmsTab(
     alarms: List<Alarm>,
-    region: SelectedRegion?,
+    places: PlacesState,
     waiting: PendingWait?,
     contentPadding: PaddingValues,
     onEdit: (Alarm) -> Unit,
@@ -66,7 +67,7 @@ fun AlarmsTab(
             item {
                 WaitingBanner(
                     alarm = waitingAlarm,
-                    placeName = region?.title,
+                    placeName = placeName(waitingAlarm, places),
                     onCancel = { onCancelWaiting(waitingAlarm.id) },
                 )
             }
@@ -78,7 +79,7 @@ fun AlarmsTab(
             items(alarms, key = { it.id }) { alarm ->
                 AlarmCard(
                     alarm = alarm,
-                    placeName = region?.title,
+                    placeName = placeName(alarm, places),
                     onClick = { onEdit(alarm) },
                     onToggle = { onToggle(alarm, it) },
                 )
@@ -86,6 +87,10 @@ fun AlarmsTab(
         }
     }
 }
+
+/** Назва місця, а якщо місця немає (обрано напряму чи видалено) — коротка назва регіону. */
+private fun placeName(alarm: Alarm, places: PlacesState): String? =
+    places.byId(alarm.placeId)?.name ?: alarm.region?.shortTitle
 
 /**
  * Банер «06:45 чекає на відбій тривоги». Повний екран очікування й колір рівня
@@ -207,10 +212,15 @@ private fun AlertSummary(alarm: Alarm, placeName: String?, modifier: Modifier = 
                 maxLines = 1,
             )
         }
+        val pause = if (alarm.pauseMinutes > 0) {
+            stringResource(R.string.card_pause, alarm.pauseMinutes)
+        } else {
+            stringResource(R.string.card_right_after)
+        }
         val deadline = alarm.deadlineMinute?.let { stringResource(R.string.card_deadline, formatTime(it / 60, it % 60)) }
             ?: stringResource(R.string.card_no_deadline)
         Text(
-            text = stringResource(R.string.card_right_after) + " · " + deadline,
+            text = "$pause · $deadline",
             style = MaterialTheme.typography.bodyMedium,
             color = subtle,
             modifier = Modifier.padding(start = 26.dp),
