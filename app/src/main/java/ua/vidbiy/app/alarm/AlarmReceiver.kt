@@ -11,7 +11,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.data.Alarm
+import ua.vidbiy.app.data.PendingWait
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 /**
  * Сюди система стукає в момент спрацювання будильника.
@@ -63,9 +65,15 @@ class AlarmReceiver : BroadcastReceiver() {
                 if (waitForAllClear) {
                     // Перша перевірка тривоги — вже всередині служби: якщо тривоги немає,
                     // вона задзвонить одразу, а якщо є — чекатиме відбою.
-                    val deadline = alarm.deadlineAt(LocalDateTime.now())
-                    AlarmScheduler(context).scheduleDeadline(alarm.id, deadline)
-                    AlarmWaitService.startWaiting(context, alarm, deadline)
+                    val now = LocalDateTime.now()
+                    val wait = PendingWait(
+                        alarmId = alarm.id,
+                        deadlineMillis = alarm.deadlineAfter(now)
+                            ?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli(),
+                        startedAtMillis = System.currentTimeMillis(),
+                    )
+                    AlarmScheduler(context).scheduleDeadline(alarm.id, wait.giveUpAtMillis())
+                    AlarmWaitService.startWaiting(context, wait)
                 } else {
                     // Регіон не обрано або тривоги не враховуються — звичайний будильник.
                     AlarmRingService.startRinging(context, alarm)

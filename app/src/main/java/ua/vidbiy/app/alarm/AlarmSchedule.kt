@@ -26,6 +26,13 @@ fun Alarm.nextTriggerAt(now: LocalDateTime): LocalDateTime {
     error("Не вдалося знайти наступне спрацювання для будильника $id")
 }
 
-/** FR-7: крайній час, після якого будильник дзвонить, навіть якщо відбою немає. */
-fun Alarm.deadlineAt(triggerAt: LocalDateTime): LocalDateTime =
-    triggerAt.plusMinutes(maxWaitMinutes.toLong())
+/**
+ * FR-6: крайній час, після якого будильник дзвонить, навіть якщо відбою немає.
+ * Найближчий такий час після [triggerAt]: будильник 23:00 і крайній 01:00 — це 01:00 наступного дня.
+ * null — крайнього часу немає.
+ */
+fun Alarm.deadlineAfter(triggerAt: LocalDateTime): LocalDateTime? {
+    val minute = deadlineMinute ?: return null
+    val todayAt = LocalDateTime.of(triggerAt.toLocalDate(), LocalTime.of(minute / 60, minute % 60))
+    return if (todayAt.isAfter(triggerAt)) todayAt else todayAt.plusDays(1)
+}

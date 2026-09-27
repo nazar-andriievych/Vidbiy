@@ -34,14 +34,15 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * Очікування відбою (FR-4, FR-5, FR-8).
+ * Очікування відбою (FR-8 … FR-18).
  *
  * Поки в обраному регіоні триває тривога, будильник мовчить, а тут висить тиха нотифікація
- * зі станом. Кожні 30 секунд опитуємо проксі; щойно тривоги не стало — дзвонимо.
+ * зі станом. На старті до 30 с пробуємо отримати свіжі дані (FR-8), далі опитуємо проксі
+ * кожні 30 с; щойно тривоги потрібного рівня не стало — дзвонимо.
  *
- * Служба не єдиний запобіжник: крайній час окремо зареєстрований у AlarmManager
- * (AlarmScheduler.scheduleDeadline), тож навіть якщо систему занесе й вона прибере цей
- * процес, будильник однаково задзвонить.
+ * Служба не єдиний запобіжник: момент, коли будильник здасться (крайній час або доба),
+ * окремо зареєстрований у AlarmManager (AlarmScheduler.scheduleDeadline), тож навіть якщо
+ * систему занесе й вона прибере цей процес, будильник однаково задзвонить.
  */
 class AlarmWaitService : Service() {
 
@@ -55,7 +56,14 @@ class AlarmWaitService : Service() {
         val alarmId = intent?.getLongExtra(EXTRA_ALARM_ID, Alarm.NEW_ID) ?: Alarm.NEW_ID
 
         when (intent?.action) {
-            ACTION_START -> startWaiting(alarmId, intent.getLongExtra(EXTRA_DEADLINE_MILLIS, 0L))
+            ACTION_START -> startWaiting(
+                PendingWait(
+                    alarmId = alarmId,
+                    deadlineMillis = intent.getLongExtra(EXTRA_DEADLINE_MILLIS, NO_DEADLINE)
+                        .takeIf { it != NO_DEADLINE },
+                    startedAtMillis = intent.getLongExtra(EXTRA_STARTED_AT_MILLIS, 0L),
+                ),
+            )
             ACTION_RING_NOW -> ringNow(alarmId)
             ACTION_CANCEL -> cancelAlarm(alarmId)
             else -> stopEverything()
@@ -65,60 +73,76 @@ class AlarmWaitService : Service() {
         return START_REDELIVER_INTENT
     }
 
-    private fun startWaiting(alarmId: Long, deadlineMillis: Long) {
-        if (alarmId == Alarm.NEW_ID || deadlineMillis == 0L) {
+    private fun startWaiting(wait: PendingWait) {
+        if (wait.alarmId == Alarm.NEW_ID) {
             stopEverything()
             return
         }
 
-        startForegroundNotification(alarmId, deadlineMillis, status = null)
-        acquireWakeLock(deadlineMillis)
-        app().applicationScope.launch {
-            app().settingsRepository.setPendingWait(PendingWait(alarmId, deadlineMillis))
-        }
+        startForegroundNotification(wait, status = null)
+        acquireWakeLock(wait.giveUpAtMillis())
+        app().applicationScope.launch { app().settingsRepository.setPendingWait(wait) }
 
         pollJob?.cancel()
-        pollJob = scope.launch { pollUntilClear(alarmId, deadlineMillis) }
+        pollJob = scope.launch { pollUntilClear(wait) }
     }
 
-    private suspend fun pollUntilClear(alarmId: Long, deadlineMillis: Long) {
+    private suspend fun pollUntilClear(wait: PendingWait) {
         val app = app()
         val baseUrl = app.settingsRepository.proxyBaseUrl()
         val client = AlertsClient(baseUrl)
-        Log.i(TAG, "Чекаємо відбою: будильник=$alarmId, проксі=$baseUrl")
+        val startedElapsed = SystemClock.elapsedRealtime()
+        // Остання відповідь, яка хоч щось знала: невдала спроба її не затирає (FR-15).
+        var known: AlertsSnapshot? = null
+        Log.i(TAG, "Чекаємо відбою: будильник=${wait.alarmId}, проксі=$baseUrl")
 
         while (currentCoroutineContext().isActive) {
-            val alarm = app.alarmsRepository.alarms.first().firstOrNull { it.id == alarmId }
+            val alarm = app.alarmsRepository.alarms.first().firstOrNull { it.id == wait.alarmId }
             if (alarm == null) {
                 // Будильник видалили, поки ми чекали — чекати більше нема для кого.
-                AlarmScheduler(this).cancelDeadline(alarmId)
+                AlarmScheduler(this).cancelDeadline(wait.alarmId)
                 stopEverything()
                 return
             }
 
             val region = app.settingsRepository.selectedRegion.first()
-            val snapshot = client.fetch()
+            val snapshot = client.fetch().orPrevious(known)
+            known = snapshot
             val nowElapsed = SystemClock.elapsedRealtime()
-            val decision = decideRing(
+            val nowMillis = System.currentTimeMillis()
+            var decision = decideRing(
                 snapshot = snapshot,
                 nowElapsed = nowElapsed,
+                nowMillis = nowMillis,
                 region = region,
-                pastDeadline = System.currentTimeMillis() >= deadlineMillis,
+                waitFor = alarm.waitFor,
+                pastDeadline = wait.deadlineMillis?.let { nowMillis >= it } ?: false,
             )
+            if (!decision.shouldRing && nowMillis >= wait.giveUpAtMillis()) {
+                decision = RingDecision.RING_ALERT_TOO_LONG
+            }
             Log.i(
                 TAG,
-                "Рішення=$decision, регіон=${region?.uid} (${region?.title}), " +
-                    "тривоги=${snapshot.alertUids}, вік=${snapshot.effectiveAgeSeconds(nowElapsed)}с",
+                "Рішення=$decision, регіон=${region?.uid} (${region?.title}), рівень=${alarm.waitFor}, " +
+                    "тривоги=${region?.let { r -> snapshot.alerts?.let { r.levelsOver(it) } }}, " +
+                    "вік=${snapshot.effectiveAgeSeconds(nowElapsed)}с",
             )
 
+            // FR-8: на старті до 30 с даємо мережі шанс, перш ніж дзвонити через брак даних.
+            val noFreshData = decision == RingDecision.RING_NO_DATA || decision == RingDecision.RING_STALE
+            if (noFreshData && nowElapsed - startedElapsed < STARTUP_WINDOW_MILLIS) {
+                delay(STARTUP_RETRY_MILLIS)
+                continue
+            }
+
             if (decision.shouldRing) {
-                AlarmScheduler(this).cancelDeadline(alarmId)
+                AlarmScheduler(this).cancelDeadline(wait.alarmId)
                 AlarmRingService.startRinging(this, alarm)
                 stopEverything()
                 return
             }
 
-            startForegroundNotification(alarmId, deadlineMillis, snapshot)
+            startForegroundNotification(wait, snapshot)
             delay(POLL_INTERVAL_MILLIS)
         }
     }
@@ -138,29 +162,24 @@ class AlarmWaitService : Service() {
         stopEverything()
     }
 
-    private fun startForegroundNotification(
-        alarmId: Long,
-        deadlineMillis: Long,
-        status: AlertsSnapshot?,
-    ) {
-        val deadline = LocalDateTime.ofInstant(Instant.ofEpochMilli(deadlineMillis), ZoneId.systemDefault())
-        val updated = if (status?.alertUids != null) {
+    private fun startForegroundNotification(wait: PendingWait, status: AlertsSnapshot?) {
+        val alarmId = wait.alarmId
+        val updated = if (status?.isKnown == true) {
             getString(R.string.waiting_alert, LocalTime.now().format(TIME_FORMAT))
         } else {
             getString(R.string.waiting_checking)
         }
+        val deadlineLine = wait.deadlineMillis?.let { millis ->
+            val deadline = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
+            getString(R.string.waiting_deadline, deadline.toLocalTime().format(TIME_FORMAT))
+        } ?: getString(R.string.waiting_no_deadline)
 
         val notification = NotificationCompat.Builder(this, Notifications.CHANNEL_WAITING)
             .setSmallIcon(R.drawable.ic_alarm)
             .setContentTitle(getString(R.string.waiting_title))
             .setContentText(updated)
             .setStyle(
-                NotificationCompat.BigTextStyle().bigText(
-                    updated + "\n" + getString(
-                        R.string.waiting_deadline,
-                        deadline.toLocalTime().format(TIME_FORMAT),
-                    ),
-                ),
+                NotificationCompat.BigTextStyle().bigText(updated + "\n" + deadlineLine),
             )
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -194,9 +213,10 @@ class AlarmWaitService : Service() {
         )
     }
 
-    private fun acquireWakeLock(deadlineMillis: Long) {
+    private fun acquireWakeLock(giveUpAtMillis: Long) {
         val power = getSystemService(PowerManager::class.java) ?: return
-        val timeout = (deadlineMillis - System.currentTimeMillis()).coerceIn(0, MAX_WAKE_LOCK_MILLIS)
+        // До моменту, коли будильник здасться, але не довше доби (PendingWait.MAX_WAIT_MILLIS).
+        val timeout = (giveUpAtMillis - System.currentTimeMillis()).coerceIn(0, PendingWait.MAX_WAIT_MILLIS)
         wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG).apply {
             setReferenceCounted(false)
             acquire(timeout)
@@ -226,11 +246,15 @@ class AlarmWaitService : Service() {
     companion object {
         private const val TAG = "VidbiyWait"
         private const val WAKE_LOCK_TAG = "vidbiy:wait"
-        private const val MAX_WAKE_LOCK_MILLIS = 6 * 60 * 60 * 1000L
         private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
         /** NFR-3 дозволяє до 2 хв затримки після відбою, тож 30 с дають запас. */
         private const val POLL_INTERVAL_MILLIS = 30_000L
+
+        /** FR-8: скільки на старті пробуємо отримати свіжі дані, перш ніж дзвонити без них. */
+        private const val STARTUP_WINDOW_MILLIS = 30_000L
+        private const val STARTUP_RETRY_MILLIS = 2_000L
+        private const val NO_DEADLINE = -1L
 
         const val ACTION_START = "ua.vidbiy.app.action.START_WAITING"
         const val ACTION_RING_NOW = "ua.vidbiy.app.action.RING_NOW"
@@ -239,13 +263,14 @@ class AlarmWaitService : Service() {
 
         private const val EXTRA_ALARM_ID = "alarm_id"
         private const val EXTRA_DEADLINE_MILLIS = "deadline_millis"
+        private const val EXTRA_STARTED_AT_MILLIS = "started_at_millis"
 
-        fun startWaiting(context: Context, alarm: Alarm, deadline: LocalDateTime) {
-            val deadlineMillis = deadline.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        fun startWaiting(context: Context, wait: PendingWait) {
             val intent = Intent(context, AlarmWaitService::class.java).apply {
                 action = ACTION_START
-                putExtra(EXTRA_ALARM_ID, alarm.id)
-                putExtra(EXTRA_DEADLINE_MILLIS, deadlineMillis)
+                putExtra(EXTRA_ALARM_ID, wait.alarmId)
+                putExtra(EXTRA_DEADLINE_MILLIS, wait.deadlineMillis ?: NO_DEADLINE)
+                putExtra(EXTRA_STARTED_AT_MILLIS, wait.startedAtMillis)
             }
             context.startForegroundService(intent)
         }

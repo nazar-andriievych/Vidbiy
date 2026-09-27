@@ -9,9 +9,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ua.vidbiy.app.VidbiyApplication
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneId
 
 /**
  * Перезавантаження стирає всі зареєстровані спрацювання — система не зберігає їх між
@@ -47,19 +44,17 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
 
-        val deadline = LocalDateTime.ofInstant(
-            Instant.ofEpochMilli(wait.deadlineMillis),
-            ZoneId.systemDefault(),
-        )
-        if (System.currentTimeMillis() >= wait.deadlineMillis) {
-            // Крайній час настав, поки телефон завантажувався — дзвонимо одразу (FR-7).
+        // Запис зі старої версії не знав, коли почалося очікування: рахуємо від зараз.
+        val restored = wait.copy(startedAtMillis = wait.startedAtMillis.takeIf { it > 0 } ?: System.currentTimeMillis())
+        if (System.currentTimeMillis() >= restored.giveUpAtMillis()) {
+            // Крайній час настав, поки телефон завантажувався — дзвонимо одразу (FR-16).
             app.settingsRepository.clearPendingWait()
             AlarmRingService.startRinging(context, alarm)
             return
         }
 
-        AlarmScheduler(context).scheduleDeadline(alarm.id, deadline)
-        AlarmWaitService.startWaiting(context, alarm, deadline)
+        AlarmScheduler(context).scheduleDeadline(alarm.id, restored.giveUpAtMillis())
+        AlarmWaitService.startWaiting(context, restored)
     }
 
     private companion object {

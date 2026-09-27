@@ -10,30 +10,46 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.Instant
 
 /** Адреса проксі. Одна на весь застосунок; debug-збірка вміє її перекрити (див. налаштування). */
 object ProxyConfig {
     const val BASE_URL = "https://vidbiy-proxy.nazar-dev.workers.dev"
 }
 
+/** Жовтий — дронова загроза, червоний — ракетна (див. docs/proxy-api.md). */
+enum class AlertLevel { RED, YELLOW }
+
+/** Один рівень тривоги в регіоні. */
+data class ActiveLevel(
+    val level: AlertLevel,
+    /** Коли рівень оголосили, мс за годинником сервера. Для правила 24 год (FR-27). */
+    val sinceMillis: Long,
+    /** Текст від ukrainealarm, лише для показу. */
+    val reason: String?,
+)
+
 /**
  * Знімок стану тривог у момент відповіді проксі.
  *
- * [alertUids] = null означає «ми не знаємо»: мережі немає, проксі мовчить або сам
- * ще не має стану від ukrainealarm. Порожній набір — навпаки, перевірено: тривог немає.
+ * [alerts] = null означає «ми не знаємо»: мережі немає, проксі мовчить або сам
+ * ще не має стану від ukrainealarm. Порожня мапа — навпаки, перевірено: тривог немає.
  * Плутати ці два стани не можна, хоч будильник в обох випадках і дзвонить (NFR-1).
  */
 data class AlertsSnapshot(
-    val alertUids: Set<String>?,
+    /** Регіон (ID з довідника) → активні рівні повітряної тривоги в ньому. */
+    val alerts: Map<String, List<ActiveLevel>>?,
     /**
-     * Скільки секунд тому проксі востаннє підтвердив стан: вебхуком від ukrainealarm
-     * або власною перевіркою, коли вебхуків немає. Понад 3 хв без підтверджень —
-     * стану довіряти не можна (NFR-1).
+     * Скільки секунд тому проксі востаннє підтвердив стан (FR-30). Понад 3 хв без
+     * підтверджень — стану довіряти не можна (FR-31).
      */
     val ageSeconds: Long?,
     /** Показник монотонного лічильника телефона в момент отримання відповіді. */
     val receivedAtElapsed: Long,
 ) {
+    /** Чи є в знімку взагалі на що спиратися. */
+    val isKnown: Boolean get() = alerts != null && ageSeconds != null
+
     /**
      * Вік даних «зараз»: серверний вік плюс те, що минуло на телефоні.
      *
@@ -44,16 +60,22 @@ data class AlertsSnapshot(
     fun effectiveAgeSeconds(nowElapsed: Long): Long? =
         ageSeconds?.plus((nowElapsed - receivedAtElapsed) / 1000)
 
+    /**
+     * FR-15: одна невдала спроба нічого не змінює. Якщо нова відповідь нічого не знає,
+     * лишаємося на попередній відомій — вона старіє сама, і коли їй стане понад 3 хв,
+     * будильник задзвонить.
+     */
+    fun orPrevious(previous: AlertsSnapshot?): AlertsSnapshot =
+        if (isKnown || previous == null || !previous.isKnown) this else previous
+
     companion object {
         fun unavailable(nowElapsed: Long = SystemClock.elapsedRealtime()) =
-            AlertsSnapshot(alertUids = null, ageSeconds = null, receivedAtElapsed = nowElapsed)
+            AlertsSnapshot(alerts = null, ageSeconds = null, receivedAtElapsed = nowElapsed)
     }
 }
 
-/** Клієнт проксі. Один запит — один знімок; жодних ретраїв: наступна спроба буде за 30 с. */
+/** Клієнт проксі. Один запит — один знімок; повтори вирішує той, хто питає. */
 class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
-
-    private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun fetch(): AlertsSnapshot = withContext(Dispatchers.IO) {
         runCatching { request() }
@@ -62,7 +84,7 @@ class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
     }
 
     private fun request(): AlertsSnapshot {
-        val connection = (URL("$baseUrl/v2/alerts").openConnection() as HttpURLConnection).apply {
+        val connection = (URL("$baseUrl/v1/alerts").openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             // Довге очікування тут шкідливе: поки ми чекаємо, будильник мовчить.
             connectTimeout = TIMEOUT_MS
@@ -79,12 +101,7 @@ class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
             }
 
             val body = connection.inputStream.bufferedReader().use { it.readText() }
-            val response = json.decodeFromString<AlertsResponse>(body)
-            return AlertsSnapshot(
-                alertUids = response.active?.toSet(),
-                ageSeconds = response.ageSeconds,
-                receivedAtElapsed = received,
-            )
+            return parseAlertsResponse(body, received)
         } finally {
             connection.disconnect()
         }
@@ -92,7 +109,8 @@ class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
 
     private companion object {
         const val TAG = "AlertsClient"
-        const val TIMEOUT_MS = 8_000
+        /** FR-8: окрема спроба не довша за ~8 с, щоб за 30 с встигнути кілька. */
+        const val TIMEOUT_MS = 4_000
 
         /**
          * Хто ми такі. Без цього HttpURLConnection представляється системним рядком
@@ -104,11 +122,41 @@ class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
     }
 }
 
+private val json = Json { ignoreUnknownKeys = true }
+
+/**
+ * Розбирає відповідь `/v1/alerts`. Незнайомий рівень вважаємо червоним: тривога з невідомим
+ * рівнем — усе одно тривога. Кривий час початку — «щойно», тобто тривога рахується.
+ */
+internal fun parseAlertsResponse(body: String, receivedAtElapsed: Long): AlertsSnapshot {
+    val response = json.decodeFromString<AlertsResponse>(body)
+    return AlertsSnapshot(
+        alerts = response.alerts?.associate { alert ->
+            alert.region to alert.levels.map { level ->
+                ActiveLevel(
+                    level = if (level.level == "yellow") AlertLevel.YELLOW else AlertLevel.RED,
+                    sinceMillis = runCatching { Instant.parse(level.since).toEpochMilli() }
+                        .getOrDefault(System.currentTimeMillis()),
+                    reason = level.reason,
+                )
+            }.ifEmpty { listOf(ActiveLevel(AlertLevel.RED, System.currentTimeMillis(), null)) }
+        },
+        ageSeconds = response.ageSeconds,
+        receivedAtElapsed = receivedAtElapsed,
+    )
+}
+
 /** Формат відповіді проксі — див. docs/proxy-api.md. */
 @Serializable
 private data class AlertsResponse(
-    val v: Int = 2,
-    /** ID регіонів із активною повітряною тривогою; null — проксі сам ще не знає стану. */
-    val active: List<String>? = null,
+    val v: Int = 1,
+    /** Регіони з активною повітряною тривогою; null — проксі сам ще не знає стану. */
+    val alerts: List<RegionAlertDto>? = null,
     @SerialName("age_seconds") val ageSeconds: Long? = null,
 )
+
+@Serializable
+private data class RegionAlertDto(val region: String, val levels: List<LevelDto> = emptyList())
+
+@Serializable
+private data class LevelDto(val level: String = "red", val since: String = "", val reason: String? = null)

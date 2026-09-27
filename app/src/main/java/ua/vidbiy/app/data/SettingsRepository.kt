@@ -18,7 +18,28 @@ import ua.vidbiy.app.BuildConfig
  * стирає і службу очікування, і зареєстрований крайній час — а будильник має пережити це.
  */
 @Serializable
-data class PendingWait(val alarmId: Long, val deadlineMillis: Long)
+data class PendingWait(
+    val alarmId: Long,
+    /** Крайній час (FR-6); null — не заданий. */
+    val deadlineMillis: Long? = null,
+    /** Коли почалося очікування. 0 — запис зі старої версії, де цього поля не було. */
+    val startedAtMillis: Long = 0L,
+) {
+    /**
+     * Коли будильник здасться за будь-яких умов: крайній час або доба очікування.
+     * Доба випливає з FR-17 — тривога, довша за добу, не рахується, — і страхує очікування
+     * без крайнього часу: без неї служба, яку прибила система, не мала б чим задзвонити.
+     */
+    fun giveUpAtMillis(): Long {
+        val started = startedAtMillis.takeIf { it > 0 } ?: System.currentTimeMillis()
+        val backstop = started + MAX_WAIT_MILLIS
+        return deadlineMillis?.coerceAtMost(backstop) ?: backstop
+    }
+
+    companion object {
+        const val MAX_WAIT_MILLIS = 24 * 60 * 60 * 1000L
+    }
+}
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 

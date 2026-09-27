@@ -78,7 +78,7 @@ fun AlarmListScreen(
                 items(alarms, key = { it.id }) { alarm ->
                     AlarmCard(
                         alarm = alarm,
-                        waitingUntilMillis = waiting?.takeIf { it.alarmId == alarm.id }?.deadlineMillis,
+                        waiting = waiting?.takeIf { it.alarmId == alarm.id },
                         onClick = { onEdit(alarm) },
                         onToggle = { onToggle(alarm, it) },
                         onCancelWaiting = { onCancelWaiting(alarm.id) },
@@ -137,20 +137,20 @@ private fun EmptyState() {
 @Composable
 private fun AlarmCard(
     alarm: Alarm,
-    waitingUntilMillis: Long?,
+    waiting: PendingWait?,
     onClick: () -> Unit,
     onToggle: (Boolean) -> Unit,
     onCancelWaiting: () -> Unit,
 ) {
     // Поки триває очікування, картка живе окремим життям: будильник не вимкнений
     // і не «спрацює завтра» — він мовчить саме зараз і задзвонить після відбою.
-    val deadline = remember(waitingUntilMillis) {
-        waitingUntilMillis?.let {
+    val deadline = remember(waiting) {
+        waiting?.deadlineMillis?.let {
             LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault())
         }
     }
-    val waiting = deadline != null
-    val subtleColor = if (waiting) {
+    val isWaiting = waiting != null
+    val subtleColor = if (isWaiting) {
         MaterialTheme.colorScheme.onTertiaryContainer
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
@@ -158,7 +158,7 @@ private fun AlarmCard(
 
     Card(
         onClick = onClick,
-        colors = if (waiting) {
+        colors = if (isWaiting) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
         } else {
             CardDefaults.cardColors()
@@ -178,13 +178,17 @@ private fun AlarmCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = subtleColor,
                 )
-                if (deadline != null) {
+                if (isWaiting) {
                     Text(
                         text = stringResource(R.string.waiting_card_title),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
-                        text = stringResource(R.string.waiting_card_deadline, formatTime(deadline)),
+                        text = if (deadline != null) {
+                            stringResource(R.string.waiting_card_deadline, formatTime(deadline))
+                        } else {
+                            stringResource(R.string.waiting_card_no_deadline)
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = subtleColor,
                     )
@@ -199,7 +203,7 @@ private fun AlarmCard(
                         color = subtleColor,
                     )
                 }
-                if (alarm.respectAlerts && !waiting) {
+                if (alarm.respectAlerts && !isWaiting) {
                     Text(
                         text = stringResource(R.string.respect_alerts),
                         style = MaterialTheme.typography.bodySmall,
@@ -207,7 +211,7 @@ private fun AlarmCard(
                     )
                 }
             }
-            if (waiting) {
+            if (isWaiting) {
                 // Перемикач тут означав би «вимкнути будильник назавжди», а потрібне
                 // інше: не дзвонити сьогодні. Наступні дні лишаються як були.
                 TextButton(onClick = onCancelWaiting) {

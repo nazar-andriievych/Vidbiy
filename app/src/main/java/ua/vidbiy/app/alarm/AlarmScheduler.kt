@@ -61,12 +61,13 @@ class AlarmScheduler(private val context: Context) {
     }
 
     /**
-     * FR-7: страхувальне спрацювання на крайній час. Служба очікування відбою може не дожити
-     * до нього (виробник прибив процес, система звільняла пам'ять), а будильник має задзвонити
-     * однаково — тож крайній час живе в AlarmManager окремо від неї.
+     * FR-16: страхувальне спрацювання на момент, коли будильник здається (крайній час або
+     * доба очікування). Служба очікування відбою може не дожити до нього (виробник прибив
+     * процес, система звільняла пам'ять), а будильник має задзвонити однаково — тож цей
+     * момент живе в AlarmManager окремо від неї.
      */
-    fun scheduleDeadline(alarmId: Long, at: LocalDateTime) {
-        setAt(alarmId, at, Kind.DEADLINE)
+    fun scheduleDeadline(alarmId: Long, atMillis: Long) {
+        setAtMillis(alarmId, atMillis, Kind.DEADLINE)
     }
 
     fun cancelDeadline(alarmId: Long) {
@@ -82,7 +83,10 @@ class AlarmScheduler(private val context: Context) {
     }
 
     private fun setAt(alarmId: Long, at: LocalDateTime, kind: Kind) {
-        val triggerAtMillis = at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        setAtMillis(alarmId, at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(), kind)
+    }
+
+    private fun setAtMillis(alarmId: Long, triggerAtMillis: Long, kind: Kind) {
         val operation = firePendingIntent(alarmId, kind)
 
         if (canScheduleExact()) {

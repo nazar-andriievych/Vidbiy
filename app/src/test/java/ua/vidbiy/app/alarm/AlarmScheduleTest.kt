@@ -1,6 +1,7 @@
 package ua.vidbiy.app.alarm
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import ua.vidbiy.app.data.Alarm
 import java.time.LocalDateTime
@@ -62,18 +63,23 @@ class AlarmScheduleTest {
     }
 
     @Test
-    fun `крайній час — це час будильника плюс очікування`() {
-        val alarm = Alarm(hour = 7, minute = 0, maxWaitMinutes = 120)
+    fun `крайній час абсолютний і того ж дня, якщо пізніший за будильник`() {
+        val alarm = Alarm(hour = 7, minute = 0, deadlineMinute = 9 * 60)
         val trigger = LocalDateTime.of(2026, 9, 24, 7, 0)
 
-        assertEquals(LocalDateTime.of(2026, 9, 24, 9, 0), alarm.deadlineAt(trigger))
+        assertEquals(LocalDateTime.of(2026, 9, 24, 9, 0), alarm.deadlineAfter(trigger))
     }
 
     @Test
-    fun `крайній час може перейти через північ`() {
-        val alarm = Alarm(hour = 23, minute = 30, maxWaitMinutes = 60)
-        val trigger = LocalDateTime.of(2026, 9, 23, 23, 30)
+    fun `крайній час раніший за будильник — це наступна доба`() {
+        val alarm = Alarm(hour = 23, minute = 0, deadlineMinute = 60)
+        val trigger = LocalDateTime.of(2026, 9, 23, 23, 0)
 
-        assertEquals(LocalDateTime.of(2026, 9, 24, 0, 30), alarm.deadlineAt(trigger))
+        assertEquals(LocalDateTime.of(2026, 9, 24, 1, 0), alarm.deadlineAfter(trigger))
+    }
+
+    @Test
+    fun `крайнього часу за замовчуванням немає`() {
+        assertNull(Alarm(hour = 7, minute = 0).deadlineAfter(LocalDateTime.of(2026, 9, 24, 7, 0)))
     }
 }

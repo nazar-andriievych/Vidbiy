@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -28,7 +29,11 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -38,9 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.IntentCompat
 import ua.vidbiy.app.R
 import ua.vidbiy.app.data.Alarm
-import java.time.LocalTime
-
-private val MAX_WAIT_OPTIONS = listOf(30, 60, 120, 180)
+import ua.vidbiy.app.data.WaitFor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -118,11 +121,14 @@ fun AlarmEditScreen(
                 )
 
                 if (alarm.respectAlerts) {
-                    MaxWaitSection(
-                        alarm = alarm,
-                        hour = timeState.hour,
-                        minute = timeState.minute,
-                        onSelect = { minutes -> onChange { it.copy(maxWaitMinutes = minutes) } },
+                    WaitForSection(
+                        selected = alarm.waitFor,
+                        onSelect = { waitFor -> onChange { it.copy(waitFor = waitFor) } },
+                    )
+                    DeadlineSection(
+                        deadlineMinute = alarm.deadlineMinute,
+                        alarmMinute = timeState.hour * 60 + timeState.minute,
+                        onChange = { minute -> onChange { it.copy(deadlineMinute = minute) } },
                     )
                 }
 
@@ -172,23 +178,25 @@ private fun DaysRow(selected: Set<Int>, onToggleDay: (Int) -> Unit) {
 }
 
 @Composable
-private fun MaxWaitSection(alarm: Alarm, hour: Int, minute: Int, onSelect: (Int) -> Unit) {
+private fun WaitForSection(selected: WaitFor, onSelect: (WaitFor) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(R.string.max_wait), style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.wait_for), style = MaterialTheme.typography.titleSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (minutes in MAX_WAIT_OPTIONS) {
-                FilterChip(
-                    selected = alarm.maxWaitMinutes == minutes,
-                    onClick = { onSelect(minutes) },
-                    label = { Text(maxWaitLabel(minutes)) },
-                )
-            }
+            FilterChip(
+                selected = selected == WaitFor.RED_AND_YELLOW,
+                onClick = { onSelect(WaitFor.RED_AND_YELLOW) },
+                label = { Text(stringResource(R.string.wait_for_red_and_yellow)) },
+            )
+            FilterChip(
+                selected = selected == WaitFor.RED_ONLY,
+                onClick = { onSelect(WaitFor.RED_ONLY) },
+                label = { Text(stringResource(R.string.wait_for_red_only)) },
+            )
         }
-        val deadline = LocalTime.of(hour, minute).plusMinutes(alarm.maxWaitMinutes.toLong())
         Text(
             text = stringResource(
-                R.string.max_wait_hint,
-                formatTime(deadline.hour, deadline.minute),
+                if (selected == WaitFor.RED_ONLY) R.string.wait_for_red_only_hint
+                else R.string.wait_for_red_and_yellow_hint
             ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -196,15 +204,61 @@ private fun MaxWaitSection(alarm: Alarm, hour: Int, minute: Int, onSelect: (Int)
     }
 }
 
+/** FR-6: абсолютний крайній час; за замовчуванням не заданий. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun maxWaitLabel(minutes: Int): String = stringResource(
-    when (minutes) {
-        30 -> R.string.max_wait_30
-        60 -> R.string.max_wait_60
-        180 -> R.string.max_wait_180
-        else -> R.string.max_wait_120
+private fun DeadlineSection(deadlineMinute: Int?, alarmMinute: Int, onChange: (Int?) -> Unit) {
+    var picking by remember { mutableStateOf(false) }
+
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(stringResource(R.string.deadline), style = MaterialTheme.typography.titleSmall)
+            Text(
+                text = when {
+                    deadlineMinute == null -> stringResource(R.string.deadline_none)
+                    deadlineMinute > alarmMinute -> stringResource(
+                        R.string.deadline_set,
+                        formatTime(deadlineMinute / 60, deadlineMinute % 60),
+                    )
+                    else -> stringResource(
+                        R.string.deadline_set_next_day,
+                        formatTime(deadlineMinute / 60, deadlineMinute % 60),
+                    )
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (deadlineMinute != null) {
+            TextButton(onClick = { onChange(null) }) { Text(stringResource(R.string.deadline_clear)) }
+        }
+        TextButton(onClick = { picking = true }) { Text(stringResource(R.string.deadline_pick)) }
     }
-)
+
+    if (picking) {
+        // Порожнє поле пропонує час будильника + 2 год — лише як відправну точку в пікері.
+        val initial = deadlineMinute ?: ((alarmMinute + 120) % (24 * 60))
+        val state = rememberTimePickerState(
+            initialHour = initial / 60,
+            initialMinute = initial % 60,
+            is24Hour = true,
+        )
+        AlertDialog(
+            onDismissRequest = { picking = false },
+            title = { Text(stringResource(R.string.deadline)) },
+            text = { TimePicker(state = state) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onChange(state.hour * 60 + state.minute)
+                    picking = false
+                }) { Text(stringResource(R.string.action_done)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { picking = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
+}
 
 @Composable
 private fun RingtoneRow(uri: String?, onPicked: (String?) -> Unit) {

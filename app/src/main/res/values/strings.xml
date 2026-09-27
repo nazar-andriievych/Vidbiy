@@ -28,12 +28,19 @@
     <string name="respect_alerts_on">Під час тривоги в регіоні чекатиме відбою</string>
     <string name="respect_alerts_off">Звичайний будильник: задзвонить у свій час</string>
 
-    <string name="max_wait">Крайній час очікування</string>
-    <string name="max_wait_hint">Якщо відбою не буде, задзвонить о %1$s</string>
-    <string name="max_wait_30">30 хв</string>
-    <string name="max_wait_60">1 год</string>
-    <string name="max_wait_120">2 год</string>
-    <string name="max_wait_180">3 год</string>
+    <string name="wait_for">Чекати відбою</string>
+    <string name="wait_for_red_and_yellow">Червоної й жовтої</string>
+    <string name="wait_for_red_only">Лише червоної</string>
+    <string name="wait_for_red_and_yellow_hint">Мовчатиме і під час ракетної, і під час дронової загрози</string>
+    <string name="wait_for_red_only_hint">Мовчатиме лише під час ракетної загрози; дронова не заважатиме</string>
+
+    <string name="deadline">Крайній час</string>
+    <string name="deadline_none">Не заданий: чекатиме відбою, скільки б він не тривав</string>
+    <string name="deadline_set">Задзвонить о %1$s, навіть якщо відбою не буде</string>
+    <string name="deadline_set_next_day">Задзвонить о %1$s наступного дня, навіть якщо відбою не буде</string>
+    <string name="deadline_pick">Задати</string>
+    <string name="deadline_clear">Прибрати</string>
+    <string name="action_done">Готово</string>
 
     <string name="vibrate">Вібрація</string>
     <string name="ringtone">Мелодія</string>
@@ -79,8 +86,10 @@
     <string name="waiting_alert">Триває тривога, оновлено о %1$s</string>
     <string name="waiting_checking">Перевіряємо стан тривоги…</string>
     <string name="waiting_deadline">Задзвонить о %1$s, навіть якщо відбою не буде</string>
+    <string name="waiting_no_deadline">Задзвонить одразу після відбою</string>
     <string name="waiting_card_title">Чекає відбою</string>
     <string name="waiting_card_deadline">Задзвонить одразу після відбою, не пізніше %1$s</string>
+    <string name="waiting_card_no_deadline">Задзвонить одразу після відбою</string>
     <string name="waiting_card_skip">Не сьогодні</string>
     <string name="waiting_ring_now">Дзвонити зараз</string>
     <string name="waiting_cancel">Скасувати</string>
