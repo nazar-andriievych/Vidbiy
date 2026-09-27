@@ -18,9 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import ua.vidbiy.app.BuildConfig
 import ua.vidbiy.app.R
 import ua.vidbiy.app.data.Place
 import ua.vidbiy.app.data.WaitFor
@@ -53,10 +49,8 @@ fun SettingsTab(
     onOpenPlaces: () -> Unit,
     onOpenPermissions: () -> Unit,
     themeMode: ThemeMode,
-    debugProxyUrl: String,
     contentPadding: PaddingValues,
     onThemeModeChange: (ThemeMode) -> Unit,
-    onDebugProxyUrlChange: (String) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -123,15 +117,6 @@ fun SettingsTab(
         }
         item { PermissionsRow(onOpen = onOpenPermissions, modifier = Modifier.padding(horizontal = Dimens.ScreenPadding)) }
         item { PrivacyNote() }
-        if (BuildConfig.DEBUG) {
-            item {
-                DebugProxyCard(
-                    url = debugProxyUrl,
-                    onUrlChange = onDebugProxyUrlChange,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenPadding),
-                )
-            }
-        }
     }
 }
 
@@ -167,28 +152,15 @@ private val THEME_OPTIONS = listOf(
 /** Сегментований перемикач (design-spec 2): висота 52, вибраний сегмент — secondaryContainer. */
 @Composable
 private fun ThemeSelector(selected: ThemeMode, onSelect: (ThemeMode) -> Unit) {
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        THEME_OPTIONS.forEachIndexed { index, option ->
-            SegmentedButton(
-                selected = option.mode == selected,
-                onClick = { onSelect(option.mode) },
-                shape = SegmentedButtonDefaults.itemShape(index, THEME_OPTIONS.size),
-                modifier = Modifier.height(Dimens.SegmentHeight),
-                colors = SegmentedButtonDefaults.colors(
-                    activeBorderColor = MaterialTheme.colorScheme.outline,
-                    inactiveBorderColor = MaterialTheme.colorScheme.outline,
-                ),
-                icon = {
-                    Icon(
-                        painter = painterResource(option.icon),
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                },
-                label = { Text(stringResource(option.label), style = MaterialTheme.typography.labelLarge) },
-            )
-        }
-    }
+    SegmentedRow(
+        segments = THEME_OPTIONS.map { option ->
+            Segment(stringResource(option.label)) {
+                Icon(painterResource(option.icon), contentDescription = null, modifier = Modifier.size(16.dp))
+            }
+        },
+        selectedIndex = THEME_OPTIONS.indexOfFirst { it.mode == selected },
+        onSelect = { onSelect(THEME_OPTIONS[it].mode) },
+    )
 }
 
 @Composable

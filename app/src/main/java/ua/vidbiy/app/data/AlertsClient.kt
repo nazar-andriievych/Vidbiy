@@ -12,9 +12,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
 
-/** Адреса проксі. Одна на весь застосунок; debug-збірка вміє її перекрити (див. налаштування). */
+/** Адреса проксі. Задається під час збірки (див. app/build.gradle.kts), у застосунку її не змінити. */
 object ProxyConfig {
-    const val BASE_URL = "https://vidbiy-proxy.nazar-dev.workers.dev"
+    val BASE_URL: String = BuildConfig.PROXY_URL.trimEnd('/')
 }
 
 /** Жовтий — дронова загроза, червоний — ракетна (див. docs/proxy-api.md). Червоний — першим: він «вищий». */

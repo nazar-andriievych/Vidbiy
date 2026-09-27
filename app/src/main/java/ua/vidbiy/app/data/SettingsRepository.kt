@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import ua.vidbiy.app.BuildConfig
 import ua.vidbiy.app.ui.theme.ThemeMode
 
 /**
@@ -64,7 +63,7 @@ data class WaitStatus(
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-/** Налаштування застосунку: тема, стан очікування, адреса проксі для розробки. */
+/** Налаштування застосунку: тема, відкладення, разовий режим, стан очікування. */
 class SettingsRepository(private val context: Context) {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -131,21 +130,15 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { prefs -> prefs.remove(regionKey) }
     }
 
+    /** Адреса проксі — задається під час збірки (див. app/build.gradle.kts). */
+    fun proxyBaseUrl(): String = ProxyConfig.BASE_URL
+
     /**
-     * Адреса проксі. У релізі це завжди одна константа; debug-збірка дозволяє вказати
-     * локальний воркер (`npm run dev -- --ip 0.0.0.0`), щоб ганяти тривогу й відбій вручну.
+     * Старі debug-збірки дозволяли вписати адресу локального воркера прямо в застосунку.
+     * Забута адреса змусила б будильник дзвонити з «Немає зв'язку», тож стираємо її.
      */
-    val debugProxyUrl: Flow<String> = context.settingsDataStore.data.map { prefs ->
-        prefs[proxyUrlKey].orEmpty()
-    }
-
-    suspend fun proxyBaseUrl(): String {
-        if (!BuildConfig.DEBUG) return ProxyConfig.BASE_URL
-        return debugProxyUrl.first().trim().trimEnd('/').ifEmpty { ProxyConfig.BASE_URL }
-    }
-
-    suspend fun setDebugProxyUrl(url: String) {
-        context.settingsDataStore.edit { prefs -> prefs[proxyUrlKey] = url }
+    suspend fun clearLegacyProxyUrl() {
+        context.settingsDataStore.edit { prefs -> prefs.remove(proxyUrlKey) }
     }
 
     /**

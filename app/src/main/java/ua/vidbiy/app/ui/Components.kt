@@ -2,6 +2,17 @@ package ua.vidbiy.app.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -250,4 +261,60 @@ fun PlaceNameDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(dismissLabel) } },
     )
+}
+
+/** Один сегмент перемикача: підпис і необов'язковий значок перед ним (іконка, крапки рівня). */
+class Segment(val label: String, val leading: (@Composable () -> Unit)? = null)
+
+/**
+ * Сегментований перемикач (design-spec 2): висота 52, контур outline, вибраний —
+ * secondaryContainer. Власний, а не M3 `SegmentedButton`: у того фіксовані відступи й
+ * слот іконки, тож на вузьких екранах «Системна» впиралася в межу, а крапки рівня
+ * стояли вище за текст.
+ */
+@Composable
+fun SegmentedRow(
+    segments: List<Segment>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val outline = MaterialTheme.colorScheme.outline
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(Dimens.SegmentHeight)
+            .clip(CircleShape)
+            .border(1.dp, outline, CircleShape)
+            .selectableGroup(),
+    ) {
+        segments.forEachIndexed { index, segment ->
+            if (index > 0) Box(Modifier.fillMaxHeight().width(1.dp).background(outline))
+            val selected = index == selectedIndex
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                    .selectable(selected = selected, role = Role.RadioButton, onClick = { onSelect(index) })
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+                CompositionLocalProvider(LocalContentColor provides color) {
+                    segment.leading?.invoke()
+                    // Не влазить (вузький екран, збільшений шрифт) — трохи зменшуємо, а не обрізаємо.
+                    val style = MaterialTheme.typography.labelLarge
+                    BasicText(
+                        text = segment.label,
+                        style = style.copy(color = color),
+                        maxLines = 1,
+                        softWrap = false,
+                        autoSize = TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = style.fontSize, stepSize = 0.5.sp),
+                    )
+                }
+            }
+        }
+    }
 }

@@ -20,6 +20,14 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    buildTypes.configureEach {
+        // Адреса проксі. Для локального воркера — лише debug і лише явно:
+        //   .\gradlew.bat installDebug -Pvidbiy.proxyUrl=http://10.0.2.2:8787
+        // Звичайна збірка (і будь-який реліз) завжди ходить на робочий проксі.
+        val local = (project.findProperty("vidbiy.proxyUrl") as String?)?.takeIf { name == "debug" }
+        buildConfigField("String", "PROXY_URL", "\"${local ?: "https://vidbiy-proxy.nazar-dev.workers.dev"}\"")
+    }
+
     buildTypes {
         release {
             optimization {

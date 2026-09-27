@@ -69,9 +69,6 @@
     <string name="channel_waiting">Очікування відбою</string>
     <string name="channel_waiting_description">Тихе сповіщення, поки будильник чекає відбою</string>
 
-    <string name="debug_proxy_title">Проксі (лише debug)</string>
-    <string name="debug_proxy_hint">http://192.168.0.2:8787</string>
-
     <!-- Редагування будильника (design-spec 3.2) -->
     <string name="action_close_without_saving">Закрити без збереження</string>
     <string name="action_done">Готово</string>

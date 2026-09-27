@@ -9,6 +9,7 @@ object LegacyMigration {
     const val DEFAULT_PLACE_NAME = "Дім"
 
     suspend fun run(settings: SettingsRepository, places: PlacesRepository, alarms: AlarmsRepository) {
+        settings.clearLegacyProxyUrl()
         val legacy = settings.legacyRegion() ?: return
         val place = places.current().places.firstOrNull { it.region.uid == legacy.uid }
             ?: places.add(DEFAULT_PLACE_NAME, legacy)

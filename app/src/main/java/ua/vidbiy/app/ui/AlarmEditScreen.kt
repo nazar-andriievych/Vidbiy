@@ -26,9 +26,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -274,29 +271,17 @@ fun PauseChips(selected: Int, onSelect: (Int) -> Unit) {
 }
 
 /** Сегменти «●● Будь-яка» / «● Лише червона» (design-spec 2). */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LevelSelector(selected: WaitFor, onSelect: (WaitFor) -> Unit) {
-    val options = listOf(
-        WaitFor.RED_AND_YELLOW to R.string.wait_for_any,
-        WaitFor.RED_ONLY to R.string.wait_for_red_only,
+    val options = listOf(WaitFor.RED_AND_YELLOW, WaitFor.RED_ONLY)
+    SegmentedRow(
+        segments = listOf(
+            Segment(stringResource(R.string.wait_for_any)) { LevelDots(WaitFor.RED_AND_YELLOW) },
+            Segment(stringResource(R.string.wait_for_red_only)) { LevelDots(WaitFor.RED_ONLY) },
+        ),
+        selectedIndex = options.indexOf(selected),
+        onSelect = { onSelect(options[it]) },
     )
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        options.forEachIndexed { index, (waitFor, label) ->
-            SegmentedButton(
-                selected = selected == waitFor,
-                onClick = { onSelect(waitFor) },
-                shape = SegmentedButtonDefaults.itemShape(index, options.size),
-                modifier = Modifier.height(Dimens.SegmentHeight),
-                colors = SegmentedButtonDefaults.colors(
-                    activeBorderColor = MaterialTheme.colorScheme.outline,
-                    inactiveBorderColor = MaterialTheme.colorScheme.outline,
-                ),
-                icon = { LevelDots(waitFor, Modifier.padding(end = 4.dp)) },
-                label = { Text(stringResource(label), style = MaterialTheme.typography.labelLarge, maxLines = 1) },
-            )
-        }
-    }
 }
 
 /** «Щобудня», «У вихідні», «Щодня», «Без повторів — задзвонить один раз» або перелік днів. */

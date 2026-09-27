@@ -207,13 +207,6 @@ class AlarmsViewModel(
         viewModelScope.launch { settings.setThemeMode(mode) }
     }
 
-    /** Адреса локального проксі; порожньо — береться робоча. Лише для debug-збірки. */
-    val debugProxyUrl: StateFlow<String> = settings.debugProxyUrl
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
-
-    fun setDebugProxyUrl(url: String) {
-        viewModelScope.launch { settings.setDebugProxyUrl(url) }
-    }
 
     // ---- Редагування будильника ----
 

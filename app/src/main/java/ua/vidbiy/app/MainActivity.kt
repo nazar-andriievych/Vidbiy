@@ -114,7 +114,6 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
     val oneShotPause by viewModel.oneShotPauseMinutes.collectAsStateWithLifecycle()
     val oneShotAlarm by viewModel.oneShotAlarm.collectAsStateWithLifecycle()
     val oneShotJustEnabled by viewModel.oneShotJustEnabled.collectAsStateWithLifecycle()
-    val debugProxyUrl by viewModel.debugProxyUrl.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     // rememberSaveable переживає поворот екрана й повернення до застосунку, як стан у Bundle.
     var tab by rememberSaveable { mutableStateOf(Tab.Alarms) }
@@ -247,10 +246,8 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                         onOpenPlaces = { tab = Tab.Places },
                         onOpenPermissions = viewModel::openPermissions,
                         themeMode = themeMode,
-                        debugProxyUrl = debugProxyUrl,
                         contentPadding = content,
                         onThemeModeChange = viewModel::setThemeMode,
-                        onDebugProxyUrlChange = viewModel::setDebugProxyUrl,
                     )
                 }
             }
