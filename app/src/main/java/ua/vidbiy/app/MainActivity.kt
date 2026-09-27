@@ -14,6 +14,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,7 +51,9 @@ import ua.vidbiy.app.ui.PlaceRegionScreen
 import ua.vidbiy.app.ui.RegionPick
 import ua.vidbiy.app.ui.PlacesTab
 import ua.vidbiy.app.ui.RegionPickerScreen
+import ua.vidbiy.app.ui.PermissionsScreen
 import ua.vidbiy.app.ui.SettingsTab
+import ua.vidbiy.app.ui.rememberMissingPermissions
 import ua.vidbiy.app.ui.WaitingScreen
 import ua.vidbiy.app.ui.placeName
 import ua.vidbiy.app.ui.theme.VidbiyTheme
@@ -122,7 +128,10 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
     val waitingAlarm = waiting?.let { wait ->
         if (wait.alarmId == OneShot.ONE_SHOT_ID) oneShotAlarm else alarms.firstOrNull { it.id == wait.alarmId }
     }
+    // Дозволи перевіряються тут, щоб банер на головному й екран дозволів бачили один стан.
+    val missingPermissions = rememberMissingPermissions()
     when {
+        current == Overlay.Permissions -> PermissionsScreen(onBack = viewModel::closeOverlay)
         current == Overlay.Waiting -> {
             val wait = waiting
             if (wait != null && waitingAlarm != null) {
@@ -195,52 +204,55 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                 }
             },
         ) { padding ->
-            // Запас унизу, щоб остання картка не ховалася під FAB.
-            val content = PaddingValues(
-                top = padding.calculateTopPadding(),
-                bottom = padding.calculateBottomPadding() + 96.dp,
-            )
-            when (tab) {
-                Tab.Alarms -> AlarmsTab(
-                    alarms = alarms,
-                    places = places,
-                    waiting = waiting,
-                    waitStatus = waitStatus,
-                    contentPadding = content,
-                    onEdit = viewModel::startEdit,
-                    onToggle = viewModel::setEnabled,
-                    onOpenWaiting = viewModel::openWaiting,
-                    oneShotRow = oneShotRow,
-                    oneShotWaitFor = oneShotWaitFor,
-                    oneShotPauseMinutes = oneShotPause,
-                    onStartOneShot = viewModel::startOneShot,
-                    onCancelOneShotCheck = viewModel::cancelOneShotCheck,
-                    onNeedPlace = { tab = Tab.Places },
-                )
-                Tab.Places -> PlacesTab(
-                    places = places,
-                    alarms = alarms,
-                    contentPadding = content,
-                    onMakePrimary = viewModel::makePrimary,
-                    onRename = viewModel::renamePlace,
-                    onChangeRegion = viewModel::startChangePlaceRegion,
-                    onDelete = viewModel::deletePlace,
-                )
-                Tab.Settings -> SettingsTab(
-                    snoozeMinutes = snoozeMinutes,
-                    onSnoozeChange = viewModel::setSnoozeMinutes,
-                    primaryPlace = places.primary,
-                    oneShotWaitFor = oneShotWaitFor,
-                    oneShotPauseMinutes = oneShotPause,
-                    onOneShotWaitFor = viewModel::setOneShotWaitFor,
-                    onOneShotPause = viewModel::setOneShotPauseMinutes,
-                    onOpenPlaces = { tab = Tab.Places },
-                    themeMode = themeMode,
-                    debugProxyUrl = debugProxyUrl,
-                    contentPadding = content,
-                    onThemeModeChange = viewModel::setThemeMode,
-                    onDebugProxyUrlChange = viewModel::setDebugProxyUrl,
-                )
+            // Запас унизу, щоб остання картка не ховалася під FAB. Згори — не відступ списку,
+            // а обрізання: інакше прокручений вміст заїжджав би під статус-бар.
+            val content = PaddingValues(bottom = padding.calculateBottomPadding() + 96.dp)
+            Box(Modifier.padding(top = padding.calculateTopPadding()).clipToBounds()) {
+                when (tab) {
+                    Tab.Alarms -> AlarmsTab(
+                        alarms = alarms,
+                        places = places,
+                        waiting = waiting,
+                        waitStatus = waitStatus,
+                        contentPadding = content,
+                        onEdit = viewModel::startEdit,
+                        onToggle = viewModel::setEnabled,
+                        onOpenWaiting = viewModel::openWaiting,
+                        oneShotRow = oneShotRow,
+                        oneShotWaitFor = oneShotWaitFor,
+                        oneShotPauseMinutes = oneShotPause,
+                        onStartOneShot = viewModel::startOneShot,
+                        onCancelOneShotCheck = viewModel::cancelOneShotCheck,
+                        onNeedPlace = { tab = Tab.Places },
+                        missingPermissions = missingPermissions,
+                        onOpenPermissions = viewModel::openPermissions,
+                    )
+                    Tab.Places -> PlacesTab(
+                        places = places,
+                        alarms = alarms,
+                        contentPadding = content,
+                        onMakePrimary = viewModel::makePrimary,
+                        onRename = viewModel::renamePlace,
+                        onChangeRegion = viewModel::startChangePlaceRegion,
+                        onDelete = viewModel::deletePlace,
+                    )
+                    Tab.Settings -> SettingsTab(
+                        snoozeMinutes = snoozeMinutes,
+                        onSnoozeChange = viewModel::setSnoozeMinutes,
+                        primaryPlace = places.primary,
+                        oneShotWaitFor = oneShotWaitFor,
+                        oneShotPauseMinutes = oneShotPause,
+                        onOneShotWaitFor = viewModel::setOneShotWaitFor,
+                        onOneShotPause = viewModel::setOneShotPauseMinutes,
+                        onOpenPlaces = { tab = Tab.Places },
+                        onOpenPermissions = viewModel::openPermissions,
+                        themeMode = themeMode,
+                        debugProxyUrl = debugProxyUrl,
+                        contentPadding = content,
+                        onThemeModeChange = viewModel::setThemeMode,
+                        onDebugProxyUrlChange = viewModel::setDebugProxyUrl,
+                    )
+                }
             }
         }
     }

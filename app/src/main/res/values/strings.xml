@@ -66,14 +66,6 @@
     <string name="ring_text">Будильник на %1$s</string>
     <string name="ring_snooze">Відкласти на %1$d хв</string>
     <string name="ring_dismiss">Вимкнути</string>
-
-    <string name="warning_notifications_title">Сповіщення вимкнені</string>
-    <string name="warning_notifications_text">Без них екран дзвінка не з’явиться</string>
-    <string name="warning_exact_title">Точні будильники заборонені</string>
-    <string name="warning_exact_text">Система може зсунути дзвінок на кілька хвилин</string>
-    <string name="warning_battery_title">Увімкнено економію батареї</string>
-    <string name="warning_battery_text">Знайди «Відбій» у списку й дозволь роботу без обмежень</string>
-    <string name="warning_action">Налаштувати</string>
     <string name="channel_waiting">Очікування відбою</string>
     <string name="channel_waiting_description">Тихе сповіщення, поки будильник чекає відбою</string>
 
@@ -255,4 +247,29 @@
     <string name="one_shot_region_label">Регіон — основне місце</string>
     <string name="one_shot_pause_hint">Після відбою почекати стільки хвилин, щоб переконатися, що тривога не повториться. Повториться — чекатиму далі.</string>
     <string name="one_shot_banner_pause_plus">+%1$d хв</string>
+
+    <!-- Дозволи (design-spec 3.7, FR-33) -->
+    <string name="perm_title">Дозволи</string>
+    <string name="perm_headline">Щоб будильник точно задзвонив</string>
+    <string name="perm_intro">Android може приспати застосунок уночі або зсунути дзвінок. Ці дозволи потрібні лише для будильників — дані нікуди не передаються.</string>
+    <string name="perm_notifications_title">Сповіщення</string>
+    <string name="perm_notifications_text">Щоб показувати очікування відбою і екран дзвінка.</string>
+    <string name="perm_notifications_missing">Немає дозволу на сповіщення.</string>
+    <string name="perm_exact_title">Будильники й нагадування</string>
+    <string name="perm_exact_text">Щоб будильник дзвонив точно в заданий час, а не «приблизно».</string>
+    <string name="perm_exact_missing">Немає дозволу на точні будильники.</string>
+    <string name="perm_full_screen_title">Показ на екрані блокування</string>
+    <string name="perm_full_screen_text">Щоб екран дзвінка відкривався поверх блокування, а не лише як сповіщення.</string>
+    <string name="perm_full_screen_missing">Немає дозволу на показ на екрані блокування.</string>
+    <string name="perm_battery_title">Робота у фоні без обмежень</string>
+    <string name="perm_battery_text">Щоб система не приспала застосунок, поки він чекає на відбій тривоги.</string>
+    <string name="perm_battery_missing">Немає дозволу на роботу у фоні без обмежень.</string>
+    <string name="perm_allow">Дозволити</string>
+    <string name="perm_granted">Надано</string>
+    <string name="perm_later">Пізніше</string>
+    <string name="perm_samsung_note">На Samsung додатково додайте «Відбій» до застосунків, які ніколи не присипляються, — це в налаштуваннях акумулятора.</string>
+    <string name="perm_banner_title">Будильник може не задзвонити</string>
+    <string name="perm_banner_more">%1$s І ще дозволів: %2$d.</string>
+    <string name="perm_banner_action">Надати дозвіл</string>
+    <string name="perm_row_hint">Сповіщення, точні будильники, екран блокування, робота у фоні</string>
 </resources>

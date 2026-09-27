@@ -51,6 +51,7 @@ fun SettingsTab(
     onOneShotWaitFor: (WaitFor) -> Unit,
     onOneShotPause: (Int) -> Unit,
     onOpenPlaces: () -> Unit,
+    onOpenPermissions: () -> Unit,
     themeMode: ThemeMode,
     debugProxyUrl: String,
     contentPadding: PaddingValues,
@@ -120,6 +121,7 @@ fun SettingsTab(
                 )
             }
         }
+        item { PermissionsRow(onOpen = onOpenPermissions, modifier = Modifier.padding(horizontal = Dimens.ScreenPadding)) }
         item { PrivacyNote() }
         if (BuildConfig.DEBUG) {
             item {

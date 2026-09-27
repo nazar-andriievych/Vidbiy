@@ -63,6 +63,8 @@ fun AlarmsTab(
     onStartOneShot: () -> Unit,
     onCancelOneShotCheck: () -> Unit,
     onNeedPlace: () -> Unit,
+    missingPermissions: List<Permission>,
+    onOpenPermissions: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -70,7 +72,15 @@ fun AlarmsTab(
         verticalArrangement = Arrangement.spacedBy(Dimens.ListGap),
     ) {
         item { TabHeader(stringResource(R.string.alarms_title)) }
-        item { SystemWarnings(Modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenPadding)) }
+        if (missingPermissions.isNotEmpty()) {
+            item {
+                PermissionsBanner(
+                    missing = missingPermissions,
+                    onOpen = onOpenPermissions,
+                    modifier = Modifier.padding(horizontal = Dimens.ScreenPadding),
+                )
+            }
+        }
 
         val waitingAlarm = waiting?.let { wait -> alarms.firstOrNull { it.id == wait.alarmId } }
         if (waitingAlarm != null) {

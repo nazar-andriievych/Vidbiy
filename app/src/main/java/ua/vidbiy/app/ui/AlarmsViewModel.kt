@@ -49,6 +49,9 @@ sealed interface Overlay {
 
     /** Екран очікування (design-spec 3.8). */
     data object Waiting : Overlay
+
+    /** Екран дозволів (design-spec 3.7). */
+    data object Permissions : Overlay
 }
 
 class AlarmsViewModel(
@@ -166,6 +169,10 @@ class AlarmsViewModel(
 
     fun setSnoozeMinutes(minutes: Int) {
         viewModelScope.launch { settings.setSnoozeMinutes(minutes) }
+    }
+
+    fun openPermissions() {
+        _overlay.value = Overlay.Permissions
     }
 
     fun openWaiting() {
