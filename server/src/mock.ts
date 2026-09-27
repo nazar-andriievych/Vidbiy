@@ -1,4 +1,4 @@
-import type { AlertsResponse } from "./types";
+import type { AlertsResponse, Level } from "./types";
 
 /**
  * Підробка стану тривог для локальної розробки.
@@ -20,6 +20,16 @@ const DOWN_AGE_SECONDS = 10 * 60;
 export interface MockState {
   scenario: MockScenario;
   uid: string;
+  level: Level;
+  /** Коли «оголосили» тривогу, мс. Можна зсунути в минуле, щоб перевірити правило 24 год. */
+  since: number;
+}
+
+export interface MockOptions {
+  uid?: string;
+  level?: string;
+  /** Скільки годин тому почалася тривога. За замовчуванням — щойно. */
+  startedHoursAgo?: string;
 }
 
 export function isMockScenario(value: string): value is MockScenario {
@@ -27,29 +37,37 @@ export function isMockScenario(value: string): value is MockScenario {
 }
 
 export class MockAlerts {
-  private scenario: MockScenario = "clear";
-  private uid = "16";
+  private current: MockState = { scenario: "clear", uid: "16", level: "red", since: 0 };
 
-  set(scenario: MockScenario, uid?: string): void {
-    this.scenario = scenario;
-    if (uid) this.uid = uid;
+  set(scenario: MockScenario, now: number, options: MockOptions = {}): void {
+    const hours = Number(options.startedHoursAgo ?? 0);
+    this.current = {
+      scenario,
+      uid: options.uid || this.current.uid,
+      level: options.level === "yellow" ? "yellow" : options.level === "red" ? "red" : this.current.level,
+      since: now - (Number.isFinite(hours) && hours > 0 ? hours * 3_600_000 : 0),
+    };
   }
 
   state(): MockState {
-    return { scenario: this.scenario, uid: this.uid };
+    return { ...this.current };
   }
 
   restore(state: MockState): void {
-    this.scenario = state.scenario;
-    this.uid = state.uid;
+    // Сценарій, збережений до появи рівнів, доповнюємо значеннями за замовчуванням.
+    this.current = { ...state, level: state.level ?? "red", since: state.since ?? 0 };
   }
 
   response(now: number): AlertsResponse {
-    const ageSeconds = this.scenario === "down" ? DOWN_AGE_SECONDS : 0;
+    const { scenario, uid, level, since } = this.current;
+    const ageSeconds = scenario === "down" ? DOWN_AGE_SECONDS : 0;
     return {
-      v: 2,
-      active: this.scenario === "clear" ? [] : [this.uid],
-      heard_at: new Date(now - ageSeconds * 1000).toISOString(),
+      v: 1,
+      alerts:
+        scenario === "clear"
+          ? []
+          : [{ region: uid, levels: [{ level, since: new Date(since).toISOString(), reason: null }] }],
+      confirmed_at: new Date(now - ageSeconds * 1000).toISOString(),
       age_seconds: ageSeconds,
     };
   }

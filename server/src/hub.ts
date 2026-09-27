@@ -1,13 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
-import { runCheck } from "./check";
 import { CallBudget, type BudgetState, type CallPath } from "./budget";
-import { MockAlerts, type MockScenario, type MockState } from "./mock";
+import { ShadowCompare, type CompareState } from "./compare";
+import { MockAlerts, type MockOptions, type MockScenario, type MockState } from "./mock";
+import { upstreamPaused, type LabPath } from "./lab";
 import { RetryProbe, type ProbeState } from "./probe";
+import { ReloadSchedule, type ReloadState } from "./reload";
 import { AlertBoard, type Meta, type ReceiveOutcome, type StateStore } from "./state";
 import {
+  fetchRaw,
   fetchSnapshot,
-  fetchStatus,
   type ApiFailure,
+  type RawCall,
   type SnapshotResult,
   type StatusResult,
 } from "./ukrainealarm";
@@ -18,6 +21,8 @@ const MOCK_STATE_KEY = "mock";
 const META_KEY = "meta";
 const BUDGET_KEY = "budget";
 const PROBE_KEY = "probe";
+const RELOAD_KEY = "reload";
+const COMPARE_KEY = "compare";
 const REGION_PREFIX = "r:";
 
 /**
@@ -38,11 +43,10 @@ const PUT_BATCH = 128;
  * Стан лежить у сховищі об'єкта, бо об'єкт засинає між запитами.
  *
  * Звідки береться стан:
- * 1. **Знімок** — один раз на початку: вебхук надсилає лише зміни.
- * 2. **Вебхуки** — основне джерело, кожна зміна за секунди.
- * 3. **Перевірка на тиші** — якщо хвилину не було жодного підтвердження, об'єкт сам
- *    питає номер останньої зміни. Той самий — стан правильний, дані знову свіжі.
- *    Інший — ми щось пропустили, і завантажуємо повний список.
+ * 1. **Вебхуки** — кожна зміна за секунди.
+ * 2. **Знімок `/alerts`** — щохвилини (див. `reload.ts`): повна картина, виправляє
+ *    загублені вебхуки і підтверджує свіжість. Вебхуки продовжують свіжість
+ *    не довше ніж на 15 хв після останнього знімка (FR-30, `state.ts`).
  *
  * Усі запити до ukrainealarm проходять через `call()` і запобіжник `CallBudget`.
  */
@@ -53,6 +57,8 @@ export class AlertsHub extends DurableObject<Env> {
   private extrasRestored: Promise<void> | null = null;
   private budget = new CallBudget();
   private probe = new RetryProbe();
+  private reload = ReloadSchedule.restore(undefined);
+  private compare = new ShadowCompare();
   private checking: Promise<void> | null = null;
   private alarmArmed = false;
 
@@ -84,6 +90,7 @@ export class AlertsHub extends DurableObject<Env> {
     const outcome = await this.board.receive(event, receivedAt);
     const { refuse } = this.probe.onDelivery(bodyHash, receivedAt, this.probeEvery());
     await this.ctx.storage.put(PROBE_KEY, this.probe.snapshot());
+    if (this.compare.apply(event)) await this.ctx.storage.put(COMPARE_KEY, this.compare.snapshot());
     await this.armAlarm();
     // Перший вебхук — теж привід завантажити знімок, якщо його ще немає.
     if (this.board.syncedAt === null) await this.check();
@@ -97,9 +104,17 @@ export class AlertsHub extends DurableObject<Env> {
     return {
       ...this.board.stats(now),
       upstream: {
-        mode: this.env.FAKE_UPSTREAM === "1" ? "fake" : this.env.UKRAINEALARM_TOKEN ? "live" : "no_token",
+        mode: upstreamPaused(this.env.UPSTREAM_PAUSED)
+          ? "paused"
+          : this.env.FAKE_UPSTREAM === "1"
+            ? "fake"
+            : this.env.UKRAINEALARM_TOKEN
+              ? "live"
+              : "no_token",
         ...this.budget.stats(now),
       },
+      reload: this.reload.stats(now),
+      webhooks_vs_alerts: this.compare.stats(now),
       retry_probe: this.probe.stats(this.probeEvery()),
     };
   }
@@ -134,12 +149,25 @@ export class AlertsHub extends DurableObject<Env> {
   }
 
   private async checkOnce(): Promise<void> {
-    const outcome = await runCheck(this.board, {
-      status: () => this.call("alerts/status", fetchStatus),
-      snapshot: () => this.call("alerts", fetchSnapshot),
-      now: Date.now,
-    });
-    if (outcome === "reloaded") console.log("стан перезавантажено з API");
+    // Пауза на час дослідів: сам воркер ліміт ключа не витрачає.
+    if (upstreamPaused(this.env.UPSTREAM_PAUSED)) return;
+    // `/alerts/status` більше не питаємо (див. `reload.ts`); `runCheck` лишається
+    // в коді на випадок, якщо номер зміни колись стане корисним.
+    const asOf = Date.now();
+    if (!this.reload.due(asOf)) return;
+
+    const snapshot = await this.call("alerts", fetchSnapshot);
+    const wasFast = this.reload.fast(asOf);
+    this.reload.record(snapshot.ok, asOf);
+    if (wasFast && !this.reload.fast(asOf)) {
+      console.error(`щохвилинний /alerts вимкнено на годину: ${this.reload.snapshot().tripped?.reason}`);
+    }
+    if (snapshot.ok) {
+      this.compare.compare(snapshot.regions, asOf);
+      await this.board.loadSnapshot(snapshot.regions, asOf);
+      await this.ctx.storage.put(COMPARE_KEY, this.compare.snapshot());
+    }
+    await this.ctx.storage.put(RELOAD_KEY, this.reload.snapshot());
   }
 
   /**
@@ -184,6 +212,26 @@ export class AlertsHub extends DurableObject<Env> {
     return result;
   }
 
+  /**
+   * Один запит до ukrainealarm для досліду ліміту (`/lab/call`). Іде через той самий
+   * запобіжник, що й робочі запити, і на паузу не зважає: дослід — це і є мета паузи.
+   */
+  async labCall(path: LabPath): Promise<RawCall | { error: string }> {
+    await this.restore();
+    const token = this.env.UKRAINEALARM_TOKEN;
+    if (!token) return { error: "no_token" };
+    const now = Date.now();
+    if (!this.budget.take(now)) {
+      this.budget.record(now, path, "over_budget");
+      await this.saveBudget();
+      return { error: "over_budget" };
+    }
+    const result = await fetchRaw(path, token);
+    this.budget.record(Date.now(), path, result.status === 200 ? "ok" : "failed", result.status);
+    await this.saveBudget();
+    return result;
+  }
+
   private saveBudget(): Promise<void> {
     return this.ctx.storage.put(BUDGET_KEY, this.budget.snapshot());
   }
@@ -199,17 +247,21 @@ export class AlertsHub extends DurableObject<Env> {
       this.board.restore(),
       this.ctx.storage.get<BudgetState>(BUDGET_KEY),
       this.ctx.storage.get<ProbeState>(PROBE_KEY),
-    ]).then(([, budget, probe]) => {
+      this.ctx.storage.get<ReloadState>(RELOAD_KEY),
+      this.ctx.storage.get<CompareState>(COMPARE_KEY),
+    ]).then(([, budget, probe, reload, compare]) => {
       if (budget) this.budget = new CallBudget(budget);
       if (probe) this.probe = new RetryProbe(probe);
+      this.reload = ReloadSchedule.restore(reload);
+      if (compare) this.compare = new ShadowCompare(compare);
     });
     return this.extrasRestored;
   }
 
-  async setMock(scenario: MockScenario, uid?: string): Promise<MockState> {
+  async setMock(scenario: MockScenario, options: MockOptions): Promise<MockState> {
     if (!this.mock) throw new Error("mock is disabled");
     await this.restoreMock();
-    this.mock.set(scenario, uid);
+    this.mock.set(scenario, Date.now(), options);
     await this.ctx.storage.put(MOCK_STATE_KEY, this.mock.state());
     return this.mock.state();
   }

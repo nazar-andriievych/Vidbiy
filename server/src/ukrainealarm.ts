@@ -1,4 +1,4 @@
-import type { AlertEvent, RegionState } from "./types";
+import type { AlertEvent, Level, RegionState, StoredLevel } from "./types";
 
 /**
  * Усе, що знає про api.ukrainealarm.com, живе тут: адреси, формат повідомлень, підпис,
@@ -142,13 +142,33 @@ export function parseWebhook(body: unknown): AlertEvent | null {
   if (levels !== null && levels !== undefined && !Array.isArray(levels)) return null;
   if (message.regionId === undefined || message.regionId === null) return null;
 
+  const parsed = parseLevels(levels, createdAt);
   return {
     regionId: toAppRegionId(message.regionId),
     alarmType: message.alarmType,
     status: typeof message.status === "string" ? message.status : "",
-    active: Array.isArray(levels) && levels.length > 0,
+    active: parsed.length > 0,
+    levels: parsed,
     createdAt,
   };
+}
+
+/**
+ * `activeAlertLevels` → наші рівні. Непорожній масив завжди дає непорожній результат:
+ * зіпсований чи незнайомий запис стає червоним рівнем, бо «тривога, рівень невідомий»
+ * безпечніше трактувати як найсуворіший рівень, ніж загубити тривогу.
+ */
+export function parseLevels(raw: unknown, fallbackSince: number): StoredLevel[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    const entry = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {};
+    const reason = typeof entry.reason === "string" && entry.reason.trim() !== "" ? entry.reason : null;
+    return { level: toLevel(entry.alertLevel), since: parseTime(entry.createdAt) ?? fallbackSince, reason };
+  });
+}
+
+function toLevel(value: unknown): Level {
+  return typeof value === "string" && value.toLowerCase() === "yellow" ? "yellow" : "red";
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +219,37 @@ export async function fetchSnapshot(token: string, fetchImpl: Fetcher = fetch): 
     : { ok: false, status: response.status, detail: "malformed" };
 }
 
+/** Сира відповідь для дослідів ліміту: нас цікавлять код і заголовки, а не дані. */
+export interface RawCall {
+  status: number | null;
+  took_ms: number;
+  bytes: number;
+  headers: Record<string, string>;
+  /** Початок тіла — лише коли відповідь не 200, бо 200 — це сотні кілобайтів тривог. */
+  body_head?: string;
+  error?: string;
+}
+
+/** Один запит до ukrainealarm без розбору — для `/lab/call`. */
+export async function fetchRaw(path: string, token: string, fetchImpl: Fetcher = fetch): Promise<RawCall> {
+  const startedAt = Date.now();
+  try {
+    const response = await fetchImpl(`${API_BASE}/${path}`, {
+      headers: { Authorization: token, Accept: "application/json", "User-Agent": USER_AGENT },
+    });
+    const body = await response.text().catch(() => "");
+    return {
+      status: response.status,
+      took_ms: Date.now() - startedAt,
+      bytes: body.length,
+      headers: Object.fromEntries(response.headers),
+      ...(response.status === 200 ? {} : { body_head: body.slice(0, 300) }),
+    };
+  } catch (error) {
+    return { status: null, took_ms: Date.now() - startedAt, bytes: 0, headers: {}, error: String(error) };
+  }
+}
+
 async function get(
   path: string,
   token: string,
@@ -224,7 +275,7 @@ async function get(
 }
 
 /**
- * Дістає з `/api/v3/alerts` регіони з активною повітряною тривогою.
+ * Дістає з `/api/v3/alerts` регіони з активною повітряною тривогою та її рівнями.
  * У відповіді є лише регіони, де щось триває; решта — чисті.
  *
  * Зіпсований окремий запис пропускаємо, а не валимо все: пропущена тривога означає,
@@ -246,9 +297,13 @@ export function parseSnapshot(body: unknown): Map<string, RegionState> | null {
 
       const id = toAppRegionId(alert.regionId ?? region.regionId);
       if (id === null) continue;
+      const changedAt = parseTime(alert.lastUpdate) ?? parseTime(region.lastUpdate) ?? 0;
+      const levels = parseLevels(alert.activeAlertLevels, changedAt);
+      // Тривога є, а рівнів у записі немає — рахуємо червоною, а не чистою.
       regions.set(id, {
         active: true,
-        changedAt: parseTime(alert.lastUpdate) ?? parseTime(region.lastUpdate) ?? 0,
+        changedAt,
+        levels: levels.length > 0 ? levels : [{ level: "red", since: changedAt, reason: null }],
       });
     }
   }

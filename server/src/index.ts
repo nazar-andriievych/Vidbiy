@@ -1,3 +1,4 @@
+import { labAccess, upstreamPaused } from "./lab";
 import { isMockScenario } from "./mock";
 import { sha256Hex } from "./probe";
 import { importPublicKey, parseWebhook, verifyWebhook, WEBHOOK_PUBLIC_KEY_PEM } from "./ukrainealarm";
@@ -19,6 +20,10 @@ export interface Env {
   FAKE_UPSTREAM?: string;
   /** `N` — кожну N-ту подію вебхука відповідаємо 503, щоб побачити, чи повторять. Див. `probe.ts`. */
   WEBHOOK_RETRY_PROBE?: string;
+  /** `"1"` — пауза на час дослідів: сам до ukrainealarm не ходимо, вебхуки приймаємо. */
+  UPSTREAM_PAUSED?: string;
+  /** Секрет для `/lab/call`. Не задано — маршруту не існує. Див. `lab.ts`. */
+  LAB_KEY?: string;
   /** Єдина точка, де живе стан тривог. Див. `hub.ts`. */
   ALERTS_HUB: DurableObjectNamespace<AlertsHub>;
 }
@@ -40,7 +45,9 @@ export default {
       return handleMock(url, env);
     }
 
-    if (url.pathname === "/v2/webhook") {
+    // `/v2/webhook` — адреса, на яку оформлена поточна підписка в ukrainealarm.
+    // Прибрати, щойно підписку переоформлять на `/webhook`.
+    if (url.pathname === "/webhook" || url.pathname === "/v2/webhook") {
       return request.method === "POST"
         ? handleWebhook(request, env)
         : json({ error: "method_not_allowed" }, 405);
@@ -51,16 +58,22 @@ export default {
     }
 
     switch (url.pathname) {
-      case "/v2/alerts":
+      case "/v1/alerts":
         return json(await getAlerts(env));
-      case "/v2/stats":
+      case "/stats":
         return json(await hub(env).stats());
+      case "/lab/call": {
+        const access = labAccess(env.LAB_KEY, request.headers.get("x-lab-key"), url.searchParams.get("path"));
+        if (!access.ok) return json({ error: access.error }, access.status);
+        return json(await hub(env).labCall(access.path));
+      }
       case "/health":
         return json({
           ok: true,
           mock: mockEnabled(env),
           configured: mockEnabled(env) || Boolean(env.UKRAINEALARM_TOKEN),
           fake_upstream: env.FAKE_UPSTREAM === "1",
+          paused: upstreamPaused(env.UPSTREAM_PAUSED),
         });
       default:
         return json({ error: "not_found" }, 404);
@@ -78,7 +91,7 @@ async function getAlerts(env: Env): Promise<AlertsResponse> {
   } catch {
     // Єдина точка виявилася недосяжною. Чесно кажемо «даних немає»,
     // щоб застосунок задзвонив за fail-safe, а не мовчав через нашу поломку.
-    return { v: 2, active: null, heard_at: null, age_seconds: null };
+    return { v: 1, alerts: null, confirmed_at: null, age_seconds: null };
   }
 }
 
@@ -145,7 +158,13 @@ async function handleMock(url: URL, env: Env): Promise<Response> {
   if (!isMockScenario(scenario)) {
     return json({ error: "bad_scenario", expected: ["clear", "alert", "down"] }, 400);
   }
-  return json(await hub(env).setMock(scenario, url.searchParams.get("uid") ?? undefined));
+  return json(
+    await hub(env).setMock(scenario, {
+      uid: url.searchParams.get("uid") ?? undefined,
+      level: url.searchParams.get("level") ?? undefined,
+      startedHoursAgo: url.searchParams.get("started_hours_ago") ?? undefined,
+    }),
+  );
 }
 
 function json(body: unknown, status = 200): Response {

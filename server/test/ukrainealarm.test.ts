@@ -148,8 +148,27 @@ describe("parseWebhook", () => {
       alarmType: "AIR",
       status: "DEACTIVATE",
       active: true,
+      levels: [{ level: "yellow", since: Date.parse("2026-09-07T12:18:00Z"), reason: "UAV activity" }],
       createdAt: Date.parse("2026-09-07T12:18:00Z"),
     });
+  });
+
+  it("рівні: свій час оголошення, порожня причина — null, незнайомий рівень — червоний", () => {
+    const event = parseWebhook({
+      ...JSON.parse(BODY),
+      createdAt: "2026-09-27T11:00:00Z",
+      activeAlertLevels: [
+        { alertLevel: "Red", reason: "Ракетна загроза (червоний рівень)", createdAt: "2026-09-27T10:40:00Z" },
+        { alertLevel: "Yellow", reason: "", createdAt: "2026-09-27T09:12:00Z" },
+        { alertLevel: "Purple" },
+      ],
+    });
+
+    expect(event?.levels).toEqual([
+      { level: "red", since: Date.parse("2026-09-27T10:40:00Z"), reason: "Ракетна загроза (червоний рівень)" },
+      { level: "yellow", since: Date.parse("2026-09-27T09:12:00Z"), reason: null },
+      { level: "red", since: Date.parse("2026-09-27T11:00:00Z"), reason: null },
+    ]);
   });
 
   it("порожній масив загроз — тривоги немає", () => {
@@ -217,7 +236,36 @@ describe("parseSnapshot", () => {
     const regions = parseSnapshot(snapshot);
 
     expect([...regions!.keys()]).toEqual(["16", "29"]);
-    expect(regions!.get("16")).toEqual({ active: true, changedAt: Date.parse("2022-04-04T16:45:00Z") });
+    // Рівнів у записі немає — тривога все одно є і вважається червоною.
+    const changedAt = Date.parse("2022-04-04T16:45:00Z");
+    expect(regions!.get("16")).toEqual({
+      active: true,
+      changedAt,
+      levels: [{ level: "red", since: changedAt, reason: null }],
+    });
+  });
+
+  it("бере рівні з activeAlertLevels", () => {
+    const regions = parseSnapshot([
+      {
+        regionId: "54",
+        activeAlerts: [
+          {
+            type: "AIR",
+            lastUpdate: "2026-09-27T10:40:00Z",
+            activeAlertLevels: [
+              { alertLevel: "Yellow", reason: "Дронова загроза (жовтий рівень)", createdAt: "2026-09-27T09:12:00Z" },
+              { alertLevel: "Red", createdAt: "2026-09-27T10:40:00Z" },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    expect(regions!.get("54")?.levels).toEqual([
+      { level: "yellow", since: Date.parse("2026-09-27T09:12:00Z"), reason: "Дронова загроза (жовтий рівень)" },
+      { level: "red", since: Date.parse("2026-09-27T10:40:00Z"), reason: null },
+    ]);
   });
 
   it("повертає null, якщо відповідь не масив", () => {

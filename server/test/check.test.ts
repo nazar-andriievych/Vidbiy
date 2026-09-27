@@ -7,8 +7,14 @@ import {
   RELOAD_MIN_INTERVAL_MS,
   SILENCE_MS,
 } from "../src/state";
-import type { AlertEvent, RegionState } from "../src/types";
+import type { AlertEvent, AlertsResponse, RegionState } from "../src/types";
 import type { ApiFailure, SnapshotResult, StatusResult } from "../src/ukrainealarm";
+
+const RED = { level: "red" as const, since: 0, reason: null };
+
+function ids(response: AlertsResponse): string[] | null {
+  return response.alerts?.map((alert) => alert.region) ?? null;
+}
 
 const T0 = Date.parse("2026-09-25T02:00:00Z");
 const SECOND = 1000;
@@ -42,7 +48,7 @@ function fakeApi(start = T0) {
 }
 
 function airEvent(regionId: string, active: boolean, createdAt: number): AlertEvent {
-  return { regionId, alarmType: "AIR", status: active ? "Activate" : "DEACTIVATE", active, createdAt };
+  return { regionId, alarmType: "AIR", status: active ? "Activate" : "DEACTIVATE", active, levels: active ? [RED] : [], createdAt };
 }
 
 /** Дошка після успішного старту о T0 і API, що пам'ятає лише наступні виклики. */
@@ -63,7 +69,7 @@ describe("runCheck: старт", () => {
 
     expect(await runCheck(board, api)).toBe("reloaded");
     expect(api.calls).toEqual(["status", "alerts"]);
-    expect(board.response(T0).active).toEqual(["16"]);
+    expect(ids(board.response(T0))).toEqual(["16"]);
   });
 
   it("без знімка стан лишається невідомим, поки API недоступний", async () => {
@@ -72,7 +78,7 @@ describe("runCheck: старт", () => {
     api.statusFails = true;
 
     expect(await runCheck(board, api)).toBe("failed");
-    expect(board.response(T0).active).toBeNull();
+    expect(ids(board.response(T0))).toBeNull();
   });
 });
 
@@ -85,7 +91,7 @@ describe("runCheck: тиша", () => {
     expect(api.calls).toEqual(["status"]);
 
     const response = board.response(api.time + 5 * SECOND);
-    expect(response.active).toEqual(["16"]);
+    expect(ids(response)).toEqual(["16"]);
     expect(response.age_seconds).toBe(5);
   });
 
@@ -130,7 +136,7 @@ describe("runCheck: номер змінився", () => {
     api.time = T0 + RELOAD_MIN_INTERVAL_MS;
     expect(await runCheck(board, api)).toBe("reloaded");
     expect(api.calls).toEqual(["status", "alerts"]);
-    expect(board.response(api.time).active).toEqual(["8"]);
+    expect(ids(board.response(api.time))).toEqual(["8"]);
   });
 
   it("незрозумілий номер — не вгадуємо, а беремо список", async () => {

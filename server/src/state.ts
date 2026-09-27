@@ -1,7 +1,7 @@
 import { AIR } from "./ukrainealarm";
-import type { AlertEvent, AlertsResponse, RegionState } from "./types";
+import type { AlertEvent, AlertsResponse, RegionAlert, RegionState } from "./types";
 
-/** Скільки останніх подій тримаємо для `/v2/stats`. */
+/** Скільки останніх подій тримаємо для `/stats`. */
 const RECENT_LIMIT = 30;
 
 /**
@@ -33,6 +33,15 @@ export const RELOAD_BACKOFF_MS = 3 * 60_000;
  * округлений до секунд, а номер має точність до мікросекунд.
  */
 export const INDEX_TOLERANCE_MS = 2_000;
+
+/**
+ * Наскільки вебхуки продовжують свіжість після останнього успішного знімка (FR-30).
+ *
+ * Лише знімок підтверджує повну картину: тиша по конкретному регіону нічого не доводить.
+ * Вебхуки з будь-яких регіонів доводять, що канал живий, а загублених вебхуків за
+ * вимірами не було, — тож короткому збою `/alerts` довіряємо, довгому — ні.
+ */
+export const WEBHOOK_TRUST_MS = 15 * 60_000;
 
 /**
  * Статистика потоку вебхуків. Заради неї весь експеримент: чи досить самих вебхуків,
@@ -268,8 +277,8 @@ export class AlertBoard {
     const previous = this.regions.get(event.regionId);
     if (previous && event.createdAt < previous.changedAt) return "out_of_order";
 
-    this.regions.set(event.regionId, { active: event.active, changedAt: event.createdAt });
-    return previous?.active === event.active ? "unchanged" : "changed";
+    this.regions.set(event.regionId, { active: event.active, changedAt: event.createdAt, levels: event.levels });
+    return previous?.active === event.active && sameLevels(previous, event) ? "unchanged" : "changed";
   }
 
   private record(event: AlertEvent, receivedAt: number, outcome: ReceiveOutcome): void {
@@ -336,12 +345,16 @@ export class AlertBoard {
 
     for (const [id, current] of this.regions) {
       if (current.changedAt > asOf || snapshot.has(id) || !current.active) continue;
-      changes.set(id, { active: false, changedAt: current.changedAt });
+      changes.set(id, { active: false, changedAt: current.changedAt, levels: [] });
     }
     for (const [id, fresh] of snapshot) {
       const current = this.regions.get(id);
       if (current && current.changedAt > asOf) continue;
-      changes.set(id, { active: true, changedAt: Math.max(fresh.changedAt, current?.changedAt ?? 0) });
+      changes.set(id, {
+        active: true,
+        changedAt: Math.max(fresh.changedAt, current?.changedAt ?? 0),
+        levels: fresh.levels,
+      });
     }
 
     for (const [id, state] of changes) this.regions.set(id, state);
@@ -360,23 +373,36 @@ export class AlertBoard {
     await this.store?.writeMeta(this.meta);
   }
 
+  /**
+   * Коли стан востаннє підтвердився (FR-30): остання успішна звірка з API — знімок
+   * або (якщо її колись увімкнуть знову) перевірка номера зміни, — а вебхуки
+   * продовжують її не далі ніж на `WEBHOOK_TRUST_MS`.
+   */
+  confirmedAt(): number | null {
+    const { lastCheckAt, lastWebhookAt } = this.meta;
+    if (lastCheckAt === null) return null;
+    if (lastWebhookAt === null) return lastCheckAt;
+    return Math.max(lastCheckAt, Math.min(lastWebhookAt, lastCheckAt + WEBHOOK_TRUST_MS));
+  }
+
   response(now: number): AlertsResponse {
     // Поки немає початкового знімка, стан неповний: регіон, де тривога почалася
     // до нашої підписки, виглядав би чистим. Чесно кажемо «не знаємо».
-    if (this.meta.syncedAt === null || this.meta.heardAt === null) {
-      return { v: 2, active: null, heard_at: null, age_seconds: null };
+    const confirmedAt = this.confirmedAt();
+    if (this.meta.syncedAt === null || confirmedAt === null) {
+      return { v: 1, alerts: null, confirmed_at: null, age_seconds: null };
     }
 
-    const active = [...this.regions]
+    const alerts: RegionAlert[] = [...this.regions]
       .filter(([, state]) => state.active)
-      .map(([id]) => id)
-      .sort((a, b) => Number(a) - Number(b));
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([region, state]) => ({ region, levels: levelsOut(state) }));
 
     return {
-      v: 2,
-      active,
-      heard_at: new Date(this.meta.heardAt).toISOString(),
-      age_seconds: Math.max(0, Math.round((now - this.meta.heardAt) / 1000)),
+      v: 1,
+      alerts,
+      confirmed_at: new Date(confirmedAt).toISOString(),
+      age_seconds: Math.max(0, Math.round((now - confirmedAt) / 1000)),
     };
   }
 
@@ -386,6 +412,7 @@ export class AlertBoard {
     const iso = (time: number | null) => (time === null ? null : new Date(time).toISOString());
     return {
       synced_at: iso(syncedAt),
+      confirmed_at: iso(this.confirmedAt()),
       heard_at: iso(heardAt),
       last_check_at: iso(lastCheckAt),
       last_action_index: lastActionIndex,
@@ -417,4 +444,18 @@ export class AlertBoard {
       },
     };
   }
+}
+
+/** Рівні для відповіді: найсуворіший першим. Стан без рівнів (до v1) — червоний. */
+function levelsOut(state: RegionState): RegionAlert["levels"] {
+  const levels = state.levels?.length ? state.levels : [{ level: "red" as const, since: state.changedAt, reason: null }];
+  return [...levels]
+    .sort((a, b) => (a.level === b.level ? a.since - b.since : a.level === "red" ? -1 : 1))
+    .map(({ level, since, reason }) => ({ level, since: new Date(since).toISOString(), reason }));
+}
+
+function sameLevels(previous: RegionState, event: AlertEvent): boolean {
+  const key = (levels: RegionState["levels"]) =>
+    JSON.stringify((levels ?? []).map((l) => [l.level, l.since]).sort());
+  return key(previous.levels) === key(event.levels);
 }

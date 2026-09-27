@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { AlertBoard, type Meta, type StateStore } from "../src/state";
-import type { AlertEvent, RegionState } from "../src/types";
+import type { AlertEvent, AlertsResponse, RegionState } from "../src/types";
+
+const RED = { level: "red" as const, since: 0, reason: null };
+
+function ids(response: AlertsResponse): string[] | null {
+  return response.alerts?.map((alert) => alert.region) ?? null;
+}
 
 const T0 = Date.parse("2026-09-24T20:00:00Z");
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
+const HOUR = 60 * MINUTE;
 
 function event(regionId: string | null, active: boolean, createdAt: number, alarmType = "AIR"): AlertEvent {
-  return { regionId, alarmType, status: active ? "Activate" : "DEACTIVATE", active, createdAt };
+  return { regionId, alarmType, status: active ? "Activate" : "DEACTIVATE", active, levels: active ? [RED] : [], createdAt };
 }
 
 /** Сховище в пам'яті — імітує сховище Durable Object між «засинаннями». */
@@ -42,24 +49,81 @@ describe("AlertBoard: відповідь", () => {
     const board = new AlertBoard();
     await board.receive(event("16", true, T0), T0);
 
-    expect(board.response(T0)).toEqual({ v: 2, active: null, heard_at: null, age_seconds: null });
+    expect(board.response(T0)).toEqual({ v: 1, alerts: null, confirmed_at: null, age_seconds: null });
   });
 
   it("після знімка показує активні регіони, відсортовані за номером", async () => {
     const { board } = await syncedBoard({ "124": T0 - MINUTE, "16": T0 - MINUTE });
 
+    const since = new Date(T0 - MINUTE).toISOString();
     expect(board.response(T0 + 5 * SECOND)).toEqual({
-      v: 2,
-      active: ["16", "124"],
-      heard_at: new Date(T0).toISOString(),
+      v: 1,
+      alerts: [
+        { region: "16", levels: [{ level: "red", since, reason: null }] },
+        { region: "124", levels: [{ level: "red", since, reason: null }] },
+      ],
+      confirmed_at: new Date(T0).toISOString(),
       age_seconds: 5,
     });
+  });
+
+  it("віддає рівні з вебхука: червоний першим, причина як є", async () => {
+    const { board } = await syncedBoard();
+    const yellow = { level: "yellow" as const, since: T0 - HOUR, reason: "Дронова загроза (жовтий рівень)" };
+    const red = { level: "red" as const, since: T0 + MINUTE, reason: null };
+    await board.receive({ ...event("54", true, T0 + MINUTE), levels: [yellow, red] }, T0 + MINUTE);
+
+    expect(board.response(T0 + MINUTE).alerts).toEqual([
+      {
+        region: "54",
+        levels: [
+          { level: "red", since: new Date(T0 + MINUTE).toISOString(), reason: null },
+          { level: "yellow", since: new Date(T0 - HOUR).toISOString(), reason: "Дронова загроза (жовтий рівень)" },
+        ],
+      },
+    ]);
+  });
+
+  it("зміна рівня без зміни «є/немає тривоги» — теж зміна", async () => {
+    const { board } = await syncedBoard();
+    const red = { level: "red" as const, since: T0, reason: null };
+    const yellow = { level: "yellow" as const, since: T0, reason: null };
+    await board.receive({ ...event("54", true, T0), levels: [red, yellow] }, T0);
+
+    const outcome = await board.receive({ ...event("54", true, T0 + MINUTE), levels: [yellow] }, T0 + MINUTE);
+
+    expect(outcome).toBe("changed");
+    expect(board.response(T0 + MINUTE).alerts?.[0].levels.map((l) => l.level)).toEqual(["yellow"]);
+  });
+
+  it("стан, збережений до рівнів, віддається червоним від часу зміни", async () => {
+    const { store, regions } = await syncedBoard();
+    regions.set("8", { active: true, changedAt: T0 - HOUR });
+    const board = new AlertBoard(store);
+    await board.restore();
+
+    expect(board.response(T0).alerts).toEqual([
+      { region: "8", levels: [{ level: "red", since: new Date(T0 - HOUR).toISOString(), reason: null }] },
+    ]);
   });
 
   it("порожній список означає «перевірено, тривог немає», а не «не знаємо»", async () => {
     const { board } = await syncedBoard();
 
-    expect(board.response(T0).active).toEqual([]);
+    expect(ids(board.response(T0))).toEqual([]);
+  });
+
+  it("вебхуки продовжують свіжість не довше ніж на 15 хв після останньої звірки (FR-30)", async () => {
+    const { board } = await syncedBoard();
+    // Знімок був о T0, далі /alerts мовчить, а вебхуки йдуть.
+    await board.receive(event("124", true, T0 + 10 * MINUTE), T0 + 10 * MINUTE);
+    expect(board.response(T0 + 10 * MINUTE).age_seconds).toBe(0);
+
+    await board.receive(event("125", true, T0 + 20 * MINUTE), T0 + 20 * MINUTE);
+    const response = board.response(T0 + 20 * MINUTE);
+
+    expect(response.confirmed_at).toBe(new Date(T0 + 15 * MINUTE).toISOString());
+    expect(response.age_seconds).toBe(5 * 60);
   });
 
   it("вік рахується від останнього вебхука будь-якого типу: це пульс каналу", async () => {
@@ -68,7 +132,7 @@ describe("AlertBoard: відповідь", () => {
 
     const response = board.response(T0 + 2 * MINUTE + 10 * SECOND);
 
-    expect(response.active).toEqual([]);
+    expect(ids(response)).toEqual([]);
     expect(response.age_seconds).toBe(10);
   });
 
@@ -84,10 +148,10 @@ describe("AlertBoard: вебхуки", () => {
     const { board } = await syncedBoard();
 
     expect(await board.receive(event("8", true, T0 + MINUTE), T0 + MINUTE)).toBe("changed");
-    expect(board.response(T0 + MINUTE).active).toEqual(["8"]);
+    expect(ids(board.response(T0 + MINUTE))).toEqual(["8"]);
 
     expect(await board.receive(event("8", false, T0 + 2 * MINUTE), T0 + 2 * MINUTE)).toBe("changed");
-    expect(board.response(T0 + 2 * MINUTE).active).toEqual([]);
+    expect(ids(board.response(T0 + 2 * MINUTE))).toEqual([]);
   });
 
   it("запізніла стара подія не затирає новішу: інакше відбій прийшов би посеред тривоги", async () => {
@@ -97,7 +161,7 @@ describe("AlertBoard: вебхуки", () => {
     const outcome = await board.receive(event("8", false, T0 + MINUTE), T0 + 3 * MINUTE);
 
     expect(outcome).toBe("out_of_order");
-    expect(board.response(T0 + 3 * MINUTE).active).toEqual(["8"]);
+    expect(ids(board.response(T0 + 3 * MINUTE))).toEqual(["8"]);
   });
 
   it("дублікат нічого не ламає", async () => {
@@ -105,7 +169,7 @@ describe("AlertBoard: вебхуки", () => {
     await board.receive(event("8", true, T0 + MINUTE), T0 + MINUTE);
 
     expect(await board.receive(event("8", true, T0 + MINUTE), T0 + MINUTE + SECOND)).toBe("unchanged");
-    expect(board.response(T0 + MINUTE).active).toEqual(["8"]);
+    expect(ids(board.response(T0 + MINUTE))).toEqual(["8"]);
   });
 
   it("інші типи тривог і тестовий регіон не впливають на стан", async () => {
@@ -113,7 +177,7 @@ describe("AlertBoard: вебхуки", () => {
 
     expect(await board.receive(event("8", true, T0, "ARTILLERY"), T0)).toBe("ignored");
     expect(await board.receive(event(null, true, T0), T0)).toBe("ignored");
-    expect(board.response(T0).active).toEqual([]);
+    expect(ids(board.response(T0))).toEqual([]);
   });
 
   it("стан переживає засинання об'єкта", async () => {
@@ -123,7 +187,7 @@ describe("AlertBoard: вебхуки", () => {
     const woken = new AlertBoard(store);
     await woken.restore();
 
-    expect(woken.response(T0 + MINUTE).active).toEqual(["8", "16"]);
+    expect(ids(woken.response(T0 + MINUTE))).toEqual(["8", "16"]);
   });
 });
 
@@ -135,7 +199,7 @@ describe("AlertBoard: початковий знімок", () => {
 
     await board.loadSnapshot(new Map([["8", { active: true, changedAt: T0 - MINUTE }]]), T0);
 
-    expect(board.response(T0 + 7 * SECOND).active).toEqual([]);
+    expect(ids(board.response(T0 + 7 * SECOND))).toEqual([]);
   });
 
   it("знімає тривоги, яких у знімку вже немає", async () => {
@@ -144,7 +208,7 @@ describe("AlertBoard: початковий знімок", () => {
 
     await board.loadSnapshot(new Map(), T0);
 
-    expect(board.response(T0).active).toEqual([]);
+    expect(ids(board.response(T0))).toEqual([]);
   });
 
   it("зберігає в сховищі лише змінені регіони", async () => {
