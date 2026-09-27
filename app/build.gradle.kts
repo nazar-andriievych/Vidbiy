@@ -26,6 +26,11 @@ android {
         // Звичайна збірка (і будь-який реліз) завжди ходить на робочий проксі.
         val local = (project.findProperty("vidbiy.proxyUrl") as String?)?.takeIf { name == "debug" }
         buildConfigField("String", "PROXY_URL", "\"${local ?: "https://vidbiy-proxy.nazar-dev.workers.dev"}\"")
+
+        // Резервна копія Android: у debug вимкнена, інакше після перевстановлення
+        // повертаються старі тестові дані. Перевірити відновлення: -Pvidbiy.backup=true.
+        val backupInDebug = project.findProperty("vidbiy.backup") == "true"
+        manifestPlaceholders["allowBackup"] = (name != "debug" || backupInDebug).toString()
     }
 
     buildTypes {

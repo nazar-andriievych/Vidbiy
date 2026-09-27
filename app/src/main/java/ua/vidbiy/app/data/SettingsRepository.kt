@@ -63,6 +63,16 @@ data class WaitStatus(
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
+/**
+ * Стан очікування — окремим файлом, бо він не йде в резервну копію Android
+ * (res/xml/data_extraction_rules.xml): вчорашнє «зараз чекаю відбою» на новому
+ * телефоні лише заплутало б. Налаштування й будильники в копію йдуть.
+ */
+private val Context.waitDataStore: DataStore<Preferences> by preferencesDataStore(name = WAIT_STORE_NAME)
+
+/** Ім'я файлу стану очікування; те саме ім'я стоїть у правилах резервної копії. */
+const val WAIT_STORE_NAME = "wait"
+
 /** Налаштування застосунку: тема, відкладення, разовий режим, стан очікування. */
 class SettingsRepository(private val context: Context) {
 
@@ -101,12 +111,12 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { prefs -> prefs[snoozeMinutesKey] = minutes }
     }
 
-    val waitStatus: Flow<WaitStatus?> = context.settingsDataStore.data.map { prefs ->
+    val waitStatus: Flow<WaitStatus?> = context.waitDataStore.data.map { prefs ->
         prefs[waitStatusKey]?.let { raw -> runCatching { json.decodeFromString<WaitStatus>(raw) }.getOrNull() }
     }
 
     suspend fun setWaitStatus(status: WaitStatus) {
-        context.settingsDataStore.edit { prefs -> prefs[waitStatusKey] = json.encodeToString(status) }
+        context.waitDataStore.edit { prefs -> prefs[waitStatusKey] = json.encodeToString(status) }
     }
 
     /** FR-32: тема застосунку; за замовчуванням — як у системі. */
@@ -146,7 +156,7 @@ class SettingsRepository(private val context: Context) {
      * «чекає відбою» рівно доти, доки служба справді чекає, і сам гасив напис,
      * коли вона зупинилася.
      */
-    val pendingWait: Flow<PendingWait?> = context.settingsDataStore.data.map { prefs ->
+    val pendingWait: Flow<PendingWait?> = context.waitDataStore.data.map { prefs ->
         prefs[pendingWaitKey]?.let { raw ->
             runCatching { json.decodeFromString<PendingWait>(raw) }.getOrNull()
         }
@@ -155,13 +165,33 @@ class SettingsRepository(private val context: Context) {
     suspend fun currentPendingWait(): PendingWait? = pendingWait.first()
 
     suspend fun setPendingWait(wait: PendingWait) {
-        context.settingsDataStore.edit { prefs -> prefs[pendingWaitKey] = json.encodeToString(wait) }
+        context.waitDataStore.edit { prefs -> prefs[pendingWaitKey] = json.encodeToString(wait) }
     }
 
     suspend fun clearPendingWait() {
-        context.settingsDataStore.edit { prefs ->
+        context.waitDataStore.edit { prefs ->
             prefs.remove(pendingWaitKey)
             prefs.remove(waitStatusKey)
+        }
+    }
+
+    /**
+     * Версії до 2026-09-28 тримали стан очікування в загальних налаштуваннях. Переносимо
+     * його в окремий файл, щоб оновлення посеред очікування нічого не загубило.
+     */
+    suspend fun moveLegacyWaitState() {
+        var wait: String? = null
+        var status: String? = null
+        context.settingsDataStore.edit { prefs ->
+            wait = prefs[pendingWaitKey]
+            status = prefs[waitStatusKey]
+            prefs.remove(pendingWaitKey)
+            prefs.remove(waitStatusKey)
+        }
+        if (wait == null && status == null) return
+        context.waitDataStore.edit { prefs ->
+            wait?.let { prefs[pendingWaitKey] = it }
+            status?.let { prefs[waitStatusKey] = it }
         }
     }
 

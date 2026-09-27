@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Те саме, що data_extraction_rules.xml, для Android 11 і старших. -->
+<full-backup-content>
+    <include domain="file" path="datastore/alarms.preferences_pb" />
+    <include domain="file" path="datastore/places.preferences_pb" />
+    <include domain="file" path="datastore/settings.preferences_pb" />
+</full-backup-content>

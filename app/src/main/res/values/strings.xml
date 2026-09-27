@@ -29,7 +29,7 @@
     <string name="theme_light">Світла</string>
     <string name="theme_dark">Темна</string>
     <string name="theme_hint">«Системна» — як у налаштуваннях телефона, разом із нічним режимом.</string>
-    <string name="privacy_note">Дані про тривоги — з офіційного API «Повітряна тривога». Без реєстрації, геолокації та аналітики: ваші місця й будильники не залишають телефон. Якщо свіжих даних немає, будильник дзвонить.</string>
+    <string name="privacy_note">Дані про тривоги — з офіційного API «Повітряна тривога». Без реєстрації, геолокації та аналітики: ваші місця й будильники не потрапляють на наш сервер — лише в резервну копію Android у вашому акаунті Google. Якщо свіжих даних немає, будильник дзвонить.</string>
 
     <string name="alarm_new_title">Новий будильник</string>
     <string name="alarm_edit_title">Будильник</string>
@@ -121,7 +121,7 @@
     <string name="region_for_place">Регіон · %1$s</string>
 
     <!-- Мої місця (design-spec 3.4, 3.5) -->
-    <string name="places_intro">Основне місце підставляється в новий будильник і в «Розбуди після відбою». Місця зберігаються лише на цьому телефоні.</string>
+    <string name="places_intro">Основне місце підставляється в новий будильник і в «Розбуди після відбою». Місця не потрапляють на наш сервер.</string>
     <string name="places_primary">Основне</string>
     <string name="places_menu">Дії з місцем «%1$s»</string>
     <string name="places_make_primary">Зробити основним</string>
