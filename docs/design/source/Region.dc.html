@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Вибір регіону</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700&display=swap">
+<style>
+body{margin:0;font-family:Onest,'Segoe UI',system-ui,sans-serif;background:#D6D3CB}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button,input{font-family:inherit}
+button{cursor:pointer}
+svg.i{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.vb-scroll{scrollbar-width:none;overscroll-behavior:contain}.vb-scroll::-webkit-scrollbar{display:none}
+</style>
+</helmet>
+<div style="width: 852px; height: 892px; box-sizing: border-box; padding: 24px; display: flex; gap: 24px; background: #D6D3CB; font-family: Onest, 'Segoe UI', system-ui, sans-serif">
+<sc-for list="{{phones}}" as="p" hint-placeholder-count="2">
+<div style="width: 390px; height: 844px; flex-shrink: 0; border-radius: 28px; overflow: hidden; display: flex; flex-direction: column; background: {{p.t.bg}}; color: {{p.t.text}}">
+<div style="height: 28px; flex-shrink: 0"></div>
+<header style="height: 64px; flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 0 8px">
+<a href="Edit.dc.html" aria-label="Назад" style="width: 48px; height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg></a>
+<h1 style="flex-grow: 1; margin: 0; font-size: 22px; font-weight: 500">Регіон</h1>
+</header>
+<div class="vb-scroll" style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+<div style="height: 56px; flex-shrink: 0; border-radius: 28px; background: {{p.t.s1}}; display: flex; align-items: center; gap: 12px; padding: 0 20px">
+<svg class="i" viewBox="0 0 24 24" style="width: 22px; height: 22px; flex-shrink: 0; color: {{p.t.text2}}"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4 4"></path></svg>
+<label for="{{p.qid}}" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Пошук регіону</label>
+<input id="{{p.qid}}" type="search" placeholder="Область, район або громада" style="flex-grow: 1; min-width: 0; border: none; background: none; outline: none; font-size: 16px; color: {{p.t.text}}">
+</div>
+<h2 style="margin: 6px 8px 0; font-size: 14px; font-weight: 600; color: {{p.t.text2}}">Мої місця</h2>
+<div style="flex-shrink: 0; display: flex; flex-direction: column; gap: 4px">
+<sc-for list="{{p.places}}" as="r" hint-placeholder-count="3">
+<button aria-pressed="{{r.on}}" onClick="{{r.pick}}" style="display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 10px 14px; border: none; border-radius: 18px; background: {{r.bg}}; color: {{r.t.text}}; text-align: left; width: 100%">
+<span style="width: 22px; height: 22px; box-sizing: border-box; border-radius: 11px; border: 2px solid {{r.ring}}; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><span style="width: 10px; height: 10px; border-radius: 5px; background: {{r.dot}}"></span></span>
+<span style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 16px; font-weight: 600">{{r.name}}</span>
+<span style="font-size: 14px; line-height: 1.35; color: {{r.t.text2}}">{{r.sub}}</span>
+</span>
+</button>
+</sc-for>
+</div>
+<h2 style="margin: 10px 8px 0; font-size: 14px; font-weight: 600; color: {{p.t.text2}}">Інший регіон</h2>
+<nav aria-label="Рівні вибору" style="flex-shrink: 0; display: flex; flex-wrap: nowrap; align-items: center; gap: 2px">
+<button aria-label="Усі області" title="Усі області" style="width: 40px; height: 40px; flex-shrink: 0; border-radius: 20px; border: none; background: none; color: {{p.t.primary}}; display: flex; align-items: center; justify-content: center; padding: 0"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5L9 4zM9 4v13.5M15 6.5V20"></path></svg></button>
+<svg class="i" viewBox="0 0 24 24" style="width: 16px; height: 16px; color: {{p.t.text2}}"><path d="M9 6l6 6-6 6"></path></svg>
+<button style="height: 40px; padding: 0 12px; border-radius: 20px; border: none; background: none; color: {{p.t.primary}}; font-size: 14px; font-weight: 600">Київська обл.</button>
+<svg class="i" viewBox="0 0 24 24" style="width: 16px; height: 16px; color: {{p.t.text2}}"><path d="M9 6l6 6-6 6"></path></svg>
+<span style="height: 40px; padding: 0 12px; border-radius: 20px; background: {{p.t.s2}}; display: flex; align-items: center; font-size: 14px; font-weight: 600">Обухівський р-н</span>
+</nav>
+<div style="flex-shrink: 0; display: flex; flex-direction: column; gap: 4px">
+<sc-for list="{{p.other}}" as="r" hint-placeholder-count="5">
+<button aria-pressed="{{r.on}}" onClick="{{r.pick}}" style="display: flex; align-items: center; gap: 16px; min-height: 56px; padding: 8px 14px; border: none; border-radius: 18px; background: {{r.bg}}; color: {{r.t.text}}; text-align: left; width: 100%">
+<span style="width: 22px; height: 22px; box-sizing: border-box; border-radius: 11px; border: 2px solid {{r.ring}}; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><span style="width: 10px; height: 10px; border-radius: 5px; background: {{r.dot}}"></span></span>
+<span style="flex-grow: 1; font-size: 16px; font-weight: {{r.w}}">{{r.name}}</span>
+</button>
+</sc-for>
+</div>
+<div style="flex-shrink: 0; background: {{p.t.s1}}; border-radius: 20px; padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start">
+<svg class="i" viewBox="0 0 24 24" style="width: 22px; height: 22px; flex-shrink: 0; color: {{p.t.text2}}"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8h.01"></path></svg>
+<p style="margin: 0; font-size: 14px; line-height: 1.45; color: {{p.t.text2}}">Будильник враховує тривоги в обраній громаді, у її районі та в області. Тривоги в сусідніх громадах і районах не враховуються.</p>
+</div>
+</div>
+<div style="flex-shrink: 0; padding: 12px 16px 20px; border-top: 1px solid {{p.t.outline}}">
+<a href="Edit.dc.html" style="height: 56px; border-radius: 28px; background: {{p.t.primary}}; color: {{p.t.onPrimary}}; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600">Готово</a>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":852,"height":892}}'>
+class Component extends DCLogic {
+  pal() {
+    return [
+      { id: 'l', bg: '#F7F5F0', s1: '#EFECE5', s2: '#E6E2DA', s3: '#DAD6CC', text: '#1B1C1F', text2: '#50525A', outline: '#D3CFC5', primary: '#35598F', onPrimary: '#FFFFFF', pc: '#D8E3F7', onPc: '#0F2A4E', redC: '#F9DCD7', onRedC: '#7A1C15', red: '#C23A2E', yelC: '#FBEAB0', onYelC: '#4C3900', yel: '#A67C00', shadow: 'rgba(30,30,40,0.18)' },
+      { id: 'd', bg: '#101318', s1: '#1A1E25', s2: '#232830', s3: '#2E343E', text: '#E5E3DE', text2: '#AAADB4', outline: '#2C323B', primary: '#A9C6F3', onPrimary: '#0D2A4F', pc: '#284470', onPc: '#D8E3F7', redC: '#571B16', onRedC: '#FFB4A9', red: '#FF8A7E', yelC: '#433500', onYelC: '#F8DE86', yel: '#EFC845', shadow: 'rgba(0,0,0,0.5)' }
+    ];
+  }
+  renderVals() {
+    const sel = this.state.sel || 'home';
+    const places = [
+      { id: 'home', name: 'Дім', sub: 'м. Київ · основне місце' },
+      { id: 'dacha', name: 'Дача', sub: 'Козинська громада · Обухівський р-н · Київська обл.' },
+      { id: 'parents', name: 'Батьки', sub: 'Самбірський р-н · Львівська обл.' }
+    ];
+    const other = [
+      { id: 'raion', name: 'Увесь Обухівський район', whole: true },
+      { id: 'g1', name: 'Васильківська громада' },
+      { id: 'g2', name: 'Кагарлицька громада' },
+      { id: 'g3', name: 'Козинська громада' },
+      { id: 'g4', name: 'Обухівська громада' },
+      { id: 'g5', name: 'Українська громада' }
+    ];
+    const row = (t, r) => {
+      const on = sel === r.id;
+      return Object.assign({}, r, {
+        t, on,
+        bg: on ? t.pc : 'transparent',
+        ring: on ? t.primary : t.text2,
+        dot: on ? t.primary : 'transparent',
+        w: r.whole ? '600' : '400',
+        pick: () => this.setState({ sel: r.id })
+      });
+    };
+    const phones = this.pal().map((t) => ({
+      t,
+      qid: 'q-' + t.id,
+      places: places.map((r) => row(t, r)),
+      other: other.map((r) => row(t, r))
+    }));
+    return { phones };
+  }
+}
+</script>
+</body>
+</html>

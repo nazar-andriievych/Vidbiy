@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Екран дзвінка</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700&display=swap">
+<style>
+body{margin:0;font-family:Onest,'Segoe UI',system-ui,sans-serif;background:#D6D3CB}
+button{font-family:inherit;cursor:pointer}
+svg.i{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+</style>
+</helmet>
+<div style="width: 2922px; height: 1760px; box-sizing: border-box; padding: 24px; display: flex; flex-direction: column; gap: 24px; background: #D6D3CB; font-family: Onest, 'Segoe UI', system-ui, sans-serif">
+<sc-for list="{{rows}}" as="row" hint-placeholder-count="2">
+<div style="display: flex; gap: 24px">
+<sc-for list="{{row.cols}}" as="v" hint-placeholder-count="7">
+<div style="width: 390px; height: 844px; flex-shrink: 0; box-sizing: border-box; border-radius: 28px; overflow: hidden; padding: 28px 24px 32px; display: flex; flex-direction: column; background: {{v.t.bg}}; color: {{v.t.text}}">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 40px; text-align: center">
+<div style="height: 64px; display: flex; align-items: center; font-size: 16px; font-weight: 500; color: {{v.t.text2}}">{{v.label}}</div>
+<div style="font-size: 88px; font-weight: 400; line-height: 1.05; letter-spacing: -0.04em; font-variant-numeric: tabular-nums">{{v.time}}</div>
+<div style="font-size: 16px; color: {{v.t.text2}}">Неділя, 27 вересня</div>
+</div>
+<div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 0 4px 56px">
+<sc-if value="{{v.hasReason}}" hint-placeholder-val="{{ true }}">
+<div style="width: 64px; height: 64px; border-radius: 32px; background: {{v.t.s2}}; color: {{v.t.primary}}; display: flex; align-items: center; justify-content: center">
+<sc-if value="{{v.icClear}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" style="width: 30px; height: 30px"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></sc-if>
+<sc-if value="{{v.icClock}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" style="width: 30px; height: 30px"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path></svg></sc-if>
+<sc-if value="{{v.icOff}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" style="width: 30px; height: 30px"><path d="M3 3l18 18M7 10a5 5 0 0 0 0 9h10.5M20.3 17.2A4 4 0 0 0 17 11h-.6A6 6 0 0 0 9.6 6.3"></path></svg></sc-if>
+<sc-if value="{{v.icBell}}" hint-placeholder-val="{{ false }}"><svg class="i" viewBox="0 0 24 24" style="width: 30px; height: 30px"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16zM10 20.5a2 2 0 0 0 4 0"></path></svg></sc-if>
+</div>
+<h1 style="margin: 0; font-size: 22px; font-weight: 600; line-height: 1.25">{{v.title}}</h1>
+<p style="margin: 0; font-size: 16px; line-height: 1.5; color: {{v.t.text2}}">{{v.detail}}</p>
+<sc-if value="{{v.hasChip}}" hint-placeholder-val="{{ false }}">
+<span style="min-height: 36px; padding: 0 14px; border-radius: 18px; background: {{v.chip.bg}}; color: {{v.chip.fg}}; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600"><span style="width: 10px; height: 10px; border-radius: 5px; background: {{v.chip.dot}}"></span>{{v.chip.label}}</span>
+</sc-if>
+</sc-if>
+</div>
+<div style="display: flex; flex-direction: column; gap: 20px">
+<button style="height: 64px; border-radius: 32px; border: none; background: {{v.t.pc}}; color: {{v.t.onPc}}; font-size: 18px; font-weight: 600">Відкласти на 10 хв</button>
+<div style="display: flex; flex-direction: column; align-items: stretch; gap: 8px">
+<button aria-label="Вимкнути будильник: утримуйте кнопку" style="height: 56px; border-radius: 28px; border: 2px solid {{v.t.primary}}; background: transparent; color: {{v.t.primary}}; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px">
+<svg class="i" viewBox="0 0 24 24" style="width: 22px; height: 22px"><path d="M12 3v8M6.3 7a8 8 0 1 0 11.4 0"></path></svg>
+Вимкнути
+</button>
+<span style="align-self: center; font-size: 14px; color: {{v.t.text2}}">Утримуйте секунду, щоб вимкнути</span>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2922,"height":1760}}'>
+class Component extends DCLogic {
+  pal() {
+    return [
+      { id: 'l', bg: '#F7F5F0', s1: '#EFECE5', s2: '#E6E2DA', s3: '#DAD6CC', text: '#1B1C1F', text2: '#50525A', outline: '#D3CFC5', primary: '#35598F', onPrimary: '#FFFFFF', pc: '#D8E3F7', onPc: '#0F2A4E', redC: '#F9DCD7', onRedC: '#7A1C15', red: '#C23A2E', yelC: '#FBEAB0', onYelC: '#4C3900', yel: '#A67C00', shadow: 'rgba(30,30,40,0.18)' },
+      { id: 'd', bg: '#101318', s1: '#1A1E25', s2: '#232830', s3: '#2E343E', text: '#E5E3DE', text2: '#AAADB4', outline: '#2C323B', primary: '#A9C6F3', onPrimary: '#0D2A4F', pc: '#284470', onPc: '#D8E3F7', redC: '#571B16', onRedC: '#FFB4A9', red: '#FF8A7E', yelC: '#433500', onYelC: '#F8DE86', yel: '#EFC845', shadow: 'rgba(0,0,0,0.5)' }
+    ];
+  }
+  renderVals() {
+    const variants = [
+      { label: 'Будильник 06:45 · Дім', time: '07:07', icon: 'clear', title: 'Відбій тривоги', detail: 'Тривога в регіоні «Дім» закінчилася о 07:02. Минуло 5 хв після відбою.', chip: null },
+      { label: 'Будильник 06:45 · Дім', time: '08:00', icon: 'clock', title: 'Настав крайній час', detail: 'Тривога ще триває, але ви просили розбудити не пізніше 08:00.', chip: 'red' },
+      { label: 'Будильник 06:45 · Дім', time: '06:46', icon: 'off', title: 'Немає зв’язку з сервісом', detail: 'Не вдалося отримати свіжі дані про тривогу, тому будильник дзвонить.', chip: null },
+      { label: 'Будильник 10:00 · Дача', time: '10:40', icon: 'clock', title: 'Тривога триває понад добу', detail: 'Будильник більше не чекає на відбій у регіоні «Дача».', chip: 'yellow' },
+      { label: 'Будильник 06:45 · Дім', time: '06:45', icon: 'bell', title: 'Тривоги немає', detail: 'У регіоні «Дім» зараз немає тривоги, тому будильник дзвонить вчасно.', chip: null },
+      { label: 'Будильник 23:30', time: '23:30', icon: 'none', title: '', detail: '', chip: null, plain: true },
+      { label: 'Розбуди після відбою · Дім', time: '03:40', icon: 'off', title: 'Немає даних', detail: 'Свіжих даних про тривогу немає понад 3 хвилини, тому будильник дзвонить.', chip: null }
+    ];
+    const rows = this.pal().map((t) => ({
+      cols: variants.map((v) => ({
+        t,
+        label: v.label, time: v.time, title: v.title, detail: v.detail,
+        hasReason: !v.plain,
+        icClear: v.icon === 'clear', icClock: v.icon === 'clock', icOff: v.icon === 'off', icBell: v.icon === 'bell',
+        hasChip: !!v.chip,
+        chip: v.chip === 'red' ? { bg: t.redC, fg: t.onRedC, dot: t.red, label: 'Червона тривога триває' }
+          : v.chip === 'yellow' ? { bg: t.yelC, fg: t.onYelC, dot: t.yel, label: 'Жовта тривога триває' }
+          : { bg: 'transparent', fg: t.text, dot: 'transparent', label: '' }
+      }))
+    }));
+    return { rows };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Очікування відбою</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700&display=swap">
+<style>
+body{margin:0;font-family:Onest,'Segoe UI',system-ui,sans-serif;background:#D6D3CB}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font-family:inherit;cursor:pointer}
+svg.i{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+</style>
+</helmet>
+<div style="width: 1680px; height: 1760px; box-sizing: border-box; padding: 24px; display: flex; flex-direction: column; gap: 24px; background: #D6D3CB; font-family: Onest, 'Segoe UI', system-ui, sans-serif">
+<sc-for list="{{rows}}" as="row" hint-placeholder-count="2">
+<div style="display: flex; gap: 24px">
+<sc-for list="{{row.cols}}" as="v" hint-placeholder-count="4">
+<div style="width: 390px; height: 844px; flex-shrink: 0; border-radius: 28px; overflow: hidden; display: flex; flex-direction: column; background: {{v.t.bg}}; color: {{v.t.text}}">
+<div style="height: 28px; flex-shrink: 0"></div>
+<header style="height: 64px; flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 0 8px">
+<button aria-label="Назад" style="width: 48px; height: 48px; border-radius: 24px; border: none; background: none; color: {{v.t.text}}; display: flex; align-items: center; justify-content: center; padding: 0"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg></button>
+<h1 style="flex-grow: 1; margin: 0; font-size: 18px; font-weight: 500">{{v.overline}}</h1>
+</header>
+<div style="flex-grow: 1; min-height: 0; padding: 0 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center">
+<div style="width: 104px; height: 104px; flex-shrink: 0; border-radius: 52px; background: {{v.lv.bg}}; color: {{v.lv.fg}}; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 8px {{v.t.s1}}">
+<sc-if value="{{v.waiting}}" hint-placeholder-val="{{ true }}">
+<svg class="i" viewBox="0 0 24 24" style="width: 44px; height: 44px; stroke-width: 1.6"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg>
+</sc-if>
+<sc-if value="{{v.paused}}" hint-placeholder-val="{{ false }}">
+<svg class="i" viewBox="0 0 24 24" style="width: 44px; height: 44px; stroke-width: 1.6"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path></svg>
+</sc-if>
+</div>
+<h2 style="margin: 10px 0 0; font-size: 22px; font-weight: 500; line-height: 1.2">{{v.heading}}</h2>
+<span style="min-height: 36px; padding: 0 14px; border-radius: 18px; background: {{v.lv.bg}}; color: {{v.lv.fg}}; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600">
+<sc-if value="{{v.hasDot}}" hint-placeholder-val="{{ true }}"><span style="width: 10px; height: 10px; border-radius: 5px; background: {{v.lv.dot}}"></span></sc-if>
+{{v.chip}}
+</span>
+<dl style="margin: 4px 0 0; width: 100%; box-sizing: border-box; background: {{v.t.s1}}; border-radius: 24px; padding: 4px 18px; display: flex; flex-direction: column; text-align: left">
+<sc-for list="{{v.info}}" as="r" hint-placeholder-count="3">
+<div style="display: flex; gap: 12px; align-items: baseline; padding: 12px 0; border-top: 1px solid {{r.line}}">
+<dt style="width: 104px; flex-shrink: 0; font-size: 14px; color: {{r.t.text2}}">{{r.label}}</dt>
+<dd style="margin: 0; flex-grow: 1; font-size: 16px; font-weight: 500; line-height: 1.4; color: {{r.c}}">{{r.value}}</dd>
+</div>
+</sc-for>
+</dl>
+<sc-if value="{{v.fresh}}" hint-placeholder-val="{{ true }}">
+<p style="margin: 0; font-size: 16px; line-height: 1.45; color: {{v.t.text2}}">{{v.plan}}</p>
+</sc-if>
+<sc-if value="{{v.stale}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="width: 100%; box-sizing: border-box; background: {{v.t.yelC}}; color: {{v.t.onYelC}}; border-radius: 20px; padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; text-align: left">
+<svg class="i" viewBox="0 0 24 24" style="width: 22px; height: 22px; flex-shrink: 0; margin-top: 1px"><path d="M3 3l18 18M7 10a5 5 0 0 0 0 9h10.5M20.3 17.2A4 4 0 0 0 17 11h-.6A6 6 0 0 0 9.6 6.3"></path></svg>
+<span style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 16px; font-weight: 600">Немає зв’язку з сервісом</span>
+<span style="font-size: 14px; line-height: 1.45">{{v.plan}}</span>
+</span>
+</div>
+</sc-if>
+</div>
+<div style="flex-shrink: 0; padding: 16px 24px 24px; display: flex; flex-direction: column; gap: 10px">
+<button style="height: 56px; border-radius: 28px; border: none; background: {{v.t.pc}}; color: {{v.t.onPc}}; font-size: 16px; font-weight: 600">Подзвони через 10 хв</button>
+<div style="display: flex; flex-direction: column; align-items: stretch; gap: 8px">
+<button aria-label="Сьогодні не дзвони: утримуйте кнопку" style="height: 56px; border-radius: 28px; border: 1px solid {{v.t.text2}}; background: none; color: {{v.t.text}}; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px">
+<svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="M6 16V11a6 6 0 0 1 9.5-4.9M18 11v5l1.5 2h-13M10 20.5a2 2 0 0 0 4 0M3 3l18 18"></path></svg>
+Сьогодні не дзвони
+</button>
+<span style="align-self: center; font-size: 14px; color: {{v.t.text2}}">Утримуйте секунду, щоб скасувати дзвінок</span>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1680,"height":1760}}'>
+class Component extends DCLogic {
+  pal() {
+    return [
+      { id: 'l', bg: '#F7F5F0', s1: '#EFECE5', s2: '#E6E2DA', s3: '#DAD6CC', text: '#1B1C1F', text2: '#50525A', outline: '#D3CFC5', primary: '#35598F', onPrimary: '#FFFFFF', pc: '#D8E3F7', onPc: '#0F2A4E', redC: '#F9DCD7', onRedC: '#7A1C15', red: '#C23A2E', yelC: '#FBEAB0', onYelC: '#4C3900', yel: '#A67C00', warnText: '#7A5A00', shadow: 'rgba(30,30,40,0.18)' },
+      { id: 'd', bg: '#101318', s1: '#1A1E25', s2: '#232830', s3: '#2E343E', text: '#E5E3DE', text2: '#AAADB4', outline: '#2C323B', primary: '#A9C6F3', onPrimary: '#0D2A4F', pc: '#284470', onPc: '#D8E3F7', redC: '#571B16', onRedC: '#FFB4A9', red: '#FF8A7E', yelC: '#433500', onYelC: '#F8DE86', yel: '#EFC845', warnText: '#EFC845', shadow: 'rgba(0,0,0,0.5)' }
+    ];
+  }
+  renderVals() {
+    const variants = [
+      {
+        overline: 'Будильник 06:45 · Дім', level: 'red', waiting: true,
+        heading: 'Чекаю на відбій тривоги', chip: 'Червона тривога · ракетна загроза',
+        info: [['Причина', 'Загроза застосування балістичного озброєння'], ['Оновлено', '06:51, щойно'], ['Крайній час', '08:00']],
+        plan: 'Задзвоню через 5 хв після відбою, але не пізніше 08:00.'
+      },
+      {
+        overline: 'Будильник 06:45 · Дім', level: 'none', waiting: false,
+        heading: 'Відбій тривоги о 07:02', chip: 'Чекаю 5 хв після відбою',
+        info: [['Оновлено', '07:03, щойно'], ['Крайній час', '08:00']],
+        plan: 'Задзвоню о 07:07, якщо тривога не почнеться знову.'
+      },
+      {
+        overline: 'Будильник 06:45 · Дім', level: 'red', waiting: true, stale: true,
+        heading: 'Чекаю на відбій тривоги', chip: 'Червона тривога · ракетна загроза',
+        info: [['Оновлено', '06:49, 2 хв тому', true], ['Крайній час', '08:00']],
+        plan: 'Якщо дані не оновляться ще хвилину — задзвоню, щоб ви не проспали.'
+      },
+      {
+        overline: 'Розбуди після відбою · Дім', level: 'yellow', waiting: true,
+        heading: 'Чекаю на відбій тривоги', chip: 'Жовта тривога · дронова загроза',
+        info: [['Оновлено', '03:12, 1 хв тому']],
+        plan: 'Задзвоню через 5 хв після відбою.'
+      }
+    ];
+    const rows = this.pal().map((t) => ({
+      cols: variants.map((v) => {
+        const lv = v.level === 'red' ? { bg: t.redC, fg: t.onRedC, dot: t.red }
+          : v.level === 'yellow' ? { bg: t.yelC, fg: t.onYelC, dot: t.yel }
+          : { bg: t.pc, fg: t.onPc, dot: 'transparent' };
+        return {
+          t, lv,
+          overline: v.overline,
+          heading: v.heading,
+          chip: v.chip,
+          hasDot: v.level !== 'none',
+          waiting: v.waiting,
+          paused: !v.waiting,
+          stale: !!v.stale,
+          fresh: !v.stale,
+          plan: v.plan,
+          info: v.info.map((r, i) => ({ t, label: r[0], value: r[1], c: r[2] ? t.warnText : t.text, line: i === 0 ? 'transparent' : t.outline }))
+        };
+      })
+    }));
+    return { rows };
+  }
+}
+</script>
+</body>
+</html>

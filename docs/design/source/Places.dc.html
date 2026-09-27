@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Мої місця</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700&display=swap">
+<style>
+body{margin:0;font-family:Onest,'Segoe UI',system-ui,sans-serif;background:#D6D3CB}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button{font-family:inherit;cursor:pointer}
+svg.i{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.vb-scroll{scrollbar-width:none;overscroll-behavior:contain}.vb-scroll::-webkit-scrollbar{display:none}
+</style>
+</helmet>
+<div style="width: 852px; height: 892px; box-sizing: border-box; padding: 24px; display: flex; gap: 24px; background: #D6D3CB; font-family: Onest, 'Segoe UI', system-ui, sans-serif">
+<sc-for list="{{phones}}" as="p" hint-placeholder-count="2">
+<div style="width: 390px; height: 844px; flex-shrink: 0; border-radius: 28px; overflow: hidden; position: relative; display: flex; flex-direction: column; background: {{p.t.bg}}; color: {{p.t.text}}">
+<div style="height: 28px; flex-shrink: 0"></div>
+<header style="height: 64px; flex-shrink: 0; display: flex; align-items: center; padding: 0 24px">
+<h1 style="margin: 0; font-size: 28px; font-weight: 500; letter-spacing: -0.01em">Мої місця</h1>
+</header>
+<div class="vb-scroll" style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 0 16px 176px; display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 0 8px 8px; font-size: 16px; line-height: 1.45; color: {{p.t.text2}}">Основне місце підставляється в новий будильник і в «Розбуди після відбою». Місця зберігаються лише на цьому телефоні.</p>
+<sc-for list="{{p.places}}" as="m" hint-placeholder-count="3">
+<article style="position: relative; z-index: {{m.z}}; background: {{m.t.s1}}; border-radius: 24px; padding: 14px 8px 14px 20px; display: flex; align-items: center; gap: 12px">
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 10px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">{{m.name}}</h2>
+<sc-if value="{{m.main}}" hint-placeholder-val="{{ false }}">
+<span style="height: 28px; padding: 0 10px; border-radius: 14px; background: {{m.t.pc}}; color: {{m.t.onPc}}; display: flex; align-items: center; font-size: 14px; font-weight: 600">Основне</span>
+</sc-if>
+</div>
+<div style="font-size: 14px; line-height: 1.4; color: {{m.t.text2}}">{{m.sub}}</div>
+</div>
+<button aria-label="Дії з місцем {{m.name}}" aria-expanded="{{m.open}}" onClick="{{m.toggle}}" style="width: 48px; height: 48px; flex-shrink: 0; border-radius: 24px; border: none; background: {{m.btnBg}}; color: {{m.t.text}}; display: flex; align-items: center; justify-content: center; padding: 0"><svg class="i" viewBox="0 0 24 24" style="width: 22px; height: 22px"><path d="M12 5h.01M12 12h.01M12 19h.01" style="stroke-width: 3"></path></svg></button>
+<sc-if value="{{m.open}}" hint-placeholder-val="{{ false }}">
+<div role="menu" style="position: absolute; top: 60px; right: 8px; width: 224px; background: {{m.t.s2}}; border-radius: 16px; padding: 8px 0; box-shadow: 0 8px 24px {{m.t.shadow}}; display: flex; flex-direction: column">
+<sc-if value="{{m.notMain}}" hint-placeholder-val="{{ true }}">
+<button role="menuitem" onClick="{{m.makeMain}}" style="height: 48px; padding: 0 16px; border: none; background: none; color: {{m.t.text}}; text-align: left; font-size: 16px">Зробити основним</button>
+</sc-if>
+<button role="menuitem" onClick="{{m.rename}}" style="height: 48px; padding: 0 16px; border: none; background: none; color: {{m.t.text}}; text-align: left; font-size: 16px">Перейменувати</button>
+<button role="menuitem" onClick="{{m.editRegion}}" style="height: 48px; padding: 0 16px; border: none; background: none; color: {{m.t.text}}; text-align: left; font-size: 16px">Змінити регіон</button>
+<button role="menuitem" onClick="{{m.del}}" style="height: 48px; padding: 0 16px; border: none; background: none; color: {{m.t.red}}; text-align: left; font-size: 16px">Видалити</button>
+</div>
+</sc-if>
+</article>
+</sc-for>
+</div>
+<a href="AddPlace.dc.html" style="position: absolute; right: 16px; bottom: 96px; height: 56px; padding: 0 20px 0 16px; border-radius: 16px; background: {{p.t.pc}}; color: {{p.t.onPc}}; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 12px {{p.t.shadow}}">
+<svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><path d="M12 5v14M5 12h14"></path></svg>
+Додати місце
+</a>
+<nav aria-label="Розділи" style="position: absolute; left: 0; right: 0; bottom: 0; height: 80px; box-sizing: border-box; background: {{p.t.s1}}; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; padding: 0 8px">
+<a href="Main.dc.html" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: {{p.n0.lab}}">
+<span style="width: 64px; height: 32px; border-radius: 16px; background: {{p.n0.pill}}; color: {{p.n0.fg}}; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><circle cx="12" cy="13" r="7"></circle><path d="M12 10v3l2 2M5 4L2.5 6.5M19 4l2.5 2.5"></path></svg></span>
+<span style="font-size: 14px; font-weight: {{p.n0.w}}">Будильники</span>
+</a>
+<a href="Places.dc.html" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: {{p.n1.lab}}">
+<span style="width: 64px; height: 32px; border-radius: 16px; background: {{p.n1.pill}}; color: {{p.n1.fg}}; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span>
+<span style="font-size: 14px; font-weight: {{p.n1.w}}">Мої місця</span>
+</a>
+<a href="Settings.dc.html" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: {{p.n2.lab}}">
+<span style="width: 64px; height: 32px; border-radius: 16px; background: {{p.n2.pill}}; color: {{p.n2.fg}}; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></span>
+<span style="font-size: 14px; font-weight: {{p.n2.w}}">Налаштування</span>
+</a>
+</nav>
+<sc-if value="{{p.dlg}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; inset: 0; z-index: 20; background: {{p.scrim}}; display: flex; align-items: center; justify-content: center; padding: 24px">
+<div role="dialog" aria-modal="true" aria-labelledby="{{p.dlgTitleId}}" style="width: 100%; max-width: 328px; box-sizing: border-box; background: {{p.t.s2}}; border-radius: 28px; padding: 24px; display: flex; flex-direction: column; gap: 20px">
+<h2 id="{{p.dlgTitleId}}" style="margin: 0; font-size: 22px; font-weight: 500">Перейменувати місце</h2>
+<div style="position: relative">
+<label for="{{p.inputId}}" style="position: absolute; top: -10px; left: 12px; padding: 0 4px; background: {{p.t.s2}}; font-size: 14px; line-height: 1.2; font-weight: 500; color: {{p.t.primary}}">Назва</label>
+<input id="{{p.inputId}}" type="text" maxlength="24" value="{{p.draft}}" onChange="{{p.onDraft}}" style="width: 100%; box-sizing: border-box; height: 56px; padding: 0 16px; border-radius: 8px; border: 2px solid {{p.t.primary}}; background: transparent; color: {{p.t.text}}; font-size: 16px; outline: none">
+<div style="margin-top: 6px; padding: 0 16px; font-size: 14px; color: {{p.t.text2}}">Наприклад: Дім, Дача, Робота</div>
+</div>
+<div style="display: flex; justify-content: flex-end; gap: 8px">
+<button onClick="{{p.cancel}}" style="height: 44px; padding: 0 16px; border-radius: 22px; border: none; background: none; color: {{p.t.primary}}; font-size: 16px; font-weight: 600">Скасувати</button>
+<button onClick="{{p.save}}" disabled="{{p.saveDisabled}}" style="height: 44px; padding: 0 16px; border-radius: 22px; border: none; background: none; color: {{p.saveColor}}; font-size: 16px; font-weight: 600">Зберегти</button>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{p.delDlg}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; inset: 0; z-index: 20; background: {{p.scrim}}; display: flex; align-items: center; justify-content: center; padding: 24px">
+<div role="alertdialog" aria-modal="true" aria-labelledby="{{p.delTitleId}}" style="width: 100%; max-width: 328px; box-sizing: border-box; background: {{p.t.s2}}; border-radius: 28px; padding: 24px; display: flex; flex-direction: column; gap: 16px">
+<h2 id="{{p.delTitleId}}" style="margin: 0; font-size: 22px; font-weight: 500; line-height: 1.25">{{p.delTitle}}</h2>
+<p style="margin: 0; font-size: 16px; line-height: 1.5; color: {{p.t.text2}}">{{p.delText}}</p>
+<div style="display: flex; justify-content: flex-end; gap: 8px">
+<sc-if value="{{p.delCan}}" hint-placeholder-val="{{ true }}">
+<button onClick="{{p.delCancel}}" style="height: 44px; padding: 0 16px; border-radius: 22px; border: none; background: none; color: {{p.t.primary}}; font-size: 16px; font-weight: 600">Скасувати</button>
+<button onClick="{{p.delConfirm}}" style="height: 44px; padding: 0 16px; border-radius: 22px; border: none; background: none; color: {{p.t.red}}; font-size: 16px; font-weight: 600">Видалити</button>
+</sc-if>
+<sc-if value="{{p.delCannot}}" hint-placeholder-val="{{ false }}">
+<button onClick="{{p.delCancel}}" style="height: 44px; padding: 0 16px; border-radius: 22px; border: none; background: none; color: {{p.t.primary}}; font-size: 16px; font-weight: 600">Зрозуміло</button>
+</sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{p.rgn}}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-labelledby="{{p.rgnTitleId}}" style="position: absolute; inset: 0; z-index: 25; background: {{p.t.bg}}; display: flex; flex-direction: column">
+<div style="height: 28px; flex-shrink: 0"></div>
+<header style="height: 64px; flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 0 8px">
+<button aria-label="Назад без змін" onClick="{{p.rgnClose}}" style="width: 48px; height: 48px; border-radius: 24px; border: none; background: none; color: {{p.t.text}}; display: flex; align-items: center; justify-content: center; padding: 0"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg></button>
+<h1 id="{{p.rgnTitleId}}" style="flex-grow: 1; margin: 0; font-size: 22px; font-weight: 500">Регіон · {{p.rgnName}}</h1>
+</header>
+<div class="vb-scroll" style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+<div style="flex-shrink: 0; padding: 0 8px; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 14px; color: {{p.t.text2}}">Зараз</span>
+<span style="font-size: 16px; font-weight: 500; line-height: 1.4">{{p.rgnCurrent}}</span>
+</div>
+<div style="height: 56px; flex-shrink: 0; border-radius: 28px; background: {{p.t.s1}}; display: flex; align-items: center; gap: 12px; padding: 0 20px">
+<svg class="i" viewBox="0 0 24 24" style="width: 22px; height: 22px; flex-shrink: 0; color: {{p.t.text2}}"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4 4"></path></svg>
+<label for="{{p.rgnQid}}" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Пошук регіону</label>
+<input id="{{p.rgnQid}}" type="search" placeholder="Область, район або громада" style="flex-grow: 1; min-width: 0; border: none; background: none; outline: none; font-size: 16px; color: {{p.t.text}}">
+</div>
+<nav aria-label="Рівні вибору" style="flex-shrink: 0; display: flex; flex-wrap: nowrap; align-items: center; gap: 2px">
+<button aria-label="Усі області" title="Усі області" style="width: 40px; height: 40px; flex-shrink: 0; border-radius: 20px; border: none; background: none; color: {{p.t.primary}}; display: flex; align-items: center; justify-content: center; padding: 0"><svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5L9 4zM9 4v13.5M15 6.5V20"></path></svg></button>
+<svg class="i" viewBox="0 0 24 24" style="width: 16px; height: 16px; flex-shrink: 0; color: {{p.t.text2}}"><path d="M9 6l6 6-6 6"></path></svg>
+<button style="height: 40px; padding: 0 12px; border-radius: 20px; border: none; background: none; color: {{p.t.primary}}; font-size: 14px; font-weight: 600; white-space: nowrap">Київська обл.</button>
+<svg class="i" viewBox="0 0 24 24" style="width: 16px; height: 16px; flex-shrink: 0; color: {{p.t.text2}}"><path d="M9 6l6 6-6 6"></path></svg>
+<span style="height: 40px; padding: 0 12px; border-radius: 20px; background: {{p.t.s2}}; display: flex; align-items: center; font-size: 14px; font-weight: 600; white-space: nowrap">Обухівський р-н</span>
+</nav>
+<div style="flex-shrink: 0; display: flex; flex-direction: column; gap: 4px">
+<sc-for list="{{p.rgnList}}" as="r" hint-placeholder-count="6">
+<button aria-pressed="{{r.on}}" onClick="{{r.pick}}" style="display: flex; align-items: center; gap: 16px; min-height: 56px; padding: 8px 14px; border: none; border-radius: 18px; background: {{r.bg}}; color: {{p.t.text}}; text-align: left; width: 100%">
+<span style="width: 22px; height: 22px; box-sizing: border-box; border-radius: 11px; border: 2px solid {{r.ring}}; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><span style="width: 10px; height: 10px; border-radius: 5px; background: {{r.dot}}"></span></span>
+<span style="flex-grow: 1; font-size: 16px; font-weight: {{r.w}}">{{r.name}}</span>
+</button>
+</sc-for>
+</div>
+<sc-if value="{{p.rgnUsed}}" hint-placeholder-val="{{ true }}">
+<div style="flex-shrink: 0; background: {{p.t.s1}}; border-radius: 20px; padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start">
+<svg class="i" viewBox="0 0 24 24" style="width: 22px; height: 22px; flex-shrink: 0; color: {{p.t.text2}}"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8h.01"></path></svg>
+<p style="margin: 0; font-size: 14px; line-height: 1.45; color: {{p.t.text2}}">{{p.rgnUsedText}}</p>
+</div>
+</sc-if>
+</div>
+<div style="flex-shrink: 0; padding: 12px 16px 20px; border-top: 1px solid {{p.t.outline}}">
+<button onClick="{{p.rgnSave}}" style="width: 100%; height: 56px; border-radius: 28px; border: none; background: {{p.t.primary}}; color: {{p.t.onPrimary}}; font-size: 16px; font-weight: 600">Зберегти</button>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":852,"height":892}}'>
+class Component extends DCLogic {
+  pal() {
+    return [
+      { id: 'l', bg: '#F7F5F0', s1: '#EFECE5', s2: '#E6E2DA', s3: '#DAD6CC', text: '#1B1C1F', text2: '#50525A', outline: '#D3CFC5', primary: '#35598F', onPrimary: '#FFFFFF', pc: '#D8E3F7', onPc: '#0F2A4E', redC: '#F9DCD7', onRedC: '#7A1C15', red: '#C23A2E', yelC: '#FBEAB0', onYelC: '#4C3900', yel: '#A67C00', shadow: 'rgba(30,30,40,0.18)' },
+      { id: 'd', bg: '#101318', s1: '#1A1E25', s2: '#232830', s3: '#2E343E', text: '#E5E3DE', text2: '#AAADB4', outline: '#2C323B', primary: '#A9C6F3', onPrimary: '#0D2A4F', pc: '#284470', onPc: '#D8E3F7', redC: '#571B16', onRedC: '#FFB4A9', red: '#FF8A7E', yelC: '#433500', onYelC: '#F8DE86', yel: '#EFC845', shadow: 'rgba(0,0,0,0.5)' }
+    ];
+  }
+  nav(t, active) {
+    return [0, 1, 2].map((i) => i === active
+      ? { pill: t.pc, fg: t.onPc, lab: t.text, w: '700' }
+      : { pill: 'transparent', fg: t.text2, lab: t.text2, w: '500' });
+  }
+  renderVals() {
+    const open = this.state.open === undefined ? 'dacha' : this.state.open;
+    const names = Object.assign({ home: 'Дім', dacha: 'Дача', parents: 'Батьки' }, this.state.names || {});
+    const editing = this.state.editing || null;
+    const draft = this.state.draft ?? '';
+    const valid = draft.trim().length > 0;
+    const removed = this.state.removed || {};
+    const deleting = this.state.deleting || null;
+    const mainId = this.state.mainId || 'home';
+    const subs = this.state.subs || {};
+    const places = [
+      { id: 'home', sub: 'м. Київ', region: 'м. Київ', used: 'Будильник 06:45' },
+      { id: 'dacha', sub: 'Козинська громада · Обухівський р-н · Київська обл.', region: 'Козинській громаді', used: 'Будильник 10:00', g: 'g3' },
+      { id: 'parents', sub: 'Самбірський р-н · Львівська обл.', region: '', used: '' }
+    ].filter((m) => !removed[m.id]).map((m) => Object.assign({}, m, { main: m.id === mainId, sub: subs[m.id] || m.sub }));
+    const rgnFor = this.state.rgnFor || null;
+    const rp = places.find((m) => m.id === rgnFor) || null;
+    const rsel = this.state.rsel !== undefined ? this.state.rsel : (rp && rp.g) || null;
+    const gList = [
+      { id: 'raion', name: 'Увесь Обухівський район', whole: true },
+      { id: 'g1', name: 'Васильківська громада' },
+      { id: 'g2', name: 'Кагарлицька громада' },
+      { id: 'g3', name: 'Козинська громада' },
+      { id: 'g4', name: 'Обухівська громада' },
+      { id: 'g5', name: 'Українська громада' }
+    ];
+    const dp = places.find((m) => m.id === deleting) || null;
+    let delTitle = '', delText = '';
+    if (dp && dp.main) {
+      delTitle = 'Це основне місце';
+      delText = 'Спочатку зробіть основним інше місце — тоді «' + names[dp.id] + '» можна буде видалити.';
+    } else if (dp) {
+      delTitle = 'Видалити «' + names[dp.id] + '»?';
+      delText = dp.used
+        ? dp.used + ' і далі чекатиме на тривоги в ' + dp.region + ' — лише без назви «' + names[dp.id] + '».'
+        : 'Це місце не використовується в жодному будильнику.';
+    }
+    const phones = this.pal().map((t) => {
+      const n = this.nav(t, 1);
+      return {
+        t, n0: n[0], n1: n[1], n2: n[2],
+        rgn: !!rp,
+        rgnTitleId: 'rg-title-' + t.id,
+        rgnQid: 'rg-q-' + t.id,
+        rgnName: rp ? names[rp.id] : '',
+        rgnCurrent: rp ? rp.sub : '',
+        rgnUsed: !!(rp && rp.used),
+        rgnUsedText: rp && rp.used ? rp.used + ' теж чекатиме на тривоги в новому регіоні.' : '',
+        rgnClose: () => this.setState({ rgnFor: null, rsel: undefined }),
+        rgnSave: () => {
+          const g = gList.find((x) => x.id === rsel);
+          const next = g ? (g.whole ? 'Обухівський р-н · Київська обл.' : g.name + ' · Обухівський р-н · Київська обл.') : null;
+          this.setState({ subs: next ? Object.assign({}, subs, { [rgnFor]: next }) : subs, rgnFor: null, rsel: undefined });
+        },
+        rgnList: gList.map((g) => {
+          const on = g.id === rsel;
+          return { name: g.name, on, bg: on ? t.pc : 'transparent', ring: on ? t.primary : t.text2, dot: on ? t.primary : 'transparent', w: g.whole ? '600' : '400', pick: () => this.setState({ rsel: g.id }) };
+        }),
+        delDlg: !!dp,
+        delTitleId: 'del-title-' + t.id,
+        delTitle, delText,
+        delCan: !!dp && !dp.main,
+        delCannot: !!dp && dp.main,
+        delCancel: () => this.setState({ deleting: null }),
+        delConfirm: () => this.setState({ removed: Object.assign({}, removed, { [deleting]: true }), deleting: null }),
+        dlg: !!editing,
+        dlgTitleId: 'rn-title-' + t.id,
+        inputId: 'rn-input-' + t.id,
+        scrim: t.id === 'l' ? 'rgba(20,20,24,0.4)' : 'rgba(0,0,0,0.6)',
+        draft,
+        onDraft: (e) => this.setState({ draft: e.target.value }),
+        cancel: () => this.setState({ editing: null }),
+        save: () => {
+          if (!valid) return;
+          this.setState({ names: Object.assign({}, names, { [editing]: draft.trim() }), editing: null });
+        },
+        saveDisabled: !valid,
+        saveColor: valid ? t.primary : t.text2,
+        places: places.map((m) => {
+          const isOpen = open === m.id;
+          return Object.assign({}, m, {
+            t, name: names[m.id], open: isOpen, notMain: !m.main,
+            z: isOpen ? '5' : '1',
+            btnBg: isOpen ? t.s3 : 'transparent',
+            toggle: () => this.setState({ open: isOpen ? null : m.id }),
+            rename: () => this.setState({ editing: m.id, draft: names[m.id], open: null }),
+            del: () => this.setState({ deleting: m.id, open: null }),
+            editRegion: () => this.setState({ rgnFor: m.id, rsel: undefined, open: null }),
+            makeMain: () => this.setState({ mainId: m.id, open: null })
+          });
+        })
+      };
+    });
+    return { phones };
+  }
+}
+</script>
+</body>
+</html>

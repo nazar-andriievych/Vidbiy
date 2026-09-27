@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Порожні й початкові стани</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700&display=swap">
+<style>
+body{margin:0;font-family:Onest,'Segoe UI',system-ui,sans-serif;background:#D6D3CB}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+button,input{font-family:inherit}
+button{cursor:pointer}
+svg.i{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.vb-scroll{scrollbar-width:none;overscroll-behavior:contain}.vb-scroll::-webkit-scrollbar{display:none}
+</style>
+</helmet>
+<div style="width: 1266px; height: 1760px; box-sizing: border-box; padding: 24px; display: flex; flex-direction: column; gap: 24px; background: #D6D3CB; font-family: Onest, 'Segoe UI', system-ui, sans-serif">
+<sc-for list="{{rows}}" as="row" hint-placeholder-count="2">
+<div style="display: flex; gap: 24px">
+<sc-for list="{{row.cols}}" as="v" hint-placeholder-count="3">
+<div style="width: 390px; height: 844px; flex-shrink: 0; border-radius: 28px; overflow: hidden; position: relative; display: flex; flex-direction: column; background: {{v.t.bg}}; color: {{v.t.text}}">
+<div style="height: 28px; flex-shrink: 0"></div>
+
+<sc-if value="{{v.isAlarms}}" hint-placeholder-val="{{ false }}">
+<header style="height: 64px; flex-shrink: 0; display: flex; align-items: center; padding: 0 24px"><h1 style="margin: 0; font-size: 28px; font-weight: 500; letter-spacing: -0.01em">Будильники</h1></header>
+</sc-if>
+<sc-if value="{{v.isAlarms}}" hint-placeholder-val="{{ false }}">
+<div style="flex-grow: 1; min-height: 0; padding: 0 16px 176px; display: flex; flex-direction: column; gap: 12px">
+<section style="background: {{v.t.s1}}; border-radius: 24px; padding: 12px 12px 12px 20px; display: flex; align-items: center; gap: 14px">
+<svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px; flex-shrink: 0; color: {{v.t.primary}}"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg>
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 600">Розбуди після відбою</h2>
+<p style="margin: 0; font-size: 14px; line-height: 1.4; color: {{v.t.text2}}">Разово · Дім · будь-яка · 5 хв</p>
+</div>
+<a href="OneShot.dc.html" aria-label="Увімкнути «Розбуди після відбою»" title="Увімкнути" style="width: 48px; height: 48px; flex-shrink: 0; border-radius: 24px; background: {{v.t.pc}}; color: {{v.t.onPc}}; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 22px; height: 22px"><path d="M12 3v8M6.3 7a8 8 0 1 0 11.4 0"></path></svg></a>
+</section>
+<div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 0 24px">
+<span style="width: 88px; height: 88px; border-radius: 44px; background: {{v.t.s1}}; color: {{v.t.text2}}; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 40px; height: 40px; stroke-width: 1.6"><circle cx="12" cy="13" r="7"></circle><path d="M12 10v3l2 2M5 4L2.5 6.5M19 4l2.5 2.5"></path></svg></span>
+<h2 style="margin: 4px 0 0; font-size: 22px; font-weight: 500">Будильників ще немає</h2>
+<p style="margin: 0; font-size: 16px; line-height: 1.45; color: {{v.t.text2}}">Створіть будильник — він не дзвонитиме під час тривоги й розбудить вас після відбою.</p>
+</div>
+</div>
+<a href="Edit.dc.html" style="position: absolute; right: 16px; bottom: 96px; height: 56px; padding: 0 20px 0 16px; border-radius: 16px; background: {{v.t.pc}}; color: {{v.t.onPc}}; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 12px {{v.t.shadow}}"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><path d="M12 5v14M5 12h14"></path></svg>Новий будильник</a>
+</sc-if>
+
+<sc-if value="{{v.isPlaces}}" hint-placeholder-val="{{ false }}">
+<header style="height: 64px; flex-shrink: 0; display: flex; align-items: center; padding: 0 24px"><h1 style="margin: 0; font-size: 28px; font-weight: 500; letter-spacing: -0.01em">Мої місця</h1></header>
+</sc-if>
+<sc-if value="{{v.isPlaces}}" hint-placeholder-val="{{ false }}">
+<div style="flex-grow: 1; min-height: 0; padding: 0 40px 176px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center">
+<span style="width: 88px; height: 88px; border-radius: 44px; background: {{v.t.s1}}; color: {{v.t.text2}}; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 40px; height: 40px; stroke-width: 1.6"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span>
+<h2 style="margin: 4px 0 0; font-size: 22px; font-weight: 500">Місць ще немає</h2>
+<p style="margin: 0; font-size: 16px; line-height: 1.45; color: {{v.t.text2}}">Додайте дім або інше місце, щоб вибирати його в будильнику одним дотиком. Перше місце стане основним.</p>
+</div>
+<a href="AddPlace.dc.html" style="position: absolute; right: 16px; bottom: 96px; height: 56px; padding: 0 20px 0 16px; border-radius: 16px; background: {{v.t.pc}}; color: {{v.t.onPc}}; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 12px {{v.t.shadow}}"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><path d="M12 5v14M5 12h14"></path></svg>Додати місце</a>
+</sc-if>
+
+<sc-if value="{{v.hasNav}}" hint-placeholder-val="{{ false }}">
+<nav aria-label="Розділи" style="position: absolute; left: 0; right: 0; bottom: 0; height: 80px; box-sizing: border-box; background: {{v.t.s1}}; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; padding: 0 8px">
+<a href="Main.dc.html" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: {{v.n0.lab}}">
+<span style="width: 64px; height: 32px; border-radius: 16px; background: {{v.n0.pill}}; color: {{v.n0.fg}}; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><circle cx="12" cy="13" r="7"></circle><path d="M12 10v3l2 2M5 4L2.5 6.5M19 4l2.5 2.5"></path></svg></span>
+<span style="font-size: 14px; font-weight: {{v.n0.w}}">Будильники</span>
+</a>
+<a href="Places.dc.html" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: {{v.n1.lab}}">
+<span style="width: 64px; height: 32px; border-radius: 16px; background: {{v.n1.pill}}; color: {{v.n1.fg}}; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2.2"></circle></svg></span>
+<span style="font-size: 14px; font-weight: {{v.n1.w}}">Мої місця</span>
+</a>
+<a href="Settings.dc.html" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: {{v.n2.lab}}">
+<span style="width: 64px; height: 32px; border-radius: 16px; background: {{v.n2.pill}}; color: {{v.n2.fg}}; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg></span>
+<span style="font-size: 14px; font-weight: {{v.n2.w}}">Налаштування</span>
+</a>
+</nav>
+</sc-if>
+
+<sc-if value="{{v.isRegion}}" hint-placeholder-val="{{ false }}">
+<header style="height: 64px; flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 0 8px">
+<a href="Edit.dc.html" aria-label="Назад" style="width: 48px; height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center"><svg class="i" viewBox="0 0 24 24" style="width: 24px; height: 24px"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg></a>
+<h1 style="flex-grow: 1; margin: 0; font-size: 22px; font-weight: 500">Регіон</h1>
+</header>
+</sc-if>
+<sc-if value="{{v.isRegion}}" hint-placeholder-val="{{ false }}">
+<div class="vb-scroll" style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+<div style="height: 56px; flex-shrink: 0; border-radius: 28px; background: {{v.t.s1}}; display: flex; align-items: center; gap: 12px; padding: 0 20px">
+<svg class="i" viewBox="0 0 24 24" style="width: 22px; height: 22px; flex-shrink: 0; color: {{v.t.text2}}"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4 4"></path></svg>
+<label for="{{v.qid}}" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Пошук регіону</label>
+<input id="{{v.qid}}" type="search" placeholder="Область, район або громада" style="flex-grow: 1; min-width: 0; border: none; background: none; outline: none; font-size: 16px; color: {{v.t.text}}">
+</div>
+<h2 style="margin: 6px 8px 0; font-size: 14px; font-weight: 600; color: {{v.t.text2}}">Область</h2>
+<div style="display: flex; flex-direction: column">
+<sc-for list="{{v.oblasts}}" as="o" hint-placeholder-count="10">
+<a href="Region.dc.html" style="min-height: 52px; padding: 0 12px 0 14px; border-radius: 16px; display: flex; align-items: center; gap: 12px; font-size: 16px">
+<span style="flex-grow: 1">{{o.name}}</span>
+<svg class="i" viewBox="0 0 24 24" style="width: 20px; height: 20px; flex-shrink: 0; color: {{o.c}}"><path d="M9 6l6 6-6 6"></path></svg>
+</a>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1266,"height":1760}}'>
+class Component extends DCLogic {
+  pal() {
+    return [
+      { id: 'l', bg: '#F7F5F0', s1: '#EFECE5', s2: '#E6E2DA', s3: '#DAD6CC', text: '#1B1C1F', text2: '#50525A', outline: '#D3CFC5', primary: '#35598F', onPrimary: '#FFFFFF', pc: '#D8E3F7', onPc: '#0F2A4E', shadow: 'rgba(30,30,40,0.18)' },
+      { id: 'd', bg: '#101318', s1: '#1A1E25', s2: '#232830', s3: '#2E343E', text: '#E5E3DE', text2: '#AAADB4', outline: '#2C323B', primary: '#A9C6F3', onPrimary: '#0D2A4F', pc: '#284470', onPc: '#D8E3F7', shadow: 'rgba(0,0,0,0.5)' }
+    ];
+  }
+  nav(t, active) {
+    return [0, 1, 2].map((i) => i === active
+      ? { pill: t.pc, fg: t.onPc, lab: t.text, w: '700' }
+      : { pill: 'transparent', fg: t.text2, lab: t.text2, w: '500' });
+  }
+  renderVals() {
+    const oblasts = ['м. Київ', 'Вінницька', 'Волинська', 'Дніпропетровська', 'Донецька', 'Житомирська', 'Закарпатська', 'Запорізька', 'Івано-Франківська', 'Київська', 'Кіровоградська', 'Луганська', 'Львівська', 'Миколаївська', 'Одеська', 'Полтавська', 'Рівненська', 'Сумська', 'Тернопільська', 'Харківська', 'Херсонська', 'Хмельницька', 'Черкаська', 'Чернівецька', 'Чернігівська', 'АР Крим'];
+    const kinds = ['alarms', 'places', 'region'];
+    const rows = this.pal().map((t) => ({
+      cols: kinds.map((k) => {
+        const n = this.nav(t, k === 'places' ? 1 : 0);
+        return {
+          t, n0: n[0], n1: n[1], n2: n[2],
+          isAlarms: k === 'alarms', isPlaces: k === 'places', isRegion: k === 'region',
+          hasNav: k !== 'region',
+          qid: 'eq-' + t.id,
+          oblasts: oblasts.map((name) => ({ name, c: t.text2 }))
+        };
+      })
+    }));
+    return { rows };
+  }
+}
+</script>
+</body>
+</html>

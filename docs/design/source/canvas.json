@@ -1,0 +1,147 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Edit.dc.html": {
+      "h": 892,
+      "is_interactive": true,
+      "title": "Будильник — налаштування",
+      "w": 852,
+      "x": 932,
+      "y": 0
+    },
+    "Main.dc.html": {
+      "h": 892,
+      "is_interactive": true,
+      "title": "Будильники",
+      "w": 852,
+      "x": 0,
+      "y": 0
+    },
+    "Notification.dc.html": {
+      "h": 568,
+      "title": "Сповіщення під час очікування",
+      "w": 852,
+      "x": 3934,
+      "y": 1292
+    },
+    "OneShot.dc.html": {
+      "h": 1760,
+      "title": "Розбуди після відбою — сценарій",
+      "w": 2094,
+      "x": 0,
+      "y": 1292
+    },
+    "Places.dc.html": {
+      "h": 892,
+      "is_interactive": true,
+      "title": "Мої місця",
+      "w": 852,
+      "x": 2796,
+      "y": 0
+    },
+    "Region.dc.html": {
+      "h": 892,
+      "is_interactive": true,
+      "title": "Вибір регіону",
+      "w": 852,
+      "x": 1864,
+      "y": 0
+    },
+    "Ring.dc.html": {
+      "h": 1760,
+      "title": "Екран дзвінка — причини",
+      "w": 2922,
+      "x": 0,
+      "y": 3452
+    },
+    "Settings.dc.html": {
+      "h": 892,
+      "is_interactive": true,
+      "title": "Налаштування",
+      "w": 852,
+      "x": 3728,
+      "y": 0
+    },
+    "Waiting.dc.html": {
+      "h": 1760,
+      "title": "Очікування",
+      "w": 1680,
+      "x": 2174,
+      "y": 1292
+    },
+    "Permissions.dc.html": {
+      "x": 4660,
+      "y": 0,
+      "w": 852,
+      "h": 892,
+      "title": "Дозволи",
+      "is_interactive": true
+    },
+    "Empty.dc.html": {
+      "x": 4866,
+      "y": 1292,
+      "w": 1266,
+      "h": 1760,
+      "title": "Порожні й початкові стани"
+    },
+    "AddPlace.dc.html": {
+      "x": 6212,
+      "y": 1292,
+      "w": 852,
+      "h": 1760,
+      "title": "Нове місце — регіон і назва",
+      "is_interactive": true
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-27T12:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "row1": {
+      "kind": "title1",
+      "maxW": 5512,
+      "text": "Основні екрани",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    },
+    "row2": {
+      "kind": "title1",
+      "maxW": 7064,
+      "text": "Разовий режим, очікування, сповіщення, порожні стани, нове місце",
+      "w": 240,
+      "x": 0,
+      "y": 1032
+    },
+    "row3": {
+      "kind": "title1",
+      "maxW": 2922,
+      "text": "Екран дзвінка",
+      "w": 240,
+      "x": 0,
+      "y": 3192
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Edit.dc.html",
+    "Region.dc.html",
+    "Places.dc.html",
+    "Settings.dc.html",
+    "OneShot.dc.html",
+    "Waiting.dc.html",
+    "Notification.dc.html",
+    "Ring.dc.html",
+    "Permissions.dc.html",
+    "Empty.dc.html",
+    "AddPlace.dc.html"
+  ],
+  "pages": [],
+  "title": "Відбій — Android"
+}
