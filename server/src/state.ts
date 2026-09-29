@@ -220,12 +220,20 @@ export class AlertBoard {
       });
     }
 
-    for (const [id, state] of changes) this.regions.set(id, state);
+    // Знімок щохвилини повторює всі активні регіони. Переписувати незмінені — це
+    // десятки тисяч записів на добу і ризик вичерпати безкоштовний ліміт сховища,
+    // після чого знімки зупинилися б. Тож у сховище йде лише те, що справді змінилось.
+    const writes = new Map<string, RegionState>();
+    for (const [id, state] of changes) {
+      const current = this.regions.get(id);
+      if (!current || !sameState(current, state)) writes.set(id, state);
+      this.regions.set(id, state);
+    }
     this.meta.syncedAt ??= asOf;
     this.meta.heardAt = Math.max(this.meta.heardAt ?? 0, asOf);
     this.meta.lastCheckAt = asOf;
 
-    await this.store?.writeRegions(changes);
+    await this.store?.writeRegions(writes);
     await this.store?.writeMeta(this.meta);
   }
 
@@ -306,6 +314,17 @@ function levelsOut(state: RegionState): RegionAlert["levels"] {
   return [...levels]
     .sort((a, b) => (a.level === b.level ? a.since - b.since : a.level === "red" ? -1 : 1))
     .map(({ level, since, reason }) => ({ level, since: new Date(since).toISOString(), reason }));
+}
+
+/** Чи збігається стан до останнього поля — тоді переписувати його в сховищі нема чого. */
+function sameState(a: RegionState, b: RegionState): boolean {
+  const key = (state: RegionState) =>
+    JSON.stringify([
+      state.active,
+      state.changedAt,
+      state.levels === undefined ? null : state.levels.map((l) => [l.level, l.since, l.reason]).sort(),
+    ]);
+  return key(a) === key(b);
 }
 
 function sameLevels(previous: RegionState, event: AlertEvent): boolean {

@@ -216,6 +216,48 @@ describe("AlertBoard: початковий знімок", () => {
 
     expect([...regions.keys()].sort()).toEqual(["16", "29"]);
   });
+
+  it("повторний однаковий знімок нічого не переписує: щохвилини — це ліміт записів", async () => {
+    const { store } = memoryStore();
+    const written: string[][] = [];
+    const counting: StateStore = {
+      ...store,
+      writeRegions: async (changes) => {
+        written.push([...changes.keys()].sort());
+        await store.writeRegions(changes);
+      },
+    };
+    const board = new AlertBoard(counting);
+    await board.restore();
+    const yellow = { level: "yellow" as const, since: T0 - HOUR, reason: "Дрони" };
+    const red = { level: "red" as const, since: T0 - HOUR, reason: null };
+    const snapshot = (levels16: (typeof red | typeof yellow)[]) =>
+      new Map<string, RegionState>([
+        ["16", { active: true, changedAt: T0 - HOUR, levels: levels16 }],
+        ["29", { active: true, changedAt: T0 - HOUR, levels: [red] }],
+        ["75", { active: true, changedAt: T0 - HOUR, levels: [yellow] }],
+      ]);
+
+    await board.loadSnapshot(snapshot([red]), T0);
+    await board.loadSnapshot(snapshot([red]), T0 + MINUTE);
+    // У 16 додалась жовта, 75 зник зі знімка — лише вони й пишуться.
+    const next = snapshot([red, yellow]);
+    next.delete("75");
+    await board.loadSnapshot(next, T0 + 2 * MINUTE);
+
+    expect(written).toEqual([["16", "29", "75"], [], ["16", "75"]]);
+    expect(ids(board.response(T0 + 2 * MINUTE))).toEqual(["16", "29"]);
+  });
+
+  it("стан у пам'яті й після пропущеного запису той самий, що в сховищі", async () => {
+    const { board, store } = await syncedBoard({ "16": T0 - HOUR });
+    await board.loadSnapshot(new Map([["16", { active: true, changedAt: T0 - HOUR }]]), T0 + MINUTE);
+
+    const restored = new AlertBoard(store);
+    await restored.restore();
+
+    expect(restored.response(T0 + MINUTE).alerts).toEqual(board.response(T0 + MINUTE).alerts);
+  });
 });
 
 describe("AlertBoard: статистика", () => {
