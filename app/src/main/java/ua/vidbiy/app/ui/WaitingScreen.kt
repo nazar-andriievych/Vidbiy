@@ -92,7 +92,7 @@ fun formatClock(millis: Long): String =
 
 /**
  * Екран очікування (design-spec 3.8, `10-waiting`): коло стану, заголовок, чип рівня,
- * таблиця (причина / оновлено / крайній час), план одним реченням. Внизу —
+ * причина, план одним реченням. Внизу —
  * «Подзвони через X хв» і «Сьогодні не дзвони» з утриманням (FR-18).
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -159,7 +159,6 @@ fun WaitingScreen(
                     icon = R.drawable.ic_notifications_off,
                     onConfirmed = onSkip,
                 )
-                FieldHint(stringResource(R.string.waiting_skip_hint))
             }
         },
     ) { padding ->
@@ -194,10 +193,20 @@ fun WaitingScreen(
                 WaitPhase.CHECKING -> Unit
             }
 
-            DetailsTable(status, wait, now, stale)
+            // Причина — дрібно під чипом; «Оновлено» — лише в попередженні, коли дані застаріли;
+            // крайній час — у плані (design-spec 3.8).
+            status?.reason?.let { reason ->
+                Text(
+                    text = reason,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                )
+            }
 
-            if (stale) {
-                StaleWarning()
+            if (stale && confirmedAt != null) {
+                StaleWarning(confirmedAt)
             } else {
                 val deadline = wait.deadlineMillis?.let(::formatClock)
                 val plan = when {
@@ -305,56 +314,9 @@ private fun StatusChip(
     }
 }
 
-@Composable
-private fun DetailsTable(status: WaitStatus?, wait: PendingWait, now: Long, stale: Boolean) {
-    val rows = buildList<Pair<String, @Composable () -> Unit>> {
-        status?.reason?.let { reason ->
-            add(stringResource(R.string.waiting_row_reason) to { TableValue(reason) })
-        }
-        status?.confirmedAtMillis?.let { confirmed ->
-            val minutes = ((now - confirmed) / 60_000L).toInt()
-            val text = if (minutes < 1) {
-                stringResource(R.string.waiting_updated_now, formatClock(confirmed))
-            } else {
-                stringResource(R.string.waiting_updated_ago, formatClock(confirmed), minutes)
-            }
-            add(
-                stringResource(R.string.waiting_row_updated) to {
-                    TableValue(text, if (stale) MaterialTheme.alertColors.warningText else null)
-                },
-            )
-        }
-        wait.deadlineMillis?.let { deadline ->
-            add(stringResource(R.string.waiting_row_deadline) to { TableValue(formatClock(deadline)) })
-        }
-    }
-    if (rows.isEmpty()) return
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 18.dp)) {
-            rows.forEachIndexed { index, (label, value) ->
-                if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Row(modifier = Modifier.padding(vertical = 14.dp), verticalAlignment = Alignment.Top) {
-                    FieldHint(label, Modifier.width(116.dp))
-                    value()
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TableValue(text: String, color: Color? = null) {
-    Text(text, style = MaterialTheme.typography.titleSmall, color = color ?: MaterialTheme.colorScheme.onSurface)
-}
-
 /** Жовтий блок «Немає зв'язку з сервісом» (стан `stale-data`). */
 @Composable
-private fun StaleWarning() {
+private fun StaleWarning(confirmedAtMillis: Long) {
     val colors = MaterialTheme.alertColors
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -365,7 +327,7 @@ private fun StaleWarning() {
         Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(painterResource(R.drawable.ic_cloud_off), contentDescription = null, modifier = Modifier.size(22.dp))
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(stringResource(R.string.waiting_stale_title), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.waiting_stale_title, formatClock(confirmedAtMillis)), style = MaterialTheme.typography.titleSmall)
                 Text(stringResource(R.string.waiting_stale_text), style = MaterialTheme.typography.bodyMedium)
             }
         }

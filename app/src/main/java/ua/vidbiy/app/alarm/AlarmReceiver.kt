@@ -58,7 +58,9 @@ class AlarmReceiver : BroadcastReceiver() {
                 // будильник уже отримав, коли задзвонив уперше.
                 if (isRegularFire) {
                     if (alarm.days.isEmpty()) {
-                        app.alarmsRepository.setEnabled(alarm.id, false)
+                        // Дату теж знімаємо: інакше вимкнений будильник пам'ятав би минулу дату,
+                        // а відкритий для правки (навіть під час очікування) не давав би зберегти.
+                        app.alarmsRepository.updateWhere({ it.id == alarm.id }) { it.copy(enabled = false, date = null) }
                     } else {
                         AlarmScheduler(context).schedule(alarm)
                     }

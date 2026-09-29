@@ -30,7 +30,7 @@ class VidbiyBackupAgent : BackupAgent() {
     override fun onRestoreFinished() {
         super.onRestoreFinished()
         runCatching {
-            val alarms = runBlocking { AlarmsRepository(this@VidbiyBackupAgent).alarms.first() }
+            val alarms = runBlocking { AlarmsRepository(this@VidbiyBackupAgent).disableMissed() }
             AlarmScheduler(this).scheduleAll(alarms)
             Log.i(TAG, "Відновлено з копії, будильників у розкладі: ${alarms.count { it.enabled }}")
         }.onFailure { Log.w(TAG, "Не вдалося поставити будильники після відновлення", it) }

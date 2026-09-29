@@ -6,11 +6,15 @@ import java.time.LocalTime
 
 /**
  * Момент наступного спрацювання будильника після [now].
- * Для одноразового (без днів тижня) — сьогодні або завтра.
+ * Для одноразового (без днів тижня) — у задану дату або, без дати, сьогодні чи завтра.
+ * null — лише для дати, чий час уже минув: такий будильник більше ніколи не спрацює.
  */
-fun Alarm.nextTriggerAt(now: LocalDateTime): LocalDateTime {
+fun Alarm.nextTriggerAt(now: LocalDateTime): LocalDateTime? {
     val time = LocalTime.of(hour, minute)
     val today = now.toLocalDate()
+    if (days.isEmpty() && date != null) {
+        return LocalDateTime.of(date, time).takeIf { it.isAfter(now) }
+    }
     if (days.isEmpty()) {
         val todayAt = LocalDateTime.of(today, time)
         return if (todayAt.isAfter(now)) todayAt else todayAt.plusDays(1)

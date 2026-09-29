@@ -1,10 +1,17 @@
 package ua.vidbiy.app.data
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import java.time.LocalDate
 
 /**
  * Один будильник. Дні тижня — числа 1..7 (понеділок..неділя), як у java.time.DayOfWeek.value.
- * Порожній набір днів означає одноразовий будильник: спрацює найближчого разу й вимкнеться.
+ * Порожній набір днів означає одноразовий будильник: спрацює найближчого разу (або в [date])
+ * й вимкнеться.
  */
 @Serializable
 data class Alarm(
@@ -12,6 +19,13 @@ data class Alarm(
     val hour: Int,
     val minute: Int,
     val days: Set<Int> = emptySet(),
+    /**
+     * Дата одноразового будильника; null — найближчий раз (сьогодні або завтра).
+     * Лише для будильника без днів тижня: одне виключає інше, як у годиннику Samsung.
+     * У момент спрацювання обнуляється разом з [enabled].
+     */
+    @Serializable(with = LocalDateIsoSerializer::class)
+    val date: LocalDate? = null,
     val enabled: Boolean = true,
     /** FR-2: враховувати повітряну тривогу. Вимкнено — це звичайний будильник. */
     val respectAlerts: Boolean = true,
@@ -51,4 +65,11 @@ enum class WaitFor {
 
     /** Жовта (дронова загроза) не заважає дзвонити; зміна червоної на жовту — відбій (FR-13). */
     RED_ONLY,
+}
+
+/** LocalDate як «2026-10-09»: так дата читається і в резервній копії, і в журналі. */
+object LocalDateIsoSerializer : KSerializer<LocalDate> {
+    override val descriptor = PrimitiveSerialDescriptor("LocalDate", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: LocalDate) = encoder.encodeString(value.toString())
+    override fun deserialize(decoder: Decoder): LocalDate = LocalDate.parse(decoder.decodeString())
 }

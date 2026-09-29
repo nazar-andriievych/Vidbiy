@@ -2,8 +2,12 @@ package ua.vidbiy.app.alarm
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.serialization.json.Json
 import ua.vidbiy.app.data.Alarm
+import ua.vidbiy.app.data.withoutPastDate
+import java.time.LocalDate
 import java.time.LocalDateTime
 
 class AlarmScheduleTest {
@@ -81,5 +85,45 @@ class AlarmScheduleTest {
     @Test
     fun `крайнього часу за замовчуванням немає`() {
         assertNull(Alarm(hour = 7, minute = 0).deadlineAfter(LocalDateTime.of(2026, 9, 24, 7, 0)))
+    }
+
+    @Test
+    fun `будильник з датою спрацьовує саме в ту дату`() {
+        val alarm = Alarm(hour = 7, minute = 0, date = LocalDate.of(2026, 10, 9))
+
+        assertEquals(LocalDateTime.of(2026, 10, 9, 7, 0), alarm.nextTriggerAt(wednesdayNoon))
+    }
+
+    @Test
+    fun `будильник з сьогоднішньою датою, час якого минув, не має спрацювання`() {
+        val alarm = Alarm(hour = 7, minute = 0, date = LocalDate.of(2026, 9, 23))
+
+        assertNull(alarm.nextTriggerAt(wednesdayNoon))
+    }
+
+    @Test
+    fun `минула дата знімається, лишається одноразовий будильник без дати`() {
+        val alarm = Alarm(hour = 7, minute = 0, date = LocalDate.of(2026, 9, 22))
+
+        assertNull(alarm.withoutPastDate(wednesdayNoon).date)
+        assertEquals(LocalDateTime.of(2026, 9, 24, 7, 0), alarm.withoutPastDate(wednesdayNoon).nextTriggerAt(wednesdayNoon))
+    }
+
+    @Test
+    fun `майбутня дата лишається`() {
+        val alarm = Alarm(hour = 7, minute = 0, date = LocalDate.of(2026, 9, 24))
+
+        assertEquals(alarm, alarm.withoutPastDate(wednesdayNoon))
+    }
+
+    @Test
+    fun `дата зберігається як ISO, а старий JSON без дати читається`() {
+        val json = Json { ignoreUnknownKeys = true }
+        val alarm = Alarm(id = 1, hour = 7, minute = 0, date = LocalDate.of(2026, 10, 9))
+
+        val encoded = json.encodeToString(Alarm.serializer(), alarm)
+        assertTrue(encoded, "\"2026-10-09\"" in encoded)
+        assertEquals(alarm, json.decodeFromString(Alarm.serializer(), encoded))
+        assertNull(json.decodeFromString(Alarm.serializer(), """{"id":1,"hour":7,"minute":0}""").date)
     }
 }

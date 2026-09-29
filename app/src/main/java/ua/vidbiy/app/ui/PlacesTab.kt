@@ -52,6 +52,7 @@ import ua.vidbiy.app.ui.theme.alertColors
 fun PlacesTab(
     places: PlacesState,
     alarms: List<Alarm>,
+    onAdd: () -> Unit,
     contentPadding: PaddingValues,
     onMakePrimary: (Place) -> Unit,
     onRename: (Place, String) -> Unit,
@@ -68,7 +69,13 @@ fun PlacesTab(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(Dimens.ListGap),
     ) {
-        item { TabHeader(stringResource(R.string.places_title)) }
+        item {
+            TabHeader(
+                title = stringResource(R.string.places_title),
+                addLabel = stringResource(R.string.places_add),
+                onAdd = onAdd,
+            )
+        }
         if (places.places.isEmpty()) {
             item { EmptyPlaces() }
             return@LazyColumn

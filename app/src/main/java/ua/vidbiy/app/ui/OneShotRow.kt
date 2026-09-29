@@ -43,8 +43,6 @@ enum class OneShotRowState { IDLE, CHECKING, NO_ALERT, ONLY_YELLOW, NO_DATA }
 fun OneShotRow(
     state: OneShotRowState,
     primary: Place?,
-    waitFor: WaitFor,
-    pauseMinutes: Int,
     onStart: () -> Unit,
     onCancelCheck: () -> Unit,
     onNeedPlace: () -> Unit,
@@ -71,16 +69,8 @@ fun OneShotRow(
                 }
             }
             val (title, subtitle) = when (state) {
-                OneShotRowState.IDLE -> stringResource(R.string.one_shot_title) to if (place == null) {
-                    stringResource(R.string.one_shot_no_place)
-                } else {
-                    stringResource(
-                        R.string.one_shot_idle,
-                        place,
-                        stringResource(if (waitFor == WaitFor.RED_ONLY) R.string.one_shot_level_red else R.string.one_shot_level_any),
-                        if (pauseMinutes > 0) stringResource(R.string.one_shot_pause, pauseMinutes) else stringResource(R.string.one_shot_pause_none),
-                    )
-                }
+                // Рівень і пауза — у налаштуваннях; тут лише місце (design-spec 4).
+                OneShotRowState.IDLE -> stringResource(R.string.one_shot_title) to (place ?: stringResource(R.string.one_shot_no_place))
                 OneShotRowState.CHECKING ->
                     stringResource(R.string.one_shot_checking) to stringResource(R.string.one_shot_checking_sub, place.orEmpty())
                 OneShotRowState.NO_ALERT ->
@@ -125,12 +115,11 @@ private fun RowIcon(icon: Int, tint: androidx.compose.ui.graphics.Color = Materi
 
 /**
  * Банер активного режиму (`09-one-shot--3-main-active-banner`): «Розбуджу після відбою»,
- * «Жовта тривога · Дім · +5 хв», шеврон → екран очікування.
+ * «Жовта тривога · Дім», шеврон → екран очікування.
  */
 @Composable
 fun OneShotBanner(
     placeName: String?,
-    pauseMinutes: Int,
     status: WaitStatus?,
     onOpen: () -> Unit,
 ) {
@@ -151,7 +140,6 @@ fun OneShotBanner(
         else -> listOfNotNull(
             level?.let { stringResource(if (it == AlertLevel.RED) R.string.level_red else R.string.level_yellow) },
             placeName,
-            if (pauseMinutes > 0) stringResource(R.string.one_shot_banner_pause_plus, pauseMinutes) else null,
         )
     }.joinToString(" · ")
 

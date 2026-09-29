@@ -39,6 +39,7 @@ import ua.vidbiy.app.data.PlacesState
 import ua.vidbiy.app.data.SelectedRegion
 import ua.vidbiy.app.data.SettingsRepository
 import ua.vidbiy.app.data.WaitStatus
+import ua.vidbiy.app.data.withoutPastDate
 import ua.vidbiy.app.ui.theme.ThemeMode
 import java.time.LocalDateTime
 
@@ -256,7 +257,7 @@ class AlarmsViewModel(
     }
 
     fun startEdit(alarm: Alarm) {
-        _draft.value = alarm
+        _draft.value = alarm.withoutPastDate(LocalDateTime.now())
     }
 
     fun updateDraft(transform: (Alarm) -> Alarm) {
@@ -288,10 +289,12 @@ class AlarmsViewModel(
 
     fun saveDraft() {
         val alarm = _draft.value?.copy(enabled = true) ?: return
+        // Дата й час, що вже минули: «Зберегти» на екрані вимкнене, це лише страховка.
+        val next = alarm.nextTriggerAt(LocalDateTime.now()) ?: return
         // FR-7b: змінений будильник більше не чекає за старими налаштуваннями.
         if (draftStopsWaiting()) AlarmWaitService.cancelWaiting(app, alarm.id)
         _draft.value = null
-        _savedNextRing.value = alarm.nextTriggerAt(LocalDateTime.now())
+        _savedNextRing.value = next
         viewModelScope.launch { scheduler.applyEdit(repository.save(alarm)) }
     }
 

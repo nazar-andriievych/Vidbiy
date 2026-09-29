@@ -31,7 +31,7 @@ class BootReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
                 app.dataReady.await()
-                AlarmScheduler(context).scheduleAll(app.alarmsRepository.alarms.first())
+                AlarmScheduler(context).scheduleAll(app.alarmsRepository.disableMissed())
                 restoreWaiting(context, app, intent.action)
             } finally {
                 pendingResult.finish()

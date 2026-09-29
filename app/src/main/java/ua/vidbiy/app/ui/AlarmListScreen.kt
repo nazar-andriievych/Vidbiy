@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -25,12 +27,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ua.vidbiy.app.R
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.alarm.OneShot
@@ -57,12 +61,11 @@ fun AlarmsTab(
     waiting: PendingWait?,
     waitStatus: WaitStatus?,
     contentPadding: PaddingValues,
+    onAdd: () -> Unit,
     onEdit: (Alarm) -> Unit,
     onToggle: (Alarm, Boolean) -> Unit,
     onOpenWaiting: () -> Unit,
     oneShotRow: OneShotRowState,
-    oneShotWaitFor: WaitFor,
-    oneShotPauseMinutes: Int,
     onStartOneShot: () -> Unit,
     onCancelOneShotCheck: () -> Unit,
     onNeedPlace: () -> Unit,
@@ -74,7 +77,13 @@ fun AlarmsTab(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(Dimens.ListGap),
     ) {
-        item { TabHeader(stringResource(R.string.alarms_title)) }
+        item {
+            TabHeader(
+                title = stringResource(R.string.alarms_title),
+                addLabel = stringResource(R.string.action_new_alarm),
+                onAdd = onAdd,
+            )
+        }
         if (missingPermissions.isNotEmpty()) {
             item {
                 PermissionsBanner(
@@ -92,7 +101,6 @@ fun AlarmsTab(
                 val snapshot = waiting.alarm
                 OneShotBanner(
                     placeName = snapshot?.let { placeName(it, places) } ?: places.primary?.name,
-                    pauseMinutes = snapshot?.pauseMinutes ?: oneShotPauseMinutes,
                     status = waitStatus?.takeIf { it.alarmId == OneShot.ONE_SHOT_ID },
                     onOpen = onOpenWaiting,
                 )
@@ -100,8 +108,6 @@ fun AlarmsTab(
                 OneShotRow(
                     state = oneShotRow,
                     primary = places.primary,
-                    waitFor = oneShotWaitFor,
-                    pauseMinutes = oneShotPauseMinutes,
                     onStart = onStartOneShot,
                     onCancelCheck = onCancelOneShotCheck,
                     onNeedPlace = onNeedPlace,
@@ -137,11 +143,10 @@ fun placeName(alarm: Alarm, places: PlacesState): String? =
 
 /**
  * Смуга очікування в картці будильника (design-spec 2): контейнер кольору рівня, крапка,
- * «Чекає відбою», «Червона тривога · Дім · оновлено щойно · крайній час 08:00», шеврон →
- * екран очікування. Замінює нижню частину картки, поки будильник чекає.
+ * «Чекає відбою», «Червона тривога · Дім», шеврон → екран очікування.
  */
 @Composable
-private fun WaitingStrip(placeName: String?, wait: PendingWait, status: WaitStatus?, onOpen: () -> Unit) {
+private fun WaitingStrip(placeName: String?, status: WaitStatus?, onOpen: () -> Unit) {
     val now = rememberNowMillis()
     val colors = MaterialTheme.alertColors
     val phase = status.phase
@@ -157,15 +162,14 @@ private fun WaitingStrip(placeName: String?, wait: PendingWait, status: WaitStat
         WaitPhase.PAUSE -> stringResource(R.string.wait_strip_pause, formatClock(status!!.ringAtMillis!!))
         WaitPhase.CHECKING -> stringResource(R.string.wait_strip_checking)
     }
-    val updated = status?.confirmedAtMillis?.let { confirmed ->
-        val minutes = ((now - confirmed) / 60_000L).toInt()
-        if (minutes < 1) stringResource(R.string.banner_updated_now) else stringResource(R.string.banner_updated_ago, minutes)
-    }
+    // «Оновлено …» — лише коли дані застаріли (design-spec 0, п. 4); крайній час — на екрані очікування.
+    val updated = status?.confirmedAtMillis
+        ?.takeIf { showsStaleWarning(it, now) }
+        ?.let { stringResource(R.string.banner_updated_ago, ((now - it) / 60_000L).toInt()) }
     val subtitle = listOfNotNull(
         level?.let { stringResource(if (it == AlertLevel.RED) R.string.level_red else R.string.level_yellow) },
         placeName,
         updated,
-        wait.deadlineMillis?.let { stringResource(R.string.card_deadline, formatClock(it)) },
     ).joinToString(" · ")
 
     Surface(
@@ -199,9 +203,9 @@ private fun WaitingStrip(placeName: String?, wait: PendingWait, status: WaitStat
 }
 
 /**
- * Картка будильника (design-spec 2, `01-alarms--list`). Поки будильник чекає відбою ([wait]),
- * замість світча нічого немає (перемикати нічого: дії — на екрані очікування), а нижня
- * частина картки стає смугою очікування.
+ * Картка будильника (design-spec 2, `01-alarms--list`): час (і крайній час поруч, якщо заданий),
+ * під ним один рядок — дні, місце й крапки рівня. Пауза — на екрані редагування. Поки будильник чекає
+ * відбою ([wait]), світча немає (дії — на екрані очікування), а під часом — смуга очікування.
  */
 @Composable
 private fun AlarmCard(
@@ -216,6 +220,7 @@ private fun AlarmCard(
     // Щоб «Один раз · сьогодні» саме перейшло на «завтра», коли час будильника мине.
     val now = rememberNowMillis()
     Surface(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenPadding),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -225,93 +230,91 @@ private fun AlarmCard(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(
-                    modifier = Modifier.weight(1f).clickable(onClick = onClick),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = formatTime(alarm.hour, alarm.minute),
-                        style = MaterialTheme.typography.displayMedium,
-                        // Одноразовий будильник уже зняв «увімкнено», але поки чекає — він живий.
-                        color = if (alarm.enabled || wait != null) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                    Text(
-                        text = daysLabel(alarm, LocalDateTime.ofInstant(Instant.ofEpochMilli(now), ZoneId.systemDefault())),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row {
+                        Text(
+                            text = formatTime(alarm.hour, alarm.minute),
+                            style = MaterialTheme.typography.displayMedium,
+                            // Одноразовий будильник уже зняв «увімкнено», але поки чекає — він живий.
+                            color = if (alarm.enabled || wait != null) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.alignByBaseline(),
+                        )
+                        // Крайній час — поруч із часом, дрібніше й сірим: «06:45 до 08:00».
+                        val deadline = alarm.deadlineMinute?.takeIf { alarm.respectAlerts }
+                        if (deadline != null) {
+                            val time = formatTime(deadline / 60, deadline % 60)
+                            val description = stringResource(R.string.card_deadline_description, time)
+                            // Вузький екран чи великий шрифт — трохи зменшуємо, а не обрізаємо.
+                            val style = MaterialTheme.typography.titleLarge
+                            BasicText(
+                                text = stringResource(R.string.card_deadline, time),
+                                style = style.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                maxLines = 1,
+                                softWrap = false,
+                                autoSize = TextAutoSize.StepBased(minFontSize = 14.sp, maxFontSize = style.fontSize),
+                                modifier = Modifier
+                                    .alignByBaseline()
+                                    .padding(start = 10.dp)
+                                    .semantics { contentDescription = description },
+                            )
+                        }
+                    }
+                    CardSummary(
+                        alarm = alarm,
+                        days = daysLabel(alarm, LocalDateTime.ofInstant(Instant.ofEpochMilli(now), ZoneId.systemDefault())),
+                        // Поки чекає, місце й рівень показує смуга очікування.
+                        placeName = placeName.takeIf { wait == null },
                     )
                 }
                 if (wait == null) Switch(checked = alarm.enabled, onCheckedChange = onToggle)
             }
 
-            if (wait != null) {
-                WaitingStrip(placeName, wait, waitStatus, onOpenWaiting)
-                return@Column
-            }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-            if (alarm.respectAlerts) {
-                AlertSummary(alarm, placeName, Modifier.clickable(onClick = onClick))
-            } else {
-                Text(
-                    text = stringResource(R.string.card_plain),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            if (wait != null) WaitingStrip(placeName, waitStatus, onOpenWaiting)
         }
     }
 }
 
-/** «📍 Дім ●● будь-яка тривога» + «Одразу після відбою · без крайнього часу». */
+/**
+ * «Пн–Пт · 📍 Дім ●●». Звичайний будильник — лише дні. Крапки для TalkBack читаються
+ * як «будь-яка тривога» / «лише червона»: колір не єдиний носій змісту (design-spec 1.1).
+ */
 @Composable
-private fun AlertSummary(alarm: Alarm, placeName: String?, modifier: Modifier = Modifier) {
+private fun CardSummary(alarm: Alarm, days: String, placeName: String?) {
     val subtle = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                painter = painterResource(R.drawable.ic_location_on),
-                contentDescription = null,
-                tint = subtle,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                text = placeName ?: stringResource(R.string.card_no_region),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 8.dp).weight(1f, fill = false),
-            )
-            LevelDots(alarm.waitFor, Modifier.padding(start = 14.dp, end = 8.dp))
-            Text(
-                text = stringResource(
-                    if (alarm.waitFor == WaitFor.RED_ONLY) R.string.card_level_red_only
-                    else R.string.card_level_any
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = subtle,
-                maxLines = 1,
-            )
-        }
-        val pause = if (alarm.pauseMinutes > 0) {
-            stringResource(R.string.card_pause, alarm.pauseMinutes)
-        } else {
-            stringResource(R.string.card_right_after)
-        }
-        val deadline = alarm.deadlineMinute?.let { stringResource(R.string.card_deadline, formatTime(it / 60, it % 60)) }
-            ?: stringResource(R.string.card_no_deadline)
-        Text(
-            text = "$pause · $deadline",
-            style = MaterialTheme.typography.bodyMedium,
-            color = subtle,
-            modifier = Modifier.padding(start = 26.dp),
+    val style = MaterialTheme.typography.bodyMedium
+    val showAlerts = alarm.respectAlerts && (placeName != null || alarm.region == null)
+    val levelDescription = stringResource(
+        if (alarm.waitFor == WaitFor.RED_ONLY) R.string.card_level_red_only else R.string.card_level_any
+    )
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
+        Text(days, style = style, color = subtle, maxLines = 1)
+        if (!showAlerts) return@Row
+        Text(" · ", style = style, color = subtle)
+        Icon(
+            painter = painterResource(R.drawable.ic_location_on),
+            contentDescription = null,
+            tint = subtle,
+            modifier = Modifier.size(16.dp),
         )
+        Text(
+            text = placeName ?: stringResource(R.string.card_no_region),
+            style = style,
+            color = subtle,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 4.dp).weight(1f, fill = false),
+        )
+        if (alarm.region != null) {
+            LevelDots(
+                alarm.waitFor,
+                Modifier.padding(start = 8.dp).semantics { contentDescription = levelDescription },
+                size = 8,
+            )
+        }
     }
 }
 

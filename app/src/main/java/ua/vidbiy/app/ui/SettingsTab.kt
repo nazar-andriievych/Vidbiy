@@ -20,6 +20,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -29,14 +33,14 @@ import ua.vidbiy.app.BuildConfig
 import ua.vidbiy.app.R
 import ua.vidbiy.app.data.Place
 import ua.vidbiy.app.data.WaitFor
-import ua.vidbiy.app.data.label
+import ua.vidbiy.app.data.shortTitle
 import androidx.compose.foundation.layout.Column
 import ua.vidbiy.app.ui.theme.Dimens
 import ua.vidbiy.app.ui.theme.ThemeMode
 
 /**
- * Вкладка «Налаштування» (design-spec 3.6). Поки що тут тема й примітка про дані;
- * відкладення, разовий режим і дозволи додаються разом із відповідними функціями.
+ * Вкладка «Налаштування» (design-spec 3.6): рядки «назва · значення», варіанти — у нижніх
+ * панелях; тема, дозволи й примітка про дані.
  */
 @Composable
 fun SettingsTab(
@@ -60,47 +64,33 @@ fun SettingsTab(
     ) {
         item { TabHeader(stringResource(R.string.settings_title)) }
         item {
-            SectionCard(
-                title = stringResource(R.string.snooze_title),
-                modifier = Modifier.padding(horizontal = Dimens.ScreenPadding),
-            ) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    for (minutes in SNOOZE_OPTIONS) {
-                        SnoozeChip(minutes, selected = minutes == snoozeMinutes, onClick = { onSnoozeChange(minutes) })
-                    }
-                }
-                FieldHint(stringResource(R.string.snooze_hint, snoozeMinutes))
+            SettingsCard(modifier = Modifier.padding(horizontal = Dimens.ScreenPadding)) {
+                SnoozeSettingRow(snoozeMinutes, onSnoozeChange)
             }
         }
         item {
             // «Розбуди після відбою» (design-spec 3.6): регіон — основне місце, рівень, пауза.
-            SectionCard(modifier = Modifier.padding(horizontal = Dimens.ScreenPadding)) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(stringResource(R.string.one_shot_title), style = MaterialTheme.typography.titleMedium)
-                    FieldHint(stringResource(R.string.one_shot_settings_hint))
-                }
-                ValueRow(
-                    icon = R.drawable.ic_location_on,
-                    label = stringResource(R.string.one_shot_region_label),
-                    value = primaryPlace?.name ?: stringResource(R.string.region_not_selected),
-                    detail = primaryPlace?.region?.label,
+            SettingsCard(
+                title = stringResource(R.string.one_shot_title),
+                modifier = Modifier.padding(horizontal = Dimens.ScreenPadding),
+            ) {
+                SettingRow(
+                    title = stringResource(R.string.one_shot_region_label),
+                    value = primaryPlace?.let { "${it.name} · ${it.region.shortTitle}" }
+                        ?: stringResource(R.string.region_not_selected),
                     onClick = onOpenPlaces,
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_chevron_right),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FieldLabel(stringResource(R.string.wait_for))
-                    LevelSelector(oneShotWaitFor, onOneShotWaitFor)
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FieldLabel(stringResource(R.string.pause_title))
-                    PauseChips(oneShotPauseMinutes, onOneShotPause)
-                    FieldHint(stringResource(R.string.one_shot_pause_hint))
-                }
+                    trailing = {
+                        Icon(
+                            painterResource(R.drawable.ic_chevron_right),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                )
+                RowDivider()
+                LevelSettingRow(oneShotWaitFor, onOneShotWaitFor)
+                RowDivider()
+                PauseSettingRow(oneShotPauseMinutes, onOneShotPause)
             }
         }
         item {
@@ -109,11 +99,6 @@ fun SettingsTab(
                 modifier = Modifier.padding(horizontal = Dimens.ScreenPadding),
             ) {
                 ThemeSelector(themeMode, onThemeModeChange)
-                Text(
-                    text = stringResource(R.string.theme_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
         item { PermissionsRow(onOpen = onOpenPermissions, modifier = Modifier.padding(horizontal = Dimens.ScreenPadding)) }
@@ -126,6 +111,27 @@ fun SettingsTab(
 
 /** design-spec 3.6: 5 / 10 / 15 / 20 / 30 хв. */
 private val SNOOZE_OPTIONS = listOf(5, 10, 15, 20, 30)
+
+/** Рядок «Відкласти дзвінок на · 10 хв» + нижня панель з варіантами (FR-19). */
+@Composable
+private fun SnoozeSettingRow(minutes: Int, onSelect: (Int) -> Unit) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    SettingRow(
+        title = stringResource(R.string.snooze_title),
+        value = stringResource(R.string.snooze_option, minutes),
+        onClick = { open = true },
+    )
+    if (open) {
+        ChoiceSheet(title = stringResource(R.string.snooze_title), onDismiss = { open = false }) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                for (option in SNOOZE_OPTIONS) {
+                    SnoozeChip(option, selected = option == minutes, onClick = { onSelect(option); open = false })
+                }
+            }
+            FieldHint(stringResource(R.string.snooze_hint))
+        }
+    }
+}
 
 /** Чип «10 хв»: як круглі чипи вибору, але ширший — у ньому два слова. */
 @Composable

@@ -26,5 +26,6 @@ object Dimens {
     val SegmentHeight = 52.dp        // перемикачі на 2–3 сегменти
     val StatusChipHeight = 36.dp     // чип рівня тривоги
     val IconCircle = 44.dp           // кружечок з іконкою в рядку (регіон, крайній час)
+    val SettingRowHeight = 56.dp     // рядок налаштування «назва · значення»
     val StateCircle = 104.dp         // велике коло на екрані очікування
 }

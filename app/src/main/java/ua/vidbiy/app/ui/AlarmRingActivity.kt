@@ -192,36 +192,29 @@ private fun RingScreen(
                 accent = true,
                 onConfirmed = onDismiss,
             )
-            FieldHint(stringResource(R.string.ring_dismiss_hint))
         }
     }
 }
 
 @Composable
 private fun ReasonBlock(reason: RingReason) {
-    val place = reason.placeName ?: stringResource(R.string.ring_region_fallback)
+    // Пояснення — лише якщо воно щось додає до заголовка й чипа (design-spec 3.10).
+    // Місце вже є над часом («Будильник 06:45 · Дім»), тож тут його не повторюємо.
     val (icon, title, detail) = when (reason.kind) {
-        RingReason.Kind.ALL_CLEAR -> {
-            val at = formatClock(reason.allClearAtMillis ?: 0L)
-            Triple(
-                R.drawable.ic_check,
-                stringResource(R.string.ring_all_clear_title),
-                if (reason.pauseMinutes > 0) {
-                    stringResource(R.string.ring_all_clear_text, place, at, reason.pauseMinutes)
-                } else {
-                    stringResource(R.string.ring_all_clear_text_no_pause, place, at)
-                },
-            )
-        }
+        RingReason.Kind.ALL_CLEAR -> Triple(
+            R.drawable.ic_check,
+            stringResource(R.string.ring_all_clear_title),
+            reason.allClearAtMillis?.let { stringResource(R.string.ring_all_clear_text, formatClock(it)) },
+        )
         RingReason.Kind.NO_ALERT -> Triple(
             R.drawable.ic_notifications,
             stringResource(R.string.ring_no_alert_title),
-            stringResource(R.string.ring_no_alert_text, place),
+            null,
         )
         RingReason.Kind.DEADLINE -> Triple(
             R.drawable.ic_schedule,
             stringResource(R.string.ring_deadline_title),
-            stringResource(R.string.ring_deadline_text, reason.deadlineMillis?.let(::formatClock).orEmpty()),
+            null,
         )
         RingReason.Kind.NO_CONNECTION -> Triple(
             R.drawable.ic_cloud_off,
@@ -237,7 +230,7 @@ private fun ReasonBlock(reason: RingReason) {
         RingReason.Kind.TOO_LONG -> Triple(
             R.drawable.ic_schedule,
             stringResource(R.string.ring_too_long_title),
-            stringResource(R.string.ring_too_long_text, place),
+            stringResource(R.string.ring_too_long_text),
         )
         RingReason.Kind.PLAIN -> return
     }
@@ -259,12 +252,14 @@ private fun ReasonBlock(reason: RingReason) {
             textAlign = TextAlign.Center,
             modifier = Modifier.semantics { heading() },
         )
-        Text(
-            text = detail,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
+        if (detail != null) {
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
         val level = reason.level
         if (level != null && (reason.kind == RingReason.Kind.DEADLINE || reason.kind == RingReason.Kind.TOO_LONG)) {
             OngoingLevelChip(level)

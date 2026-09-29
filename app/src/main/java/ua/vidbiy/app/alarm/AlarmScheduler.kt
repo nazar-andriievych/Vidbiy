@@ -32,13 +32,18 @@ class AlarmScheduler(private val context: Context) {
     fun canScheduleExact(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
 
-    /** Ставить будильник на його найближче спрацювання. Вимкнений — скасовує. */
+    /**
+     * Ставить будильник на його найближче спрацювання. Вимкнений — скасовує.
+     * Будильник з датою, що минула, теж лише скасовує: вимкнути його в сховищі —
+     * справа [AlarmsRepository.disableMissed], планувальник у сховище не пише.
+     */
     fun schedule(alarm: Alarm, now: LocalDateTime = LocalDateTime.now()) {
-        if (!alarm.enabled) {
+        val next = alarm.nextTriggerAt(now)
+        if (!alarm.enabled || next == null) {
             cancel(alarm.id)
             return
         }
-        setAt(alarm.id, alarm.nextTriggerAt(now), Kind.NORMAL)
+        setAt(alarm.id, next, Kind.NORMAL)
     }
 
     fun scheduleAll(alarms: List<Alarm>, now: LocalDateTime = LocalDateTime.now()) {

@@ -18,7 +18,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -217,17 +216,9 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
         else -> Scaffold(
             bottomBar = { VidbiyNavigationBar(selected = tab, onSelect = { tab = it }) },
             snackbarHost = { SnackbarHost(snackbar) },
-            floatingActionButton = {
-                when (tab) {
-                    Tab.Alarms -> VidbiyFab(R.string.action_new_alarm, viewModel::startNew)
-                    Tab.Places -> VidbiyFab(R.string.places_add, viewModel::startAddPlace)
-                    Tab.Settings -> Unit
-                }
-            },
         ) { padding ->
-            // Запас унизу, щоб остання картка не ховалася під FAB. Згори — не відступ списку,
-            // а обрізання: інакше прокручений вміст заїжджав би під статус-бар.
-            val content = PaddingValues(bottom = padding.calculateBottomPadding() + 96.dp)
+            // Згори — не відступ списку, а обрізання: інакше прокручений вміст заїжджав би під статус-бар.
+            val content = PaddingValues(bottom = padding.calculateBottomPadding() + 16.dp)
             Box(Modifier.padding(top = padding.calculateTopPadding()).clipToBounds()) {
                 when (tab) {
                     Tab.Alarms -> AlarmsTab(
@@ -236,12 +227,11 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                         waiting = waiting,
                         waitStatus = waitStatus,
                         contentPadding = content,
+                        onAdd = viewModel::startNew,
                         onEdit = viewModel::startEdit,
                         onToggle = viewModel::setEnabled,
                         onOpenWaiting = viewModel::openWaiting,
                         oneShotRow = oneShotRow,
-                        oneShotWaitFor = oneShotWaitFor,
-                        oneShotPauseMinutes = oneShotPause,
                         onStartOneShot = viewModel::startOneShot,
                         onCancelOneShotCheck = viewModel::cancelOneShotCheck,
                         onNeedPlace = { tab = Tab.Places },
@@ -251,6 +241,7 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                     Tab.Places -> PlacesTab(
                         places = places,
                         alarms = alarms,
+                        onAdd = viewModel::startAddPlace,
                         contentPadding = content,
                         onMakePrimary = viewModel::makePrimary,
                         onRename = viewModel::renamePlace,
@@ -275,19 +266,6 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
             }
         }
     }
-}
-
-/** Extended FAB: primaryContainer, радіус 16 (design-spec 2). */
-@Composable
-private fun VidbiyFab(@StringRes label: Int, onClick: () -> Unit) {
-    ExtendedFloatingActionButton(
-        onClick = onClick,
-        shape = MaterialTheme.shapes.small,
-        containerColor = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        icon = { Icon(painterResource(R.drawable.ic_add), contentDescription = null) },
-        text = { Text(stringResource(label), style = MaterialTheme.typography.labelLarge) },
-    )
 }
 
 /** NavigationBar: висота 80, фон surfaceContainer, активний підпис 700, неактивні 500. */

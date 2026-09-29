@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -56,14 +57,27 @@ import ua.vidbiy.app.data.WaitFor
 import ua.vidbiy.app.ui.theme.Dimens
 import ua.vidbiy.app.ui.theme.alertColors
 
-/** Заголовок вкладки: «Будильники», «Мої місця», «Налаштування» (design-spec 1.2, headlineMedium). */
+/**
+ * Заголовок вкладки: «Будильники», «Мої місця», «Налаштування» (design-spec 1.2, headlineMedium).
+ * [addLabel] і [onAdd] — кнопка «+» праворуч, як у годиннику Samsung (замість FAB).
+ */
 @Composable
-fun TabHeader(title: String, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp),
-        contentAlignment = Alignment.CenterStart,
+fun TabHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    addLabel: String? = null,
+    onAdd: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().height(64.dp).padding(start = 24.dp, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, style = MaterialTheme.typography.headlineMedium)
+        Text(title, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+        if (onAdd != null) {
+            IconButton(onClick = onAdd) {
+                Icon(painterResource(R.drawable.ic_add), contentDescription = addLabel)
+            }
+        }
     }
 }
 
@@ -143,6 +157,8 @@ fun ChoiceChip(
         color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
         border = if (selected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        // 46, а не 48: сім днів мають влазити на екран 360 dp. Зона натиску все одно 48 —
+        // її додає сам Surface з onClick (minimumInteractiveComponentSize).
         modifier = modifier.size(Dimens.ChipHeight - 2.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {

@@ -70,7 +70,7 @@ class VidbiyApplication : Application() {
         // спрацювання нічого не ламає, тож робимо це на кожному старті.
         applicationScope.launch {
             dataReady.await()
-            alarmScheduler.scheduleAll(alarmsRepository.alarms.first())
+            alarmScheduler.scheduleAll(alarmsRepository.disableMissed())
         }
     }
 }
