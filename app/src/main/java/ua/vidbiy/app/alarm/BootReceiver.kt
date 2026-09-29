@@ -41,7 +41,8 @@ class BootReceiver : BroadcastReceiver() {
 
     private suspend fun restoreWaiting(context: Context, app: VidbiyApplication, action: String?) {
         val wait = app.settingsRepository.currentPendingWait() ?: return
-        val alarm = app.findAlarm(wait.alarmId)
+        // Видалений будильник не відновлюємо; живий — з налаштуваннями, з якими він чекав.
+        val alarm = app.findAlarm(wait.alarmId)?.let { wait.alarm ?: it }
         app.decisionLog.log(
             DecisionEntry(
                 at = DecisionLog.now(),

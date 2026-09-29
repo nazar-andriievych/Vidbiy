@@ -124,8 +124,9 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
     // (редагування, вибір регіону, нове місце) перекривають вкладки, поки відкриті.
     val editing = draft
     val current = overlay
+    // Екран очікування показує налаштування, з якими очікування почалося (PendingWait.alarm).
     val waitingAlarm = waiting?.let { wait ->
-        if (wait.alarmId == OneShot.ONE_SHOT_ID) oneShotAlarm else alarms.firstOrNull { it.id == wait.alarmId }
+        wait.alarm ?: if (wait.alarmId == OneShot.ONE_SHOT_ID) oneShotAlarm else alarms.firstOrNull { it.id == wait.alarmId }
     }
     // Дозволи перевіряються тут, щоб банер на головному й екран дозволів бачили один стан.
     val missingPermissions = rememberMissingPermissions()
@@ -192,6 +193,7 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
             onSave = viewModel::saveDraft,
             onDelete = viewModel::deleteDraft,
             onCancel = viewModel::cancelEdit,
+            stopsWaiting = viewModel::draftStopsWaiting,
         )
         else -> Scaffold(
             bottomBar = { VidbiyNavigationBar(selected = tab, onSelect = { tab = it }) },

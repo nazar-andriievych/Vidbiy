@@ -25,6 +25,13 @@ data class PendingWait(
     val deadlineMillis: Long? = null,
     /** Коли почалося очікування. 0 — запис зі старої версії, де цього поля не було. */
     val startedAtMillis: Long = 0L,
+    /**
+     * Будильник таким, яким він був на початку очікування: регіон, рівень, пауза, час.
+     * Очікування доживає з ними, хоч би що змінилося потім (регіон місця, основне місце,
+     * налаштування разового режиму) — інакше воно тихо перемкнулося б на інші дані.
+     * Редагування самого будильника очікування припиняє (FR-7b). null — запис зі старої версії.
+     */
+    val alarm: Alarm? = null,
 ) {
     /**
      * Коли будильник здасться за будь-яких умов: крайній час або доба очікування.
@@ -37,8 +44,14 @@ data class PendingWait(
         return deadlineMillis?.coerceAtMost(backstop) ?: backstop
     }
 
+    fun toJson(): String = json.encodeToString(this)
+
     companion object {
         const val MAX_WAIT_MILLIS = 24 * 60 * 60 * 1000L
+
+        private val json = Json { ignoreUnknownKeys = true }
+
+        fun fromJson(raw: String): PendingWait? = runCatching { json.decodeFromString<PendingWait>(raw) }.getOrNull()
     }
 }
 

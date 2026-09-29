@@ -43,14 +43,16 @@ class AlarmReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
                 app.dataReady.await()
-                val alarm = app.findAlarm(alarmId)
+                val live = app.findAlarm(alarmId)
                 // Прочитати до дзвінка: дзвінок зупиняє службу очікування, і вона стирає свій стан.
                 val wait = app.settingsRepository.currentPendingWait()?.takeIf { it.alarmId == alarmId }
                 val lastLevel = app.settingsRepository.waitStatus.first()?.takeIf { it.alarmId == alarmId }?.level
-                if (alarm == null) {
+                if (live == null) {
                     // Будильник видалили, а спрацювання лишилося — просто мовчимо.
                     return@launch
                 }
+                // Страховка очікування дзвонить тим будильником, що чекав; нове спрацювання — поточним.
+                val alarm = wait?.alarm?.takeIf { !isRegularFire } ?: live
 
                 // Відкладення й крайній час нічого не переплановують: свій наступний раз
                 // будильник уже отримав, коли задзвонив уперше.
@@ -92,6 +94,7 @@ class AlarmReceiver : BroadcastReceiver() {
                         deadlineMillis = alarm.deadlineAfter(now)
                             ?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli(),
                         startedAtMillis = System.currentTimeMillis(),
+                        alarm = alarm,
                     )
                     AlarmScheduler(context).scheduleDeadline(alarm.id, wait.giveUpAtMillis())
                     AlarmWaitService.startWaiting(context, wait)

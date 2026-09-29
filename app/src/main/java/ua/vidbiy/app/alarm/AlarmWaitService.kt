@@ -72,12 +72,7 @@ class AlarmWaitService : Service() {
 
         when (intent?.action) {
             ACTION_START -> startWaiting(
-                PendingWait(
-                    alarmId = alarmId,
-                    deadlineMillis = intent.getLongExtra(EXTRA_DEADLINE_MILLIS, NO_DEADLINE)
-                        .takeIf { it != NO_DEADLINE },
-                    startedAtMillis = intent.getLongExtra(EXTRA_STARTED_AT_MILLIS, 0L),
-                ),
+                intent.getStringExtra(EXTRA_WAIT)?.let(PendingWait::fromJson) ?: PendingWait(alarmId = alarmId),
             )
             ACTION_SNOOZE -> snooze(alarmId)
             ACTION_CANCEL -> cancelAlarm(alarmId)
@@ -123,14 +118,16 @@ class AlarmWaitService : Service() {
 
         app.dataReady.await()
         while (currentCoroutineContext().isActive) {
-            val alarm = app.findAlarm(wait.alarmId)
-            if (alarm == null) {
+            val live = app.findAlarm(wait.alarmId)
+            if (live == null) {
                 // Будильник видалили, поки ми чекали — чекати більше нема для кого.
                 AlarmScheduler(this@AlarmWaitService).cancelDeadline(wait.alarmId)
                 stopEverything()
                 return
             }
 
+            // Налаштування — ті, з якими очікування почалося (PendingWait.alarm).
+            val alarm = wait.alarm ?: live
             val region = alarm.region
             val (fetched, attempt) = client.fetchWithAttempt()
             val snapshot = fetched.orPrevious(known)
@@ -400,7 +397,6 @@ class AlarmWaitService : Service() {
         /** FR-8: скільки на старті пробуємо отримати свіжі дані, перш ніж дзвонити без них. */
         private const val STARTUP_WINDOW_MILLIS = 30_000L
         private const val STARTUP_RETRY_MILLIS = 2_000L
-        private const val NO_DEADLINE = -1L
 
         const val ACTION_START = "ua.vidbiy.app.action.START_WAITING"
         const val ACTION_SNOOZE = "ua.vidbiy.app.action.SNOOZE_WAITING"
@@ -408,8 +404,7 @@ class AlarmWaitService : Service() {
         const val ACTION_STOP = "ua.vidbiy.app.action.STOP_WAITING"
 
         private const val EXTRA_ALARM_ID = "alarm_id"
-        private const val EXTRA_DEADLINE_MILLIS = "deadline_millis"
-        private const val EXTRA_STARTED_AT_MILLIS = "started_at_millis"
+        private const val EXTRA_WAIT = "wait"
 
         private fun formatTime(hour: Int, minute: Int): String = LocalTime.of(hour, minute).format(TIME_FORMAT)
 
@@ -420,8 +415,9 @@ class AlarmWaitService : Service() {
             val intent = Intent(context, AlarmWaitService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_ALARM_ID, wait.alarmId)
-                putExtra(EXTRA_DEADLINE_MILLIS, wait.deadlineMillis ?: NO_DEADLINE)
-                putExtra(EXTRA_STARTED_AT_MILLIS, wait.startedAtMillis)
+                // Цілим записом, разом зі знімком будильника: START_REDELIVER_INTENT віддасть його
+                // службі наново, якщо систему змусять її прибити.
+                putExtra(EXTRA_WAIT, wait.toJson())
             }
             context.startForegroundService(intent)
         }

@@ -44,8 +44,8 @@ import ua.vidbiy.app.data.WaitFor
 import ua.vidbiy.app.ui.theme.Dimens
 
 /**
- * Вкладка «Будильники» (design-spec 3.1): заголовок → попередження → банер очікування →
- * картки будильників. Рядок разового режиму з'явиться разом із самим режимом (FR-25a).
+ * Вкладка «Будильники» (design-spec 3.1): заголовок → попередження → рядок разового режиму →
+ * картки будильників.
  */
 @Composable
 fun AlarmsTab(
@@ -82,25 +82,14 @@ fun AlarmsTab(
             }
         }
 
-        val waitingAlarm = waiting?.let { wait -> alarms.firstOrNull { it.id == wait.alarmId } }
-        if (waitingAlarm != null) {
-            item {
-                WaitingBanner(
-                    alarm = waitingAlarm,
-                    placeName = placeName(waitingAlarm, places),
-                    status = waitStatus?.takeIf { it.alarmId == waitingAlarm.id },
-                    onOpen = onOpenWaiting,
-                )
-            }
-        }
-
-        // Порядок з design-spec 3.1: банер очікування → рядок разового режиму → картки.
-        // Коли режим активний, його рядок сам стає банером.
+        // Порядок з design-spec 3.1: рядок разового режиму → картки. Стан очікування
+        // показує сам елемент, що чекає: рядок режиму стає банером, картка — смугою.
         item {
             if (waiting?.alarmId == OneShot.ONE_SHOT_ID) {
+                val snapshot = waiting.alarm
                 OneShotBanner(
-                    placeName = places.primary?.name,
-                    pauseMinutes = oneShotPauseMinutes,
+                    placeName = snapshot?.let { placeName(it, places) } ?: places.primary?.name,
+                    pauseMinutes = snapshot?.pauseMinutes ?: oneShotPauseMinutes,
                     status = waitStatus?.takeIf { it.alarmId == OneShot.ONE_SHOT_ID },
                     onOpen = onOpenWaiting,
                 )
@@ -120,12 +109,19 @@ fun AlarmsTab(
         if (alarms.isEmpty()) {
             item { EmptyAlarms() }
         } else {
-            items(alarms, key = { it.id }) { alarm ->
+            // Будильник, що чекає, — першим: інакше він міг би опинитися нижче видимої частини.
+            val ordered = alarms.sortedByDescending { it.id == waiting?.alarmId }
+            items(ordered, key = { it.id }) { alarm ->
+                val wait = waiting?.takeIf { it.alarmId == alarm.id }
                 AlarmCard(
                     alarm = alarm,
-                    placeName = placeName(alarm, places),
+                    // Поки чекає — місце з налаштувань, з якими почалося очікування.
+                    placeName = placeName(wait?.alarm ?: alarm, places),
+                    wait = wait,
+                    waitStatus = waitStatus?.takeIf { wait != null && it.alarmId == alarm.id },
                     onClick = { onEdit(alarm) },
                     onToggle = { onToggle(alarm, it) },
+                    onOpenWaiting = onOpenWaiting,
                 )
             }
         }
@@ -137,11 +133,12 @@ fun placeName(alarm: Alarm, places: PlacesState): String? =
     places.byId(alarm.placeId)?.name ?: alarm.region?.shortTitle
 
 /**
- * Банер очікування (design-spec 2): контейнер кольору рівня, крапка, «06:45 чекає на відбій
- * тривоги», «Червона тривога · Дім · оновлено щойно», шеврон → екран очікування.
+ * Смуга очікування в картці будильника (design-spec 2): контейнер кольору рівня, крапка,
+ * «Чекає відбою», «Червона тривога · Дім · оновлено щойно · крайній час 08:00», шеврон →
+ * екран очікування. Замінює нижню частину картки, поки будильник чекає.
  */
 @Composable
-private fun WaitingBanner(alarm: Alarm, placeName: String?, status: WaitStatus?, onOpen: () -> Unit) {
+private fun WaitingStrip(placeName: String?, wait: PendingWait, status: WaitStatus?, onOpen: () -> Unit) {
     val now = rememberNowMillis()
     val colors = MaterialTheme.alertColors
     val phase = status.phase
@@ -152,11 +149,10 @@ private fun WaitingBanner(alarm: Alarm, placeName: String?, status: WaitStatus?,
         level == AlertLevel.YELLOW -> colors.yellowContainer to colors.onYellowContainer
         else -> MaterialTheme.colorScheme.surfaceContainerHigh to MaterialTheme.colorScheme.onSurface
     }
-    val time = formatTime(alarm.hour, alarm.minute)
     val title = when (phase) {
-        WaitPhase.ALERT -> stringResource(R.string.banner_alert_title, time)
-        WaitPhase.PAUSE -> stringResource(R.string.banner_pause_title, time, formatClock(status!!.ringAtMillis!!))
-        WaitPhase.CHECKING -> stringResource(R.string.banner_checking_title, time)
+        WaitPhase.ALERT -> stringResource(R.string.wait_strip_alert)
+        WaitPhase.PAUSE -> stringResource(R.string.wait_strip_pause, formatClock(status!!.ringAtMillis!!))
+        WaitPhase.CHECKING -> stringResource(R.string.wait_strip_checking)
     }
     val updated = status?.confirmedAtMillis?.let { confirmed ->
         val minutes = ((now - confirmed) / 60_000L).toInt()
@@ -166,19 +162,20 @@ private fun WaitingBanner(alarm: Alarm, placeName: String?, status: WaitStatus?,
         level?.let { stringResource(if (it == AlertLevel.RED) R.string.level_red else R.string.level_yellow) },
         placeName,
         updated,
+        wait.deadlineMillis?.let { stringResource(R.string.card_deadline, formatClock(it)) },
     ).joinToString(" · ")
 
     Surface(
         onClick = onOpen,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenPadding),
+        modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         color = container,
         contentColor = content,
     ) {
         Row(
-            modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 16.dp, end = 12.dp),
+            modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             when {
                 level != null && phase == WaitPhase.ALERT -> Box(
@@ -198,13 +195,20 @@ private fun WaitingBanner(alarm: Alarm, placeName: String?, status: WaitStatus?,
     }
 }
 
-/** Картка будильника (design-spec 2, `01-alarms--list`). */
+/**
+ * Картка будильника (design-spec 2, `01-alarms--list`). Поки будильник чекає відбою ([wait]),
+ * замість світча нічого немає (перемикати нічого: дії — на екрані очікування), а нижня
+ * частина картки стає смугою очікування.
+ */
 @Composable
 private fun AlarmCard(
     alarm: Alarm,
     placeName: String?,
+    wait: PendingWait?,
+    waitStatus: WaitStatus?,
     onClick: () -> Unit,
     onToggle: (Boolean) -> Unit,
+    onOpenWaiting: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenPadding),
@@ -223,7 +227,8 @@ private fun AlarmCard(
                     Text(
                         text = formatTime(alarm.hour, alarm.minute),
                         style = MaterialTheme.typography.displayMedium,
-                        color = if (alarm.enabled) {
+                        // Одноразовий будильник уже зняв «увімкнено», але поки чекає — він живий.
+                        color = if (alarm.enabled || wait != null) {
                             MaterialTheme.colorScheme.onSurface
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -235,7 +240,12 @@ private fun AlarmCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Switch(checked = alarm.enabled, onCheckedChange = onToggle)
+                if (wait == null) Switch(checked = alarm.enabled, onCheckedChange = onToggle)
+            }
+
+            if (wait != null) {
+                WaitingStrip(placeName, wait, waitStatus, onOpenWaiting)
+                return@Column
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

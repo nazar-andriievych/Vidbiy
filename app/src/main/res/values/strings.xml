@@ -183,9 +183,15 @@
     <string name="waiting_snooze">Подзвони через %1$d хв</string>
     <string name="waiting_skip">Сьогодні не дзвони</string>
     <string name="waiting_skip_hint">Утримуйте секунду, щоб скасувати дзвінок</string>
-    <string name="banner_alert_title">%1$s чекає на відбій тривоги</string>
-    <string name="banner_pause_title">%1$s: відбій, задзвоню о %2$s</string>
-    <string name="banner_checking_title">%1$s перевіряє тривогу…</string>
+    <string name="wait_strip_alert">Чекає відбою</string>
+    <string name="wait_strip_pause">Відбій · задзвоню о %1$s</string>
+    <string name="wait_strip_checking">Перевіряю тривогу…</string>
+    <string name="edit_waiting_title">Будильник чекає відбою</string>
+    <string name="edit_waiting_text">Якщо зберегти зміни, очікування припиниться. Далі будильник працюватиме за новими налаштуваннями: наступний дзвінок — %1$s.</string>
+    <string name="edit_waiting_confirm">Зберегти</string>
+    <string name="next_ring_today">сьогодні о %1$s</string>
+    <string name="next_ring_tomorrow">завтра о %1$s</string>
+    <string name="next_ring_day">%1$s о %2$s</string>
     <string name="banner_updated_now">оновлено щойно</string>
     <string name="banner_updated_ago">оновлено %1$d хв тому</string>
 

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -52,7 +53,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.IntentCompat
+import java.time.LocalDateTime
 import ua.vidbiy.app.R
+import ua.vidbiy.app.alarm.nextTriggerAt
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.WaitFor
 import ua.vidbiy.app.data.label
@@ -74,9 +77,12 @@ fun AlarmEditScreen(
     onSave: () -> Unit,
     onDelete: () -> Unit,
     onCancel: () -> Unit,
+    stopsWaiting: () -> Boolean = { false },
 ) {
     BackHandler(onBack = onCancel)
     var pickingTime by rememberSaveable { mutableStateOf(false) }
+    var confirmingSave by rememberSaveable { mutableStateOf(false) }
+    val save = { if (stopsWaiting()) confirmingSave = true else onSave() }
 
     Scaffold(
         topBar = {
@@ -98,7 +104,7 @@ fun AlarmEditScreen(
                     }
                 },
                 actions = {
-                    TextButton(onClick = onSave) {
+                    TextButton(onClick = save) {
                         Text(stringResource(R.string.action_save), style = MaterialTheme.typography.labelLarge)
                     }
                 },
@@ -161,12 +167,48 @@ fun AlarmEditScreen(
         }
     }
 
+    if (confirmingSave) {
+        // FR-7b: зміни в будильнику, що чекає, припиняють очікування — кажемо про це прямо,
+        // разом із тим, коли він задзвонить наступного разу (може статися, що вже завтра).
+        AlertDialog(
+            onDismissRequest = { confirmingSave = false },
+            title = { Text(stringResource(R.string.edit_waiting_title)) },
+            text = { Text(stringResource(R.string.edit_waiting_text, nextRingLabel(alarm))) },
+            confirmButton = {
+                TextButton(onClick = { confirmingSave = false; onSave() }) {
+                    Text(stringResource(R.string.edit_waiting_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingSave = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        )
+    }
+
     if (pickingTime) {
         TimePickerDialog(
             title = stringResource(R.string.time_dialog_title),
             initialMinute = alarm.hour * 60 + alarm.minute,
             onConfirm = { minute -> onChange { it.copy(hour = minute / 60, minute = minute % 60) } },
             onDismiss = { pickingTime = false },
+        )
+    }
+}
+
+/** «сьогодні о 08:00» / «завтра о 06:00» / «пн о 06:00» — коли будильник задзвонить після збереження. */
+@Composable
+private fun nextRingLabel(alarm: Alarm): String {
+    val now = LocalDateTime.now()
+    val next = alarm.nextTriggerAt(now)
+    val time = formatTime(next.hour, next.minute)
+    return when (next.toLocalDate()) {
+        now.toLocalDate() -> stringResource(R.string.next_ring_today, time)
+        now.toLocalDate().plusDays(1) -> stringResource(R.string.next_ring_tomorrow, time)
+        else -> stringResource(
+            R.string.next_ring_day,
+            stringArrayResource(R.array.day_short_names)[next.dayOfWeek.value - 1].lowercase(),
+            time,
         )
     }
 }

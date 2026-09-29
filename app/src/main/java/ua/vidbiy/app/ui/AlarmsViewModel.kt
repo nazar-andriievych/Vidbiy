@@ -124,7 +124,10 @@ class AlarmsViewModel(
      * починаємо очікування; немає тривоги чи даних — показуємо це в рядку ~10 с.
      */
     fun startOneShot() {
-        val region = places.value.primary?.region ?: return
+        // Знімок на момент натиску: очікування доживе з ним, навіть якщо основне місце
+        // чи налаштування режиму змінять посеред тривоги (PendingWait.alarm).
+        val snapshot = OneShot.alarm(places.value.primary, oneShotWaitFor.value, oneShotPauseMinutes.value)
+        val region = snapshot.region ?: return
         oneShotJob?.cancel()
         _oneShotRow.value = OneShotRowState.CHECKING
         oneShotJob = viewModelScope.launch {
@@ -141,7 +144,7 @@ class AlarmsViewModel(
                     nowElapsed = SystemClock.elapsedRealtime(),
                     nowMillis = nowMillis,
                     region = region,
-                    waitFor = oneShotWaitFor.value,
+                    waitFor = snapshot.waitFor,
                     pastDeadline = false,
                 )
                 check = oneShotCheck(decision, yellowActive = region.hasFreshYellow(known.alerts, nowMillis))
@@ -152,7 +155,7 @@ class AlarmsViewModel(
                         alarmId = OneShot.ONE_SHOT_ID,
                         region = region.uid,
                         covering = region.coveringUids.sorted(),
-                        waitFor = oneShotWaitFor.value.name,
+                        waitFor = snapshot.waitFor.name,
                         ageSeconds = known.effectiveAgeSeconds(SystemClock.elapsedRealtime()),
                         confirmedAt = known.confirmedAt,
                         levels = DecisionLog.describeLevels(region, known.alerts),
@@ -167,7 +170,11 @@ class AlarmsViewModel(
             }
             when (check) {
                 OneShotCheck.ALERT -> {
-                    val wait = PendingWait(alarmId = OneShot.ONE_SHOT_ID, startedAtMillis = System.currentTimeMillis())
+                    val wait = PendingWait(
+                        alarmId = OneShot.ONE_SHOT_ID,
+                        startedAtMillis = System.currentTimeMillis(),
+                        alarm = snapshot,
+                    )
                     scheduler.scheduleDeadline(OneShot.ONE_SHOT_ID, wait.giveUpAtMillis())
                     AlarmWaitService.startWaiting(app, wait)
                     _oneShotRow.value = OneShotRowState.IDLE
@@ -258,8 +265,21 @@ class AlarmsViewModel(
         _draft.value = null
     }
 
+    /**
+     * FR-7b: чи збереження чернетки припинить очікування відбою. Так — якщо цей будильник
+     * просто зараз чекає і в ньому щось змінили (без змін «Зберегти» нічого не зупиняє).
+     */
+    fun draftStopsWaiting(): Boolean {
+        val draft = _draft.value ?: return false
+        if (pendingWait.value?.alarmId != draft.id) return false
+        val saved = alarms.value.firstOrNull { it.id == draft.id } ?: return false
+        return saved != draft.copy(enabled = saved.enabled)
+    }
+
     fun saveDraft() {
         val alarm = _draft.value?.copy(enabled = true) ?: return
+        // FR-7b: змінений будильник більше не чекає за старими налаштуваннями.
+        if (draftStopsWaiting()) AlarmWaitService.cancelWaiting(app, alarm.id)
         _draft.value = null
         viewModelScope.launch { scheduler.applyEdit(repository.save(alarm)) }
     }
@@ -268,6 +288,7 @@ class AlarmsViewModel(
         val alarm = _draft.value ?: return
         _draft.value = null
         if (alarm.id != Alarm.NEW_ID) {
+            if (pendingWait.value?.alarmId == alarm.id) AlarmWaitService.cancelWaiting(app, alarm.id)
             scheduler.cancel(alarm.id)
             viewModelScope.launch { repository.delete(alarm.id) }
         }
