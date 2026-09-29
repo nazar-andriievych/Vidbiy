@@ -61,8 +61,19 @@ val WaitStatus?.phase: WaitPhase
         else -> WaitPhase.CHECKING
     }
 
-/** FR-15 [дизайн]: попередження «Немає зв'язку» — коли даним понад 60 с. */
-const val STALE_WARNING_MILLIS = 60_000L
+/**
+ * FR-15 [дизайн]: попередження «Немає зв'язку» — коли даним понад 120 с.
+ *
+ * Не менше: сервер підтверджує стан раз на 60 с, телефон питає раз на 30 с, тож справні
+ * дані бувають старими до ~90 с. З порогом 60 с попередження блимало щохвилини при живому
+ * зв'язку (журнал рішень, 2026-09-29). 120 с — пропущено щонайменше одне оновлення, і до
+ * дзвінка за FR-15 (180 с) лишається саме та хвилина, про яку пише попередження.
+ */
+const val STALE_WARNING_MILLIS = 120_000L
+
+/** Чи показувати попередження «Немає зв'язку» ([confirmedAtMillis] — коли сервер підтвердив стан). */
+fun showsStaleWarning(confirmedAtMillis: Long?, nowMillis: Long): Boolean =
+    confirmedAtMillis != null && nowMillis - confirmedAtMillis > STALE_WARNING_MILLIS
 
 /** Поточний час, що оновлюється раз на кілька секунд — для «оновлено 2 хв тому». */
 @Composable
@@ -103,7 +114,7 @@ fun WaitingScreen(
     val phase = status.phase
     val time = formatTime(alarm.hour, alarm.minute)
     val confirmedAt = status?.confirmedAtMillis
-    val stale = confirmedAt != null && now - confirmedAt > STALE_WARNING_MILLIS
+    val stale = showsStaleWarning(confirmedAt, now)
 
     Scaffold(
         topBar = {
