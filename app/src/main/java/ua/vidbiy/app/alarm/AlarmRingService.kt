@@ -236,8 +236,6 @@ class AlarmRingService : Service() {
          * відкладення (FR-19) читаємо тут, щоб кнопки й сповіщення знали її одразу.
          */
         suspend fun startRinging(context: Context, alarm: Alarm, reason: RingReason = RingReason.Plain) {
-            // Дзвінок і очікування відбою взаємно виключні.
-            AlarmWaitService.stop(context)
             val app = context.applicationContext as VidbiyApplication
             val snooze = app.settingsRepository.snoozeMinutes.first()
 
@@ -252,6 +250,12 @@ class AlarmRingService : Service() {
                 putExtra(EXTRA_SNOOZE_MINUTES, snooze)
             }
             context.startForegroundService(intent)
+            // Дзвінок і очікування відбою взаємно виключні. Очікування зупиняємо лише тепер,
+            // коли дзвінок уже запущено: часто нас викликає саме служба очікування, і її зупинка
+            // скасовує цю корутину. Зупинка до запуску обривала дзвінок на першому ж `first()`
+            // вище — будильник мовчки не дзвонив після відбою (журнал рішень, 2026-09-29).
+            // Після `startForegroundService` пауз немає, тож скасуванню тут нема чого обірвати.
+            AlarmWaitService.stop(context)
         }
 
         fun snoozeIntent(context: Context, alarmId: Long): Intent =

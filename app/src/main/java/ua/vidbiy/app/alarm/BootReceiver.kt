@@ -9,6 +9,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ua.vidbiy.app.VidbiyApplication
+import ua.vidbiy.app.data.DecisionEntry
+import ua.vidbiy.app.data.DecisionLog
 
 /**
  * Перезавантаження стирає всі зареєстровані спрацювання — система не зберігає їх між
@@ -30,16 +32,24 @@ class BootReceiver : BroadcastReceiver() {
             try {
                 app.dataReady.await()
                 AlarmScheduler(context).scheduleAll(app.alarmsRepository.alarms.first())
-                restoreWaiting(context, app)
+                restoreWaiting(context, app, intent.action)
             } finally {
                 pendingResult.finish()
             }
         }
     }
 
-    private suspend fun restoreWaiting(context: Context, app: VidbiyApplication) {
+    private suspend fun restoreWaiting(context: Context, app: VidbiyApplication, action: String?) {
         val wait = app.settingsRepository.currentPendingWait() ?: return
         val alarm = app.findAlarm(wait.alarmId)
+        app.decisionLog.log(
+            DecisionEntry(
+                at = DecisionLog.now(),
+                event = "restore_wait",
+                alarmId = wait.alarmId,
+                note = "${action?.substringAfterLast('.')}${if (alarm == null) ", будильник видалено" else ""}",
+            ),
+        )
         if (alarm == null) {
             app.settingsRepository.clearPendingWait()
             return

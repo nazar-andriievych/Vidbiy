@@ -20,6 +20,7 @@ import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
@@ -27,6 +28,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ua.vidbiy.app.MainActivity
 import ua.vidbiy.app.R
 import ua.vidbiy.app.VidbiyApplication
@@ -124,7 +126,7 @@ class AlarmWaitService : Service() {
             val alarm = app.findAlarm(wait.alarmId)
             if (alarm == null) {
                 // Будильник видалили, поки ми чекали — чекати більше нема для кого.
-                AlarmScheduler(this).cancelDeadline(wait.alarmId)
+                AlarmScheduler(this@AlarmWaitService).cancelDeadline(wait.alarmId)
                 stopEverything()
                 return
             }
@@ -187,7 +189,9 @@ class AlarmWaitService : Service() {
                     else -> "wait"
                 },
             )
-            if (step is WaitStep.Ring) {
+            // Рішення дзвонити вже ухвалене — жодне скасування (зупинка служби посеред шляху)
+            // не має його обірвати: будильник, що не задзвонив, гірший (NFR-1).
+            if (step is WaitStep.Ring) withContext(NonCancellable) {
                 val strongest = region?.let { r -> snapshot.alerts?.let { r.strongestLevel(it, alarm.waitFor, nowMillis) } }
                 val reason = ringReasonFor(
                     decision = step.reason,
@@ -199,14 +203,14 @@ class AlarmWaitService : Service() {
                     deadlineMillis = wait.deadlineMillis,
                     nowMillis = nowMillis,
                 ).copy(oneShot = alarm.id == OneShot.ONE_SHOT_ID)
-                AlarmScheduler(this).cancelDeadline(wait.alarmId)
-                AlarmRingService.startRinging(this, alarm, reason)
+                AlarmScheduler(this@AlarmWaitService).cancelDeadline(wait.alarmId)
+                AlarmRingService.startRinging(this@AlarmWaitService, alarm, reason)
                 app.decisionLog.log(
                     DecisionEntry(at = DecisionLog.now(), event = "ring", alarmId = alarm.id, region = region?.uid, note = reason.kind.name),
                 )
                 stopEverything()
-                return
             }
+            if (step is WaitStep.Ring) return
             step as WaitStep.Wait
             if (decision == RingDecision.KEEP_WAITING) sawAlert = true
             if (step.allClearAtElapsed == null) {
