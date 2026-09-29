@@ -1,4 +1,5 @@
 import { AIR } from "./ukrainealarm";
+import { EventLog, type LevelMark, type LogEntry, type SnapshotChange } from "./eventlog";
 import type { AlertEvent, AlertsResponse, RegionAlert, RegionState } from "./types";
 
 /** Скільки останніх подій тримаємо для `/stats`. */
@@ -107,7 +108,10 @@ export class AlertBoard {
   private meta: Meta = emptyMeta();
   private restored: Promise<void> | null = null;
 
-  constructor(private readonly store?: StateStore) {}
+  constructor(
+    private readonly store?: StateStore,
+    private readonly log: EventLog = new EventLog(),
+  ) {}
 
   /** Читаємо збережений стан один раз на життя об'єкта: між запитами він засинає. */
   restore(): Promise<void> {
@@ -132,6 +136,7 @@ export class AlertBoard {
    * змусило б будильник задзвонити саме тоді, коли не треба.
    */
   async receive(event: AlertEvent, receivedAt: number): Promise<ReceiveOutcome> {
+    const before = event.regionId === null ? undefined : this.regions.get(event.regionId);
     const outcome = this.apply(event);
     this.record(event, receivedAt, outcome);
 
@@ -139,6 +144,21 @@ export class AlertBoard {
       await this.store?.writeRegions(new Map([[event.regionId!, this.regions.get(event.regionId!)!]]));
     }
     await this.store?.writeMeta(this.meta);
+    if (outcome !== "ignored") {
+      await this.logSafely(
+        {
+          kind: "webhook",
+          receivedAt,
+          createdAt: event.createdAt,
+          region: event.regionId!,
+          from: summary(before),
+          to: summary(this.regions.get(event.regionId!)),
+          levels: marks(event.levels),
+          outcome,
+        },
+        receivedAt,
+      );
+    }
     return outcome;
   }
 
@@ -203,15 +223,19 @@ export class AlertBoard {
    * такий регіон лишається як є. Решта регіонів стає такою, як у знімку, — зокрема
    * тривоги, яких у знімку немає, вважаються завершеними.
    */
-  async loadSnapshot(snapshot: Map<string, RegionState>, asOf: number): Promise<void> {
+  async loadSnapshot(snapshot: Map<string, RegionState>, asOf: number, tookMs: number | null = null): Promise<void> {
     const changes = new Map<string, RegionState>();
+    // Лише для журналу: де знімок розійшовся з новішим за нього вебхуком.
+    const kept: string[] = [];
 
     for (const [id, current] of this.regions) {
+      if (current.changedAt > asOf && current.active && !snapshot.has(id)) kept.push(id);
       if (current.changedAt > asOf || snapshot.has(id) || !current.active) continue;
       changes.set(id, { active: false, changedAt: current.changedAt, levels: [] });
     }
     for (const [id, fresh] of snapshot) {
       const current = this.regions.get(id);
+      if (current && current.changedAt > asOf && summary(current) !== summary(fresh)) kept.push(id);
       if (current && current.changedAt > asOf) continue;
       changes.set(id, {
         active: true,
@@ -224,9 +248,19 @@ export class AlertBoard {
     // десятки тисяч записів на добу і ризик вичерпати безкоштовний ліміт сховища,
     // після чого знімки зупинилися б. Тож у сховище йде лише те, що справді змінилось.
     const writes = new Map<string, RegionState>();
+    const logged: SnapshotChange[] = [];
     for (const [id, state] of changes) {
       const current = this.regions.get(id);
       if (!current || !sameState(current, state)) writes.set(id, state);
+      if (summary(current) !== summary(state)) {
+        logged.push({
+          region: id,
+          from: summary(current),
+          to: summary(state),
+          lastUpdate: snapshot.get(id)?.changedAt ?? null,
+          levels: marks(state.levels),
+        });
+      }
       this.regions.set(id, state);
     }
     this.meta.syncedAt ??= asOf;
@@ -235,6 +269,29 @@ export class AlertBoard {
 
     await this.store?.writeRegions(writes);
     await this.store?.writeMeta(this.meta);
+    await this.logSafely(
+      { kind: "snapshot", asOf, tookMs, ok: true, active: snapshot.size, changes: logged, kept },
+      asOf,
+    );
+  }
+
+  /** Невдалий знімок — лише в журнал: стан не змінюється. */
+  async snapshotFailed(asOf: number, tookMs: number | null, status: number | null, detail?: string): Promise<void> {
+    await this.logSafely({ kind: "snapshot", asOf, tookMs, ok: false, status, detail }, asOf);
+  }
+
+  /** Журнал подій за останні `hours` год (див. `eventlog.ts`). */
+  readLog(now: number, hours: number, region?: string): Promise<LogEntry[]> {
+    return this.log.read(now, hours, region);
+  }
+
+  /** Журнал не має права зламати обробку тривог: його помилка — лише рядок у лозі воркера. */
+  private async logSafely(entry: LogEntry, at: number): Promise<void> {
+    try {
+      await this.log.append(entry, at);
+    } catch (error) {
+      console.error(`журнал подій не записано: ${String(error)}`);
+    }
   }
 
   /**
@@ -314,6 +371,17 @@ function levelsOut(state: RegionState): RegionAlert["levels"] {
   return [...levels]
     .sort((a, b) => (a.level === b.level ? a.since - b.since : a.level === "red" ? -1 : 1))
     .map(({ level, since, reason }) => ({ level, since: new Date(since).toISOString(), reason }));
+}
+
+function marks(levels: RegionState["levels"]): LevelMark[] {
+  return (levels ?? []).map((l) => [l.level, l.since]);
+}
+
+/** Стан регіону одним словом для журналу: `none`, `red`, `yellow`, `red+yellow`. */
+function summary(state: RegionState | undefined): string {
+  if (!state?.active) return "none";
+  const levels = new Set((state.levels?.length ? state.levels : [{ level: "red" }]).map((l) => l.level));
+  return ["red", "yellow"].filter((level) => levels.has(level as "red" | "yellow")).join("+");
 }
 
 /** Чи збігається стан до останнього поля — тоді переписувати його в сховищі нема чого. */

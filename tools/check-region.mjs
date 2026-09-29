@@ -8,7 +8,8 @@
  *
  * Бере довідник app/src/main/assets/regions.json, будує ланцюжок «громада → район → область»
  * (як SelectedRegion.coveringUids у застосунку), питає проксі `/v1/alerts`
- * і друкує рішення для «Будь-яка» та «Лише червона». Логіка рішення повторює RingDecision.kt: якщо вони розійдуться,
+ * і друкує рішення для «Будь-яка» та «Лише червона», а потім події сервера по цих регіонах
+ * за останні години (`/log`). Логіка рішення повторює RingDecision.kt: якщо вони розійдуться,
  * вірити треба застосунку.
  */
 import { readFileSync } from "node:fs";
@@ -105,3 +106,28 @@ function decide(waitFor) {
 }
 console.log(`Будь-яка:      ${decide("RED_AND_YELLOW")}`);
 console.log(`Лише червона:  ${decide("RED_ONLY")}`);
+
+// Журнал подій сервера (/log): що змінювало стан цих регіонів за останні години.
+const HOURS = 6;
+const local = (ms) => new Date(ms).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", hour12: false });
+try {
+  const logs = await Promise.all(region.covering.map((uid) => get(`/log?hours=${HOURS}&region=${uid}`)));
+  const events = [];
+  for (const { body } of logs) {
+    for (const entry of body) {
+      if (entry.kind === "webhook") {
+        const delay = Math.round((entry.receivedAt - entry.createdAt) / 1000);
+        events.push([entry.receivedAt, `вебхук  ${entry.region.padStart(5)}  ${entry.from} → ${entry.to}  (${entry.outcome}, затримка ${delay} с)`]);
+      } else {
+        for (const c of entry.changes ?? []) events.push([entry.asOf, `знімок  ${c.region.padStart(5)}  ${c.from} → ${c.to}`]);
+        for (const id of entry.kept ?? []) events.push([entry.asOf, `знімок  ${id.padStart(5)}  розійшовся з новішим вебхуком — лишено вебхук`]);
+      }
+    }
+  }
+  const unique = [...new Map(events.map((e) => [e.join("|"), e])).values()].sort(([a], [b]) => a - b);
+  console.log();
+  console.log(unique.length ? `Події на сервері за ${HOURS} год (час київський):` : `Змін по цих регіонах за ${HOURS} год не було.`);
+  for (const [at, text] of unique.slice(-30)) console.log(`  ${local(at)}  ${text}`);
+} catch (error) {
+  console.warn(`(/log недоступний: ${error.message})`);
+}

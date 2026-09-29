@@ -3,6 +3,7 @@ import { CallBudget, type BudgetState, type CallPath } from "./budget";
 import { MockAlerts, type MockOptions, type MockScenario, type MockState } from "./mock";
 import { ReloadSchedule, type ReloadState } from "./reload";
 import { AlertBoard, type Meta, type ReceiveOutcome, type StateStore } from "./state";
+import { EventLog, type LogEntry, type LogStore } from "./eventlog";
 import { fetchSnapshot, type ApiFailure, type SnapshotResult } from "./ukrainealarm";
 import type { AlertEvent, AlertsResponse, RegionState } from "./types";
 import type { Env } from "./index";
@@ -14,6 +15,7 @@ const RELOAD_KEY = "reload";
 /** Ключі прибраних дослідів (2026-09-27): стираємо, якщо ще лежать. */
 const LEGACY_KEYS = ["probe", "compare"];
 const REGION_PREFIX = "r:";
+const LOG_PREFIX = "log:";
 
 /**
  * Як часто об'єкт прокидається сам, щоб вирішити, чи пора перевірити тишу.
@@ -52,7 +54,7 @@ export class AlertsHub extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.board = new AlertBoard(storageFor(ctx.storage));
+    this.board = new AlertBoard(storageFor(ctx.storage), new EventLog(logStorageFor(ctx.storage)));
     this.mock = env.MOCK === "1" || env.MOCK === "true" ? new MockAlerts() : null;
   }
 
@@ -92,6 +94,13 @@ export class AlertsHub extends DurableObject<Env> {
     };
   }
 
+  /** Журнал подій (`/log`): за останні `hours` год, за потреби — лише один регіон. */
+  async log(hours: number, region?: string): Promise<LogEntry[]> {
+    await this.restore();
+    await this.armAlarm();
+    return this.board.readLog(Date.now(), hours, region);
+  }
+
   /** Вбудований будильник Durable Object: прокидається сам, навіть коли ніхто не питає. */
   async alarm(): Promise<void> {
     if (this.mock) return;
@@ -125,13 +134,16 @@ export class AlertsHub extends DurableObject<Env> {
     const asOf = Date.now();
     if (!this.reload.due(asOf)) return;
 
+    const started = Date.now();
     const snapshot = await this.call("alerts", fetchSnapshot);
+    const tookMs = Date.now() - started;
     const wasFast = this.reload.fast(asOf);
     this.reload.record(snapshot.ok, asOf);
     if (wasFast && !this.reload.fast(asOf)) {
       console.error(`щохвилинний /alerts вимкнено на годину: ${this.reload.snapshot().tripped?.reason}`);
     }
-    if (snapshot.ok) await this.board.loadSnapshot(snapshot.regions, asOf);
+    if (snapshot.ok) await this.board.loadSnapshot(snapshot.regions, asOf, tookMs);
+    else await this.board.snapshotFailed(asOf, tookMs, snapshot.status, snapshot.detail);
     await this.ctx.storage.put(RELOAD_KEY, this.reload.snapshot());
   }
 
@@ -240,5 +252,22 @@ function storageFor(storage: DurableObjectStorage): StateStore {
       }
     },
     writeMeta: (meta) => storage.put(META_KEY, meta),
+  };
+}
+
+/** Журнал подій: один ключ на годину (див. `eventlog.ts`). */
+function logStorageFor(storage: DurableObjectStorage): LogStore {
+  return {
+    readHour: (hour) => storage.get<LogEntry[]>(LOG_PREFIX + hour),
+    writeHour: (hour, entries) => storage.put(LOG_PREFIX + hour, entries),
+    async readFrom(fromHour) {
+      const buckets = await storage.list<LogEntry[]>({ prefix: LOG_PREFIX, start: LOG_PREFIX + fromHour });
+      return [...buckets].map(([key, entries]) => [key.slice(LOG_PREFIX.length), entries]);
+    },
+    async deleteBefore(hour) {
+      const old = await storage.list({ prefix: LOG_PREFIX, end: LOG_PREFIX + hour });
+      const keys = [...old.keys()];
+      for (let i = 0; i < keys.length; i += PUT_BATCH) await storage.delete(keys.slice(i, i + PUT_BATCH));
+    },
   };
 }

@@ -52,6 +52,8 @@ export default {
         return json(await getAlerts(env));
       case "/stats":
         return json(await hub(env).stats());
+      case "/log":
+        return json(await hub(env).log(logHours(url), url.searchParams.get("region") ?? undefined));
       case "/health":
         return json({
           ok: true,
@@ -124,6 +126,12 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
     console.error(`вебхук не збережено: ${String(error)}`);
     return json({ error: "unavailable" }, 503);
   }
+}
+
+/** `?hours=` для `/log`: за замовчуванням 6, не більше 48 — стільки журнал і тримає. */
+function logHours(url: URL): number {
+  const hours = Number(url.searchParams.get("hours") ?? 6);
+  return Number.isFinite(hours) ? Math.min(Math.max(hours, 0), 48) : 6;
 }
 
 function mockEnabled(env: Env): boolean {
