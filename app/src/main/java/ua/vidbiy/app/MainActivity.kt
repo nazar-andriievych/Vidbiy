@@ -25,6 +25,12 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import ua.vidbiy.app.ui.nextRingLabel
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -120,6 +126,19 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
 
     RequestNotificationPermission()
 
+    // Після збереження: «Спрацює завтра о 06:45» — щоб одразу було видно, чи той день.
+    val snackbar = remember { SnackbarHostState() }
+    // Власний scope: після consume цей блок зникає з композиції разом із LaunchedEffect,
+    // а повідомлення має лишитися на екрані свої кілька секунд.
+    val snackbarScope = rememberCoroutineScope()
+    viewModel.savedNextRing.collectAsStateWithLifecycle().value?.let { next ->
+        val message = stringResource(R.string.saved_next_ring, nextRingLabel(next))
+        LaunchedEffect(next) {
+            viewModel.consumeSavedNextRing()
+            snackbarScope.launch { snackbar.showSnackbar(message) }
+        }
+    }
+
     // Екранів небагато, тож навігаційна бібліотека надлишкова: повноекранні підекрани
     // (редагування, вибір регіону, нове місце) перекривають вкладки, поки відкриті.
     val editing = draft
@@ -197,6 +216,7 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
         )
         else -> Scaffold(
             bottomBar = { VidbiyNavigationBar(selected = tab, onSelect = { tab = it }) },
+            snackbarHost = { SnackbarHost(snackbar) },
             floatingActionButton = {
                 when (tab) {
                     Tab.Alarms -> VidbiyFab(R.string.action_new_alarm, viewModel::startNew)

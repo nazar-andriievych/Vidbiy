@@ -21,6 +21,7 @@ import ua.vidbiy.app.alarm.AlarmWaitService
 import ua.vidbiy.app.alarm.OneShot
 import ua.vidbiy.app.alarm.OneShotCheck
 import ua.vidbiy.app.alarm.decideRing
+import ua.vidbiy.app.alarm.nextTriggerAt
 import ua.vidbiy.app.alarm.hasFreshYellow
 import ua.vidbiy.app.alarm.oneShotCheck
 import ua.vidbiy.app.data.AlertsClient
@@ -39,6 +40,7 @@ import ua.vidbiy.app.data.SelectedRegion
 import ua.vidbiy.app.data.SettingsRepository
 import ua.vidbiy.app.data.WaitStatus
 import ua.vidbiy.app.ui.theme.ThemeMode
+import java.time.LocalDateTime
 
 /** Повноекранний підекран, що перекриває вкладки (навігаційна бібліотека тут надлишкова). */
 sealed interface Overlay {
@@ -276,11 +278,20 @@ class AlarmsViewModel(
         return saved != draft.copy(enabled = saved.enabled)
     }
 
+    /** Коли спрацює щойно збережений будильник — для повідомлення «Спрацює завтра о 06:45». */
+    private val _savedNextRing = MutableStateFlow<LocalDateTime?>(null)
+    val savedNextRing: StateFlow<LocalDateTime?> = _savedNextRing.asStateFlow()
+
+    fun consumeSavedNextRing() {
+        _savedNextRing.value = null
+    }
+
     fun saveDraft() {
         val alarm = _draft.value?.copy(enabled = true) ?: return
         // FR-7b: змінений будильник більше не чекає за старими налаштуваннями.
         if (draftStopsWaiting()) AlarmWaitService.cancelWaiting(app, alarm.id)
         _draft.value = null
+        _savedNextRing.value = alarm.nextTriggerAt(LocalDateTime.now())
         viewModelScope.launch { scheduler.applyEdit(repository.save(alarm)) }
     }
 

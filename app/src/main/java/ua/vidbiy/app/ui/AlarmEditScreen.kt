@@ -173,7 +173,7 @@ fun AlarmEditScreen(
         AlertDialog(
             onDismissRequest = { confirmingSave = false },
             title = { Text(stringResource(R.string.edit_waiting_title)) },
-            text = { Text(stringResource(R.string.edit_waiting_text, nextRingLabel(alarm))) },
+            text = { Text(stringResource(R.string.edit_waiting_text, nextRingLabel(alarm.nextTriggerAt(LocalDateTime.now())))) },
             confirmButton = {
                 TextButton(onClick = { confirmingSave = false; onSave() }) {
                     Text(stringResource(R.string.edit_waiting_confirm))
@@ -192,23 +192,6 @@ fun AlarmEditScreen(
             initialMinute = alarm.hour * 60 + alarm.minute,
             onConfirm = { minute -> onChange { it.copy(hour = minute / 60, minute = minute % 60) } },
             onDismiss = { pickingTime = false },
-        )
-    }
-}
-
-/** «сьогодні о 08:00» / «завтра о 06:00» / «пн о 06:00» — коли будильник задзвонить після збереження. */
-@Composable
-private fun nextRingLabel(alarm: Alarm): String {
-    val now = LocalDateTime.now()
-    val next = alarm.nextTriggerAt(now)
-    val time = formatTime(next.hour, next.minute)
-    return when (next.toLocalDate()) {
-        now.toLocalDate() -> stringResource(R.string.next_ring_today, time)
-        now.toLocalDate().plusDays(1) -> stringResource(R.string.next_ring_tomorrow, time)
-        else -> stringResource(
-            R.string.next_ring_day,
-            stringArrayResource(R.array.day_short_names)[next.dayOfWeek.value - 1].lowercase(),
-            time,
         )
     }
 }

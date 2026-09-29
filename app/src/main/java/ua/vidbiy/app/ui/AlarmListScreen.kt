@@ -42,6 +42,9 @@ import ua.vidbiy.app.data.PlacesState
 import ua.vidbiy.app.data.shortTitle
 import ua.vidbiy.app.data.WaitFor
 import ua.vidbiy.app.ui.theme.Dimens
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 
 /**
  * Вкладка «Будильники» (design-spec 3.1): заголовок → попередження → рядок разового режиму →
@@ -210,6 +213,8 @@ private fun AlarmCard(
     onToggle: (Boolean) -> Unit,
     onOpenWaiting: () -> Unit,
 ) {
+    // Щоб «Один раз · сьогодні» саме перейшло на «завтра», коли час будильника мине.
+    val now = rememberNowMillis()
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenPadding),
         shape = MaterialTheme.shapes.large,
@@ -235,7 +240,7 @@ private fun AlarmCard(
                         },
                     )
                     Text(
-                        text = daysLabel(alarm),
+                        text = daysLabel(alarm, LocalDateTime.ofInstant(Instant.ofEpochMilli(now), ZoneId.systemDefault())),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

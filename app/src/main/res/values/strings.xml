@@ -35,6 +35,9 @@
     <string name="alarm_edit_title">Будильник</string>
 
     <string name="days_once">Один раз</string>
+    <string name="days_once_on">Один раз · %1$s</string>
+    <string name="day_today">сьогодні</string>
+    <string name="day_tomorrow">завтра</string>
     <string name="days_everyday">Щодня</string>
     <string name="days_weekdays">Пн–Пт</string>
     <string name="days_weekend">Сб, Нд</string>
@@ -50,6 +53,17 @@
     <string name="ringtone">Мелодія</string>
     <string name="ringtone_default">Типова мелодія будильника</string>
     <string name="ringtone_picker_title">Мелодія будильника</string>
+
+    <!-- «Спрацює у понеділок о 06:00» -->
+    <string-array name="day_on_names">
+        <item>у понеділок</item>
+        <item>у вівторок</item>
+        <item>у середу</item>
+        <item>у четвер</item>
+        <item>у п\'ятницю</item>
+        <item>у суботу</item>
+        <item>у неділю</item>
+    </string-array>
 
     <string-array name="day_short_names">
         <item>Пн</item>
@@ -187,7 +201,8 @@
     <string name="wait_strip_pause">Відбій · задзвоню о %1$s</string>
     <string name="wait_strip_checking">Перевіряю тривогу…</string>
     <string name="edit_waiting_title">Будильник чекає відбою</string>
-    <string name="edit_waiting_text">Якщо зберегти зміни, очікування припиниться. Далі будильник працюватиме за новими налаштуваннями: наступний дзвінок — %1$s.</string>
+    <string name="edit_waiting_text">Якщо зберегти зміни, очікування припиниться. Далі будильник працюватиме за новими налаштуваннями й наступного разу спрацює %1$s.</string>
+    <string name="saved_next_ring">Спрацює %1$s</string>
     <string name="edit_waiting_confirm">Зберегти</string>
     <string name="next_ring_today">сьогодні о %1$s</string>
     <string name="next_ring_tomorrow">завтра о %1$s</string>
