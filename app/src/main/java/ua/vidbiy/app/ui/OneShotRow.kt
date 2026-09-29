@@ -33,7 +33,7 @@ import ua.vidbiy.app.ui.theme.Dimens
 import ua.vidbiy.app.ui.theme.alertColors
 
 /** Стан рядка «Розбуди після відбою» (design-spec 4). */
-enum class OneShotRowState { IDLE, CHECKING, NO_ALERT, NO_DATA }
+enum class OneShotRowState { IDLE, CHECKING, NO_ALERT, ONLY_YELLOW, NO_DATA }
 
 /**
  * Рядок разового режиму вгорі головного екрана (FR-25a): кнопка ⏻, перевірка тривоги
@@ -65,6 +65,7 @@ fun OneShotRow(
                 when (state) {
                     OneShotRowState.CHECKING -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.5.dp)
                     OneShotRowState.NO_ALERT -> RowIcon(R.drawable.ic_check)
+                    OneShotRowState.ONLY_YELLOW -> Box(Modifier.size(12.dp).background(MaterialTheme.alertColors.yellow, CircleShape))
                     OneShotRowState.NO_DATA -> RowIcon(R.drawable.ic_cloud_off)
                     OneShotRowState.IDLE -> RowIcon(R.drawable.ic_bedtime, MaterialTheme.colorScheme.primary)
                 }
@@ -84,6 +85,8 @@ fun OneShotRow(
                     stringResource(R.string.one_shot_checking) to stringResource(R.string.one_shot_checking_sub, place.orEmpty())
                 OneShotRowState.NO_ALERT ->
                     stringResource(R.string.one_shot_no_alert) to stringResource(R.string.one_shot_no_alert_sub, place.orEmpty())
+                OneShotRowState.ONLY_YELLOW ->
+                    stringResource(R.string.one_shot_only_yellow) to stringResource(R.string.one_shot_only_yellow_sub, place.orEmpty())
                 OneShotRowState.NO_DATA ->
                     stringResource(R.string.one_shot_no_data) to stringResource(R.string.one_shot_no_data_sub)
             }

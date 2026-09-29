@@ -6,9 +6,13 @@ import ua.vidbiy.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.net.URL
 import java.time.Instant
 
@@ -47,6 +51,8 @@ data class AlertsSnapshot(
     val ageSeconds: Long?,
     /** Показник монотонного лічильника телефона в момент отримання відповіді. */
     val receivedAtElapsed: Long,
+    /** `confirmed_at` з відповіді як є — лише для журналу рішень, щоб звірити з сервером. */
+    val confirmedAt: String? = null,
 ) {
     /** Чи є в знімку взагалі на що спиратися. */
     val isKnown: Boolean get() = alerts != null && ageSeconds != null
@@ -75,16 +81,40 @@ data class AlertsSnapshot(
     }
 }
 
+/**
+ * Як пройшла одна спроба запиту — лише для журналу рішень: чи Samsung не душить мережу
+ * і скільки насправді триває запит.
+ *
+ * [outcome]: `ok`, `http_<код>`, `timeout`, `no_network`, `bad_body` або `error:<тип>`.
+ */
+data class FetchAttempt(val outcome: String, val durationMillis: Long)
+
 /** Клієнт проксі. Один запит — один знімок; повтори вирішує той, хто питає. */
 class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
 
-    suspend fun fetch(): AlertsSnapshot = withContext(Dispatchers.IO) {
-        runCatching { request() }
-            .onFailure { Log.w(TAG, "Проксі недоступний", it) }
-            .getOrElse { AlertsSnapshot.unavailable() }
+    suspend fun fetch(): AlertsSnapshot = fetchWithAttempt().first
+
+    /** Те саме, що [fetch], плюс опис спроби для журналу. */
+    suspend fun fetchWithAttempt(): Pair<AlertsSnapshot, FetchAttempt> = withContext(Dispatchers.IO) {
+        val started = SystemClock.elapsedRealtime()
+        fun took() = SystemClock.elapsedRealtime() - started
+        try {
+            val (snapshot, outcome) = request()
+            snapshot to FetchAttempt(outcome, took())
+        } catch (e: Exception) {
+            Log.w(TAG, "Проксі недоступний", e)
+            AlertsSnapshot.unavailable() to FetchAttempt(describeFailure(e), took())
+        }
     }
 
-    private fun request(): AlertsSnapshot {
+    private fun describeFailure(e: Exception): String = when (e) {
+        is SocketTimeoutException -> "timeout"
+        is UnknownHostException, is ConnectException -> "no_network"
+        is SerializationException, is IllegalArgumentException -> "bad_body"
+        else -> "error:${e.javaClass.simpleName}"
+    }
+
+    private fun request(): Pair<AlertsSnapshot, String> {
         val connection = (URL("$baseUrl/v1/alerts").openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             // Довге очікування тут шкідливе: поки ми чекаємо, будильник мовчить.
@@ -98,11 +128,11 @@ class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
             val received = SystemClock.elapsedRealtime()
             if (connection.responseCode != HttpURLConnection.HTTP_OK) {
                 Log.w(TAG, "Проксі відповів ${connection.responseCode}")
-                return AlertsSnapshot.unavailable(received)
+                return AlertsSnapshot.unavailable(received) to "http_${connection.responseCode}"
             }
 
             val body = connection.inputStream.bufferedReader().use { it.readText() }
-            return parseAlertsResponse(body, received)
+            return parseAlertsResponse(body, received) to "ok"
         } finally {
             connection.disconnect()
         }
@@ -144,6 +174,7 @@ internal fun parseAlertsResponse(body: String, receivedAtElapsed: Long): AlertsS
         },
         ageSeconds = response.ageSeconds,
         receivedAtElapsed = receivedAtElapsed,
+        confirmedAt = response.confirmedAt,
     )
 }
 
@@ -154,6 +185,7 @@ private data class AlertsResponse(
     /** Регіони з активною повітряною тривогою; null — проксі сам ще не знає стану. */
     val alerts: List<RegionAlertDto>? = null,
     @SerialName("age_seconds") val ageSeconds: Long? = null,
+    @SerialName("confirmed_at") val confirmedAt: String? = null,
 )
 
 @Serializable

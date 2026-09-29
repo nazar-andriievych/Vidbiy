@@ -21,6 +21,7 @@ class AlertsResponseTest {
 
         assertEquals(2L, snapshot.ageSeconds)
         assertEquals(42L, snapshot.receivedAtElapsed)
+        assertEquals("2026-09-27T12:27:07.488Z", snapshot.confirmedAt)
         assertEquals(
             listOf(
                 ActiveLevel(

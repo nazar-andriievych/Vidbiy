@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.data.Alarm
+import ua.vidbiy.app.data.DecisionEntry
+import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.PendingWait
 import ua.vidbiy.app.data.shortTitle
 import java.time.LocalDateTime
@@ -68,6 +70,18 @@ class AlarmReceiver : BroadcastReceiver() {
                     "Спрацювання ${intent.action}: будильник=$alarmId, " +
                         "враховувати тривоги=${alarm.respectAlerts}, регіон=${region?.uid}",
                 )
+                app.decisionLog.log(
+                    DecisionEntry(
+                        at = DecisionLog.now(),
+                        event = "fire",
+                        alarmId = alarm.id,
+                        region = region?.uid,
+                        covering = region?.coveringUids?.sorted().orEmpty(),
+                        waitFor = alarm.waitFor.name,
+                        pauseMinutes = alarm.pauseMinutes,
+                        note = "${intent.action?.substringAfterLast('.')}, враховувати тривоги=${alarm.respectAlerts}",
+                    ),
+                )
 
                 if (waitForAllClear) {
                     // Перша перевірка тривоги — вже всередині служби: якщо тривоги немає,
@@ -98,6 +112,15 @@ class AlarmReceiver : BroadcastReceiver() {
                         RingReason.Plain
                     }
                     AlarmRingService.startRinging(context, alarm, reason.copy(oneShot = alarm.id == OneShot.ONE_SHOT_ID))
+                    app.decisionLog.log(
+                        DecisionEntry(
+                            at = DecisionLog.now(),
+                            event = "ring",
+                            alarmId = alarm.id,
+                            region = region?.uid,
+                            note = "${intent.action?.substringAfterLast('.')}: ${reason.kind}",
+                        ),
+                    )
                 }
             } finally {
                 pendingResult.finish()

@@ -21,9 +21,12 @@ import ua.vidbiy.app.alarm.AlarmWaitService
 import ua.vidbiy.app.alarm.OneShot
 import ua.vidbiy.app.alarm.OneShotCheck
 import ua.vidbiy.app.alarm.decideRing
+import ua.vidbiy.app.alarm.hasFreshYellow
 import ua.vidbiy.app.alarm.oneShotCheck
 import ua.vidbiy.app.data.AlertsClient
 import ua.vidbiy.app.data.AlertsSnapshot
+import ua.vidbiy.app.data.DecisionEntry
+import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.WaitFor
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlarmsRepository
@@ -130,16 +133,35 @@ class AlarmsViewModel(
             var known: AlertsSnapshot? = null
             var check: OneShotCheck
             while (true) {
-                known = client.fetch().orPrevious(known)
+                val (fetched, attempt) = client.fetchWithAttempt()
+                known = fetched.orPrevious(known)
+                val nowMillis = System.currentTimeMillis()
                 val decision = decideRing(
                     snapshot = known,
                     nowElapsed = SystemClock.elapsedRealtime(),
-                    nowMillis = System.currentTimeMillis(),
+                    nowMillis = nowMillis,
                     region = region,
                     waitFor = oneShotWaitFor.value,
                     pastDeadline = false,
                 )
-                check = oneShotCheck(decision)
+                check = oneShotCheck(decision, yellowActive = region.hasFreshYellow(known.alerts, nowMillis))
+                app.decisionLog.log(
+                    DecisionEntry(
+                        at = DecisionLog.now(nowMillis),
+                        event = "one_shot_check",
+                        alarmId = OneShot.ONE_SHOT_ID,
+                        region = region.uid,
+                        covering = region.coveringUids.sorted(),
+                        waitFor = oneShotWaitFor.value.name,
+                        ageSeconds = known.effectiveAgeSeconds(SystemClock.elapsedRealtime()),
+                        confirmedAt = known.confirmedAt,
+                        levels = DecisionLog.describeLevels(region, known.alerts),
+                        decision = decision.name,
+                        step = check.name,
+                        fetch = attempt.outcome,
+                        fetchMillis = attempt.durationMillis,
+                    ),
+                )
                 if (check != OneShotCheck.NO_DATA || SystemClock.elapsedRealtime() - started >= ONE_SHOT_CHECK_MILLIS) break
                 delay(ONE_SHOT_RETRY_MILLIS)
             }
@@ -152,8 +174,12 @@ class AlarmsViewModel(
                     _oneShotJustEnabled.value = true
                     _overlay.value = Overlay.Waiting
                 }
-                OneShotCheck.NO_ALERT, OneShotCheck.NO_DATA -> {
-                    _oneShotRow.value = if (check == OneShotCheck.NO_ALERT) OneShotRowState.NO_ALERT else OneShotRowState.NO_DATA
+                OneShotCheck.NO_ALERT, OneShotCheck.ONLY_YELLOW, OneShotCheck.NO_DATA -> {
+                    _oneShotRow.value = when (check) {
+                        OneShotCheck.NO_ALERT -> OneShotRowState.NO_ALERT
+                        OneShotCheck.ONLY_YELLOW -> OneShotRowState.ONLY_YELLOW
+                        else -> OneShotRowState.NO_DATA
+                    }
                     // Відкриті питання requirements: повідомлення тримається ~10 с.
                     delay(ONE_SHOT_MESSAGE_MILLIS)
                     _oneShotRow.value = OneShotRowState.IDLE

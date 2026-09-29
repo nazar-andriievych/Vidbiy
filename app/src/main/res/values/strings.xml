@@ -227,6 +227,8 @@
     <string name="one_shot_cancel_check">Скасувати перевірку</string>
     <string name="one_shot_no_alert">Зараз тривоги немає</string>
     <string name="one_shot_no_alert_sub">%1$s · режим не потрібен</string>
+    <string name="one_shot_only_yellow">Червоної тривоги немає · зараз жовта</string>
+    <string name="one_shot_only_yellow_sub">%1$s · режим чекає лише червону</string>
     <string name="one_shot_no_data">Немає даних</string>
     <string name="one_shot_no_data_sub">Режим не ввімкнено</string>
     <string name="one_shot_retry">Повторити</string>

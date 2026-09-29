@@ -1,7 +1,10 @@
 package ua.vidbiy.app.alarm
 
+import ua.vidbiy.app.data.ActiveLevel
 import ua.vidbiy.app.data.Alarm
+import ua.vidbiy.app.data.AlertLevel
 import ua.vidbiy.app.data.Place
+import ua.vidbiy.app.data.SelectedRegion
 import ua.vidbiy.app.data.WaitFor
 import java.time.LocalTime
 
@@ -37,6 +40,12 @@ enum class OneShotCheck {
     /** «Зараз тривоги немає» — режим не потрібен. */
     NO_ALERT,
 
+    /**
+     * Режим чекає лише червону, а зараз діє жовта. Для рішення це те саме, що [NO_ALERT],
+     * але «тривоги немає» тут вводить в оману: людина бачить тривогу в іншому застосунку.
+     */
+    ONLY_YELLOW,
+
     /** «Немає даних» — режим не вмикається. */
     NO_DATA,
 }
@@ -44,9 +53,18 @@ enum class OneShotCheck {
 /**
  * Рішення перевірки з того самого [decideRing]. Тривога понад добу не рахується (FR-27),
  * тож для режиму це «тривоги немає».
+ *
+ * [yellowActive] — у регіоні зараз діє свіжа жовта тривога (див. [hasFreshYellow]).
  */
-fun oneShotCheck(decision: RingDecision): OneShotCheck = when (decision) {
+fun oneShotCheck(decision: RingDecision, yellowActive: Boolean = false): OneShotCheck = when (decision) {
     RingDecision.KEEP_WAITING -> OneShotCheck.ALERT
-    RingDecision.RING_CLEAR, RingDecision.RING_ALERT_TOO_LONG -> OneShotCheck.NO_ALERT
+    RingDecision.RING_CLEAR -> if (yellowActive) OneShotCheck.ONLY_YELLOW else OneShotCheck.NO_ALERT
+    RingDecision.RING_ALERT_TOO_LONG -> OneShotCheck.NO_ALERT
     else -> OneShotCheck.NO_DATA
 }
+
+/** Чи діє над регіоном жовта тривога, що почалася менше доби тому (FR-27). */
+fun SelectedRegion.hasFreshYellow(alerts: Map<String, List<ActiveLevel>>?, nowMillis: Long): Boolean =
+    alerts != null && levelsOver(alerts).any {
+        it.level == AlertLevel.YELLOW && nowMillis - it.sinceMillis < MAX_ALERT_AGE_MILLIS
+    }

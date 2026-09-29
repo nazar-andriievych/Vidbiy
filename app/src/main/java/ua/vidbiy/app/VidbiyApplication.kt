@@ -13,6 +13,7 @@ import ua.vidbiy.app.alarm.Notifications
 import ua.vidbiy.app.alarm.OneShot
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlarmsRepository
+import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.LegacyMigration
 import ua.vidbiy.app.data.PlacesEditor
 import ua.vidbiy.app.data.PlacesRepository
@@ -28,6 +29,7 @@ class VidbiyApplication : Application() {
     val alarmScheduler: AlarmScheduler by lazy { AlarmScheduler(this) }
     val placesRepository: PlacesRepository by lazy { PlacesRepository(this) }
     val placesEditor: PlacesEditor by lazy { PlacesEditor(placesRepository, alarmsRepository) }
+    val decisionLog: DecisionLog by lazy { DecisionLog(this) }
 
     /** Живе стільки ж, скільки процес: сюди йде робота, яку не можна кидати посеред шляху. */
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

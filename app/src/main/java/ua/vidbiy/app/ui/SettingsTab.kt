@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import ua.vidbiy.app.BuildConfig
 import ua.vidbiy.app.R
 import ua.vidbiy.app.data.Place
 import ua.vidbiy.app.data.WaitFor
@@ -117,6 +118,9 @@ fun SettingsTab(
         }
         item { PermissionsRow(onOpen = onOpenPermissions, modifier = Modifier.padding(horizontal = Dimens.ScreenPadding)) }
         item { PrivacyNote() }
+        if (BuildConfig.DEBUG) {
+            item { DecisionLogCard(modifier = Modifier.padding(horizontal = Dimens.ScreenPadding)) }
+        }
     }
 }
 

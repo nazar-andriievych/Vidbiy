@@ -34,6 +34,8 @@ import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlertLevel
 import ua.vidbiy.app.data.AlertsClient
 import ua.vidbiy.app.data.AlertsSnapshot
+import ua.vidbiy.app.data.DecisionEntry
+import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.PendingWait
 import ua.vidbiy.app.data.WaitStatus
 import ua.vidbiy.app.data.shortTitle
@@ -114,6 +116,7 @@ class AlarmWaitService : Service() {
         var sawAlert = false
         var allClearAtElapsed: Long? = null
         var allClearAtMillis: Long? = null
+        var previousPollElapsed: Long? = null
         Log.i(TAG, "Чекаємо відбою: будильник=${wait.alarmId}, проксі=$baseUrl")
 
         app.dataReady.await()
@@ -127,9 +130,12 @@ class AlarmWaitService : Service() {
             }
 
             val region = alarm.region
-            val snapshot = client.fetch().orPrevious(known)
+            val (fetched, attempt) = client.fetchWithAttempt()
+            val snapshot = fetched.orPrevious(known)
             known = snapshot
             val nowElapsed = SystemClock.elapsedRealtime()
+            val gapSeconds = previousPollElapsed?.let { (nowElapsed - it) / 1000 }
+            previousPollElapsed = nowElapsed
             val nowMillis = System.currentTimeMillis()
             var decision = decideRing(
                 snapshot = snapshot,
@@ -143,23 +149,45 @@ class AlarmWaitService : Service() {
                 decision = RingDecision.RING_ALERT_TOO_LONG
             }
             val age = snapshot.effectiveAgeSeconds(nowElapsed)
-            Log.i(
-                TAG,
-                "Рішення=$decision, регіон=${region?.uid} (${region?.title}), рівень=${alarm.waitFor}, " +
-                    "пауза=${alarm.pauseMinutes} хв, тривоги=${region?.let { r -> snapshot.alerts?.let { r.levelsOver(it) } }}, " +
-                    "вік=${age}с",
-            )
+            fun logPoll(step: String) {
+                val entry = DecisionEntry(
+                    at = DecisionLog.now(nowMillis),
+                    event = "poll",
+                    alarmId = alarm.id,
+                    region = region?.uid,
+                    covering = region?.coveringUids?.sorted().orEmpty(),
+                    waitFor = alarm.waitFor.name,
+                    pauseMinutes = alarm.pauseMinutes,
+                    ageSeconds = age,
+                    confirmedAt = snapshot.confirmedAt,
+                    levels = DecisionLog.describeLevels(region, snapshot.alerts),
+                    decision = decision.name,
+                    step = step,
+                    fetch = attempt.outcome,
+                    fetchMillis = attempt.durationMillis,
+                    gapSeconds = gapSeconds,
+                )
+                Log.i(TAG, entry.toString())
+                app.decisionLog.log(entry)
+            }
 
             // FR-8: на старті до 30 с даємо мережі шанс, перш ніж дзвонити через брак даних.
             val noFreshData = decision == RingDecision.RING_NO_DATA || decision == RingDecision.RING_STALE
             if (noFreshData && !sawAlert && nowElapsed - startedElapsed < STARTUP_WINDOW_MILLIS) {
+                logPoll("retry")
                 delay(STARTUP_RETRY_MILLIS)
                 continue
             }
 
             val step = nextWaitStep(decision, sawAlert, allClearAtElapsed, alarm.pauseMinutes, nowElapsed)
+            logPoll(
+                when {
+                    step is WaitStep.Ring -> "ring"
+                    (step as WaitStep.Wait).allClearAtElapsed != null -> "pause"
+                    else -> "wait"
+                },
+            )
             if (step is WaitStep.Ring) {
-                Log.i(TAG, "Дзвонимо: ${step.reason}")
                 val strongest = region?.let { r -> snapshot.alerts?.let { r.strongestLevel(it, alarm.waitFor, nowMillis) } }
                 val reason = ringReasonFor(
                     decision = step.reason,
@@ -173,6 +201,9 @@ class AlarmWaitService : Service() {
                 ).copy(oneShot = alarm.id == OneShot.ONE_SHOT_ID)
                 AlarmScheduler(this).cancelDeadline(wait.alarmId)
                 AlarmRingService.startRinging(this, alarm, reason)
+                app.decisionLog.log(
+                    DecisionEntry(at = DecisionLog.now(), event = "ring", alarmId = alarm.id, region = region?.uid, note = reason.kind.name),
+                )
                 stopEverything()
                 return
             }
@@ -214,12 +245,16 @@ class AlarmWaitService : Service() {
             AlarmScheduler(this@AlarmWaitService).cancelDeadline(alarmId)
             AlarmScheduler(this@AlarmWaitService).snooze(alarmId, minutes)
             Log.i(TAG, "Відкладено з очікування на $minutes хв: будильник=$alarmId")
+            app().decisionLog.log(
+                DecisionEntry(at = DecisionLog.now(), event = "snooze_from_wait", alarmId = alarmId, note = "$minutes хв"),
+            )
             stopEverything()
         }
     }
 
     /** Користувач вирішив, що сьогодні будильник не потрібен. Наступні дні не чіпаємо. */
     private fun cancelAlarm(alarmId: Long) {
+        app().decisionLog.log(DecisionEntry(at = DecisionLog.now(), event = "cancel_wait", alarmId = alarmId))
         AlarmScheduler(this).cancelDeadline(alarmId)
         stopEverything()
     }
