@@ -58,13 +58,13 @@ import java.time.ZoneId
 fun AlarmsTab(
     alarms: List<Alarm>,
     places: PlacesState,
-    waiting: PendingWait?,
-    waitStatus: WaitStatus?,
+    waits: List<PendingWait>,
+    waitStatuses: List<WaitStatus>,
     contentPadding: PaddingValues,
     onAdd: () -> Unit,
     onEdit: (Alarm) -> Unit,
     onToggle: (Alarm, Boolean) -> Unit,
-    onOpenWaiting: () -> Unit,
+    onOpenWaiting: (alarmId: Long) -> Unit,
     oneShotRow: OneShotRowState,
     onStartOneShot: () -> Unit,
     onCancelOneShotCheck: () -> Unit,
@@ -97,12 +97,12 @@ fun AlarmsTab(
         // Порядок з design-spec 3.1: рядок разового режиму → картки. Стан очікування
         // показує сам елемент, що чекає: рядок режиму стає банером, картка — смугою.
         item {
-            if (waiting?.alarmId == OneShot.ONE_SHOT_ID) {
-                val snapshot = waiting.alarm
+            val oneShotWait = waits.firstOrNull { it.alarmId == OneShot.ONE_SHOT_ID }
+            if (oneShotWait != null) {
                 OneShotBanner(
-                    placeName = snapshot?.let { placeName(it, places) } ?: places.primary?.name,
-                    status = waitStatus?.takeIf { it.alarmId == OneShot.ONE_SHOT_ID },
-                    onOpen = onOpenWaiting,
+                    placeName = oneShotWait.alarm?.let { placeName(it, places) } ?: places.primary?.name,
+                    status = waitStatuses.firstOrNull { it.alarmId == OneShot.ONE_SHOT_ID },
+                    onOpen = { onOpenWaiting(OneShot.ONE_SHOT_ID) },
                 )
             } else {
                 OneShotRow(
@@ -119,18 +119,18 @@ fun AlarmsTab(
             item { EmptyAlarms() }
         } else {
             // Будильник, що чекає, — першим: інакше він міг би опинитися нижче видимої частини.
-            val ordered = alarms.sortedByDescending { it.id == waiting?.alarmId }
+            val ordered = alarms.sortedByDescending { alarm -> waits.any { it.alarmId == alarm.id } }
             items(ordered, key = { it.id }) { alarm ->
-                val wait = waiting?.takeIf { it.alarmId == alarm.id }
+                val wait = waits.firstOrNull { it.alarmId == alarm.id }
                 AlarmCard(
                     alarm = alarm,
                     // Поки чекає — місце з налаштувань, з якими почалося очікування.
                     placeName = placeName(wait?.alarm ?: alarm, places),
                     wait = wait,
-                    waitStatus = waitStatus?.takeIf { wait != null && it.alarmId == alarm.id },
+                    waitStatus = waitStatuses.firstOrNull { wait != null && it.alarmId == alarm.id },
                     onClick = { onEdit(alarm) },
                     onToggle = { onToggle(alarm, it) },
-                    onOpenWaiting = onOpenWaiting,
+                    onOpenWaiting = { onOpenWaiting(alarm.id) },
                 )
             }
         }
@@ -189,7 +189,7 @@ private fun WaitingStrip(placeName: String?, status: WaitStatus?, onOpen: () -> 
                     Modifier.size(12.dp).background(if (level == AlertLevel.RED) colors.red else colors.yellow, CircleShape),
                 )
                 phase == WaitPhase.PAUSE -> Icon(painterResource(R.drawable.ic_schedule), null, Modifier.size(20.dp))
-                else -> Icon(painterResource(R.drawable.ic_hourglass_top), null, Modifier.size(20.dp))
+                else -> Icon(painterResource(R.drawable.ic_bedtime), null, Modifier.size(20.dp))
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, style = MaterialTheme.typography.titleSmall)

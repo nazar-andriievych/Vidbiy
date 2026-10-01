@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.data.DecisionEntry
 import ua.vidbiy.app.data.DecisionLog
+import ua.vidbiy.app.data.PendingWait
 
 /**
  * Перезавантаження стирає всі зареєстровані спрацювання — система не зберігає їх між
@@ -40,7 +41,11 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     private suspend fun restoreWaiting(context: Context, app: VidbiyApplication, action: String?) {
-        val wait = app.settingsRepository.currentPendingWait() ?: return
+        // Очікувань могло бути кілька (різні регіони, разовий режим): відновлюємо кожне.
+        for (wait in app.settingsRepository.currentPendingWaits()) restoreWait(context, app, action, wait)
+    }
+
+    private suspend fun restoreWait(context: Context, app: VidbiyApplication, action: String?, wait: PendingWait) {
         // Видалений будильник не відновлюємо; живий — з налаштуваннями, з якими він чекав.
         val alarm = app.findAlarm(wait.alarmId)?.let { wait.alarm ?: it }
         app.decisionLog.log(
@@ -52,7 +57,7 @@ class BootReceiver : BroadcastReceiver() {
             ),
         )
         if (alarm == null) {
-            app.settingsRepository.clearPendingWait()
+            app.settingsRepository.clearPendingWait(wait.alarmId)
             return
         }
 
@@ -60,7 +65,7 @@ class BootReceiver : BroadcastReceiver() {
         val restored = wait.copy(startedAtMillis = wait.startedAtMillis.takeIf { it > 0 } ?: System.currentTimeMillis())
         if (System.currentTimeMillis() >= restored.giveUpAtMillis()) {
             // Крайній час настав, поки телефон завантажувався — дзвонимо одразу (FR-16).
-            app.settingsRepository.clearPendingWait()
+            app.settingsRepository.clearPendingWait(wait.alarmId)
             val deadline = restored.deadlineMillis
             val reason = if (deadline != null && System.currentTimeMillis() >= deadline) {
                 RingReason(RingReason.Kind.DEADLINE, deadlineMillis = deadline)

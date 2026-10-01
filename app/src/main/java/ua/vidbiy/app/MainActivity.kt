@@ -86,12 +86,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
-        if (intent?.action == ACTION_SHOW_WAITING) viewModel.openWaiting()
+        if (intent?.action != ACTION_SHOW_WAITING) return
+        // Сповіщення кожного очікування несе id свого будильника.
+        val alarmId = if (intent.hasExtra(EXTRA_ALARM_ID)) intent.getLongExtra(EXTRA_ALARM_ID, 0L) else null
+        viewModel.openWaiting(alarmId)
     }
 
     companion object {
         /** Відкрити екран очікування: зі сповіщення («Не дзвонити…» або натиск на нього). */
         const val ACTION_SHOW_WAITING = "ua.vidbiy.app.action.SHOW_WAITING"
+        const val EXTRA_ALARM_ID = "alarm_id"
     }
 }
 
@@ -111,8 +115,8 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
     val places by viewModel.places.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val overlay by viewModel.overlay.collectAsStateWithLifecycle()
-    val waiting by viewModel.pendingWait.collectAsStateWithLifecycle()
-    val waitStatus by viewModel.waitStatus.collectAsStateWithLifecycle()
+    val waits by viewModel.pendingWaits.collectAsStateWithLifecycle()
+    val waitStatuses by viewModel.waitStatuses.collectAsStateWithLifecycle()
     val snoozeMinutes by viewModel.snoozeMinutes.collectAsStateWithLifecycle()
     val oneShotRow by viewModel.oneShotRow.collectAsStateWithLifecycle()
     val oneShotWaitFor by viewModel.oneShotWaitFor.collectAsStateWithLifecycle()
@@ -142,7 +146,11 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
     // (редагування, вибір регіону, нове місце) перекривають вкладки, поки відкриті.
     val editing = draft
     val current = overlay
-    // Екран очікування показує налаштування, з якими очікування почалося (PendingWait.alarm).
+    // Екран очікування — того, на яке натиснули; без вказівки — будь-якого, що чекає.
+    val waiting = (current as? Overlay.Waiting)?.let { target ->
+        waits.firstOrNull { it.alarmId == target.alarmId } ?: waits.firstOrNull().takeIf { target.alarmId == null }
+    }
+    // Він показує налаштування, з якими очікування почалося (PendingWait.alarm).
     val waitingAlarm = waiting?.let { wait ->
         wait.alarm ?: if (wait.alarmId == OneShot.ONE_SHOT_ID) oneShotAlarm else alarms.firstOrNull { it.id == wait.alarmId }
     }
@@ -150,14 +158,14 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
     val missingPermissions = rememberMissingPermissions()
     when {
         current == Overlay.Permissions -> PermissionsScreen(onBack = viewModel::closeOverlay)
-        current == Overlay.Waiting -> {
+        current is Overlay.Waiting -> {
             val wait = waiting
             if (wait != null && waitingAlarm != null) {
                 WaitingScreen(
                     alarm = waitingAlarm,
                     placeName = placeName(waitingAlarm, places),
                     wait = wait,
-                    status = waitStatus?.takeIf { it.alarmId == wait.alarmId },
+                    status = waitStatuses.firstOrNull { it.alarmId == wait.alarmId },
                     snoozeMinutes = snoozeMinutes,
                     onBack = viewModel::closeOverlay,
                     onSnooze = { viewModel.snoozeWaiting(wait.alarmId) },
@@ -224,8 +232,8 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                     Tab.Alarms -> AlarmsTab(
                         alarms = alarms,
                         places = places,
-                        waiting = waiting,
-                        waitStatus = waitStatus,
+                        waits = waits,
+                        waitStatuses = waitStatuses,
                         contentPadding = content,
                         onAdd = viewModel::startNew,
                         onEdit = viewModel::startEdit,

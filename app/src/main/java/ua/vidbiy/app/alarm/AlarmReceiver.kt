@@ -7,7 +7,6 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.data.Alarm
@@ -45,8 +44,8 @@ class AlarmReceiver : BroadcastReceiver() {
                 app.dataReady.await()
                 val live = app.findAlarm(alarmId)
                 // Прочитати до дзвінка: дзвінок зупиняє службу очікування, і вона стирає свій стан.
-                val wait = app.settingsRepository.currentPendingWait()?.takeIf { it.alarmId == alarmId }
-                val lastLevel = app.settingsRepository.waitStatus.first()?.takeIf { it.alarmId == alarmId }?.level
+                val wait = app.settingsRepository.currentPendingWait(alarmId)
+                val lastLevel = app.settingsRepository.currentWaitStatus(alarmId)?.level
                 if (live == null) {
                     // Будильник видалили, а спрацювання лишилося — просто мовчимо.
                     return@launch

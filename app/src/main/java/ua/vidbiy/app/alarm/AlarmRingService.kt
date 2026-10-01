@@ -45,7 +45,9 @@ class AlarmRingService : Service() {
     private var vibrator: Vibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var autoStopJob: Job? = null
-    private var ringingAlarmId: Long = Alarm.NEW_ID
+
+    /** Будильники, що дзвонять зараз: дзвінок один, а екран і кнопки — на всіх разом. */
+    private val ringing = LinkedHashMap<Long, RingEntry>()
     private var snoozeMinutes: Int = SettingsRepository.DEFAULT_SNOOZE_MINUTES
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -54,10 +56,10 @@ class AlarmRingService : Service() {
         when (intent?.action) {
             ACTION_START -> startRinging(intent)
             ACTION_SNOOZE -> {
-                AlarmScheduler(this).snooze(
-                    alarmId = intent.getLongExtra(EXTRA_ALARM_ID, ringingAlarmId),
-                    minutes = snoozeMinutes,
-                )
+                // Відкладення, як і вимкнення, стосується всіх будильників, що дзвонять.
+                val scheduler = AlarmScheduler(this)
+                val ids = ringing.keys.toList().ifEmpty { listOf(intent.getLongExtra(EXTRA_ALARM_ID, Alarm.NEW_ID)) }
+                ids.forEach { scheduler.snooze(alarmId = it, minutes = snoozeMinutes) }
                 stopEverything()
             }
 
@@ -74,13 +76,22 @@ class AlarmRingService : Service() {
         val vibrate = intent.getBooleanExtra(EXTRA_VIBRATE, true)
         val ringtoneUri = intent.getStringExtra(EXTRA_RINGTONE_URI)
         val reasonJson = intent.getStringExtra(EXTRA_REASON)
-        ringingAlarmId = alarmId
+        val reason = reasonJson?.let { runCatching { json.decodeFromString<RingReason>(it) }.getOrNull() } ?: RingReason.Plain
         snoozeMinutes = intent.getIntExtra(EXTRA_SNOOZE_MINUTES, SettingsRepository.DEFAULT_SNOOZE_MINUTES)
 
+        // Другий будильник (той самий регіон закінчився одночасно, або наспів інший час) долучається
+        // до дзвінка, що вже йде: звук один, а на екрані видно всі. Той самий будильник двічі
+        // (скажімо, відкладення, що збіглося з дзвінком) просто оновлює свій запис.
+        val alreadyRinging = ringing.isNotEmpty()
+        ringing[alarmId] = RingEntry(alarmId, hour, minute, reason)
+        RingState.set(ringing.values.toList())
+
         startForegroundNotification(alarmId, hour, minute, reasonJson)
-        acquireWakeLock()
-        startSound(ringtoneUri)
-        if (vibrate) startVibration()
+        if (!alreadyRinging) {
+            acquireWakeLock()
+            startSound(ringtoneUri)
+        }
+        if (vibrate && vibrator == null) startVibration()
 
         // Будильник, який дзвонить годинами, розряджає телефон і дратує сусідів.
         // Через 10 хвилин замовкаємо — так само, як системний годинник.
@@ -92,9 +103,10 @@ class AlarmRingService : Service() {
     }
 
     private fun startForegroundNotification(alarmId: Long, hour: Int, minute: Int, reasonJson: String?) {
+        // Один код запиту: повторний показ оновлює той самий повноекранний інтент, а не множить їх.
         val fullScreen = PendingIntent.getActivity(
             this,
-            alarmId.toInt(),
+            0,
             AlarmRingActivity.intent(this, alarmId, hour, minute, reasonJson, snoozeMinutes),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -102,7 +114,13 @@ class AlarmRingService : Service() {
         val notification = NotificationCompat.Builder(this, Notifications.CHANNEL_ALARM)
             .setSmallIcon(R.drawable.ic_alarm)
             .setContentTitle(getString(R.string.ring_title))
-            .setContentText(getString(R.string.ring_text, "%02d:%02d".format(hour, minute)))
+            .setContentText(
+                if (ringing.size > 1) {
+                    getString(R.string.ring_text_multiple, ringing.size)
+                } else {
+                    getString(R.string.ring_text, "%02d:%02d".format(hour, minute))
+                },
+            )
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -203,6 +221,8 @@ class AlarmRingService : Service() {
         vibrator = null
         wakeLock?.takeIf { it.isHeld }?.release()
         wakeLock = null
+        ringing.clear()
+        RingState.set(emptyList())
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -250,12 +270,13 @@ class AlarmRingService : Service() {
                 putExtra(EXTRA_SNOOZE_MINUTES, snooze)
             }
             context.startForegroundService(intent)
-            // Дзвінок і очікування відбою взаємно виключні. Очікування зупиняємо лише тепер,
+            // Дзвінок і очікування відбою одного будильника взаємно виключні. Очікування зупиняємо лише тепер,
             // коли дзвінок уже запущено: часто нас викликає саме служба очікування, і її зупинка
             // скасовує цю корутину. Зупинка до запуску обривала дзвінок на першому ж `first()`
             // вище — будильник мовчки не дзвонив після відбою (журнал рішень, 2026-09-29).
             // Після `startForegroundService` пауз немає, тож скасуванню тут нема чого обірвати.
-            AlarmWaitService.stop(context)
+            // Зупиняємо лише очікування цього будильника: решта (інші регіони) чекають далі.
+            AlarmWaitService.stop(context, alarm.id)
         }
 
         fun snoozeIntent(context: Context, alarmId: Long): Intent =

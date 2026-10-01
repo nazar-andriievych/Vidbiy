@@ -53,8 +53,8 @@ sealed interface Overlay {
 
     data class PlaceRegion(val placeId: Long) : Overlay
 
-    /** Екран очікування (design-spec 3.8). */
-    data object Waiting : Overlay
+    /** Екран очікування (design-spec 3.8) цього будильника; [alarmId] null — будь-якого, що чекає. */
+    data class Waiting(val alarmId: Long?) : Overlay
 
     /** Екран дозволів (design-spec 3.7). */
     data object Permissions : Overlay
@@ -77,16 +77,16 @@ class AlarmsViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, PlacesState())
 
     /**
-     * Будильник, який просто зараз чекає відбою. Без цього він у списку виглядав би
-     * вимкненим (одноразовий уже зняв позначку «увімкнено») або «спрацює завтра»,
-     * хоча насправді він саме зараз мовчить через тривогу.
+     * Будильники (і разовий режим), що просто зараз чекають відбою; їх може бути кілька.
+     * Без цього будильник у списку виглядав би вимкненим (одноразовий уже зняв позначку
+     * «увімкнено») або «спрацює завтра», хоча насправді він саме зараз мовчить через тривогу.
      */
-    val pendingWait: StateFlow<PendingWait?> = settings.pendingWait
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val pendingWaits: StateFlow<List<PendingWait>> = settings.pendingWaits
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Що зараз бачить служба очікування: рівень, причина, свіжість, пауза. */
-    val waitStatus: StateFlow<WaitStatus?> = settings.waitStatus
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    /** Що зараз бачить служба про кожне очікування: рівень, причина, свіжість, пауза. */
+    val waitStatuses: StateFlow<List<WaitStatus>> = settings.waitStatuses
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** FR-19: тривалість відкладення. */
     val snoozeMinutes: StateFlow<Int> = settings.snoozeMinutes
@@ -182,7 +182,7 @@ class AlarmsViewModel(
                     AlarmWaitService.startWaiting(app, wait)
                     _oneShotRow.value = OneShotRowState.IDLE
                     _oneShotJustEnabled.value = true
-                    _overlay.value = Overlay.Waiting
+                    _overlay.value = Overlay.Waiting(OneShot.ONE_SHOT_ID)
                 }
                 OneShotCheck.NO_ALERT, OneShotCheck.ONLY_YELLOW, OneShotCheck.NO_DATA -> {
                     _oneShotRow.value = when (check) {
@@ -211,8 +211,8 @@ class AlarmsViewModel(
         _overlay.value = Overlay.Permissions
     }
 
-    fun openWaiting() {
-        _overlay.value = Overlay.Waiting
+    fun openWaiting(alarmId: Long? = null) {
+        _overlay.value = Overlay.Waiting(alarmId)
     }
 
     /** «Сьогодні не дзвони» (утриманням на екрані очікування). */
@@ -274,7 +274,7 @@ class AlarmsViewModel(
      */
     fun draftStopsWaiting(): Boolean {
         val draft = _draft.value ?: return false
-        if (pendingWait.value?.alarmId != draft.id) return false
+        if (pendingWaits.value.none { it.alarmId == draft.id }) return false
         val saved = alarms.value.firstOrNull { it.id == draft.id } ?: return false
         return saved != draft.copy(enabled = saved.enabled)
     }
@@ -302,7 +302,7 @@ class AlarmsViewModel(
         val alarm = _draft.value ?: return
         _draft.value = null
         if (alarm.id != Alarm.NEW_ID) {
-            if (pendingWait.value?.alarmId == alarm.id) AlarmWaitService.cancelWaiting(app, alarm.id)
+            if (pendingWaits.value.any { it.alarmId == alarm.id }) AlarmWaitService.cancelWaiting(app, alarm.id)
             scheduler.cancel(alarm.id)
             viewModelScope.launch { repository.delete(alarm.id) }
         }

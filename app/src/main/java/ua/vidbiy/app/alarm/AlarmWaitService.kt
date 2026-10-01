@@ -1,6 +1,7 @@
 package ua.vidbiy.app.alarm
 
 import android.app.Notification
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
@@ -17,6 +18,7 @@ import android.text.style.ForegroundColorSpan
 import android.util.Log
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -55,6 +57,11 @@ import java.time.format.DateTimeFormatter
  * зі станом. На старті до 30 с пробуємо отримати свіжі дані (FR-8), далі опитуємо проксі
  * кожні 30 с. Відбій — чекаємо паузу N хв (FR-14), і якщо тривога не повернулася — дзвонимо.
  *
+ * Очікувань може бути кілька одразу — будильники в різних регіонах і разовий режим. Кожне
+ * має власну корутину опитування, сповіщення, wake lock і запис у сховищі, а служба живе, доки
+ * є бодай одне. Як «справжнє» foreground-сповіщення Android тримає одне з них ([foregroundId]);
+ * решта — звичайні сповіщення, і коли головне зникає, роль переходить до іншого.
+ *
  * Служба не єдиний запобіжник: момент, коли будильник здасться (крайній час або доба),
  * окремо зареєстрований у AlarmManager (AlarmScheduler.scheduleDeadline), тож навіть якщо
  * систему занесе й вона прибере цей процес, будильник однаково задзвонить.
@@ -62,8 +69,14 @@ import java.time.format.DateTimeFormatter
 class AlarmWaitService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private var wakeLock: PowerManager.WakeLock? = null
-    private var pollJob: Job? = null
+    private val jobs = mutableMapOf<Long, Job>()
+    private val wakeLocks = mutableMapOf<Long, PowerManager.WakeLock>()
+
+    /** Останнє сповіщення кожного очікування: потрібне, щоб передати роль foreground іншому. */
+    private val notifications = mutableMapOf<Long, Notification>()
+
+    /** Очікування, чиє сповіщення тримає службу в foreground. */
+    private var foregroundId: Long? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -71,12 +84,17 @@ class AlarmWaitService : Service() {
         val alarmId = intent?.getLongExtra(EXTRA_ALARM_ID, Alarm.NEW_ID) ?: Alarm.NEW_ID
 
         when (intent?.action) {
-            ACTION_START -> startWaiting(
-                intent.getStringExtra(EXTRA_WAIT)?.let(PendingWait::fromJson) ?: PendingWait(alarmId = alarmId),
-            )
+            ACTION_START -> {
+                val wait = intent.getStringExtra(EXTRA_WAIT)?.let(PendingWait::fromJson) ?: PendingWait(alarmId = alarmId)
+                startWaiting(wait)
+                // Систему змусили прибити службу, і вона віддає лише останній Intent. Інші
+                // очікування лежать у сховищі — піднімаємо й їх, інакше вони втратили б опитування.
+                if (flags and START_FLAG_REDELIVERY != 0) resumeOtherWaits(except = wait.alarmId)
+            }
             ACTION_SNOOZE -> snooze(alarmId)
             ACTION_CANCEL -> cancelAlarm(alarmId)
-            else -> stopEverything()
+            ACTION_STOP -> finishWait(alarmId)
+            else -> stopIfIdle()
         }
         // START_REDELIVER_INTENT: якщо систему змусять прибити службу, вона віддасть їй
         // той самий Intent наново — разом із будильником і крайнім часом.
@@ -85,24 +103,67 @@ class AlarmWaitService : Service() {
 
     private fun startWaiting(wait: PendingWait) {
         if (wait.alarmId == Alarm.NEW_ID) {
-            stopEverything()
+            stopIfIdle()
             return
         }
 
         // Android вимагає показати сповіщення протягом кількох секунд після старту служби,
         // тож перше — ще до того, як прочитали будильник.
-        startForeground(buildNotification(alarm = null, wait = wait, status = null, snoozeMinutes = null))
-        acquireWakeLock(wait.giveUpAtMillis())
+        publish(wait.alarmId, buildNotification(alarm = null, wait = wait, status = null, snoozeMinutes = null))
+        // Кожен startForegroundService вимагає свого startForeground, навіть якщо сповіщення
+        // нового очікування — не те, що тримає службу.
+        refreshForeground()
+        acquireWakeLock(wait)
         app().applicationScope.launch {
             app().settingsRepository.setPendingWait(wait)
             app().settingsRepository.setWaitStatus(WaitStatus(alarmId = wait.alarmId))
         }
 
-        pollJob?.cancel()
-        pollJob = scope.launch { pollUntilClear(wait) }
+        jobs.remove(wait.alarmId)?.cancel()
+        jobs[wait.alarmId] = scope.launch { pollUntilClear(wait) }
     }
 
+    private fun resumeOtherWaits(except: Long) {
+        scope.launch {
+            for (saved in app().settingsRepository.currentPendingWaits()) {
+                if (saved.alarmId == except || saved.alarmId in jobs) continue
+                Log.i(TAG, "Відновлюємо очікування після перезапуску служби: будильник=${saved.alarmId}")
+                startWaiting(saved)
+            }
+        }
+    }
+
+    /**
+     * Будь-який збій у циклі (диск, DataStore, сповіщення) = дзвонимо, а не мовчимо (NFR-1).
+     * Без цього необроблений виняток валив би процес, а крайній час у AlarmManager
+     * без заданого крайнього часу — це доба.
+     */
     private suspend fun pollUntilClear(wait: PendingWait) {
+        try {
+            pollLoop(wait)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Крок очікування не вдався — дзвонимо (NFR-1): будильник=${wait.alarmId}", e)
+            ringAfterFailure(wait)
+        }
+    }
+
+    private suspend fun ringAfterFailure(wait: PendingWait) = withContext(NonCancellable) {
+        // Кожен крок окремо: збій одного (наприклад, диска) не має завадити самому дзвінку.
+        runCatching { AlarmScheduler(this@AlarmWaitService).cancelDeadline(wait.alarmId) }
+        val alarm = wait.alarm ?: runCatching { app().findAlarm(wait.alarmId) }.getOrNull()
+        if (alarm != null) {
+            val reason = RingReason(
+                kind = RingReason.Kind.NO_CONNECTION,
+                oneShot = alarm.id == OneShot.ONE_SHOT_ID,
+            )
+            AlarmRingService.startRinging(this@AlarmWaitService, alarm, reason)
+        }
+        finishWait(wait.alarmId)
+    }
+
+    private suspend fun pollLoop(wait: PendingWait) {
         val app = app()
         val baseUrl = app.settingsRepository.proxyBaseUrl()
         val client = AlertsClient(baseUrl)
@@ -122,7 +183,7 @@ class AlarmWaitService : Service() {
             if (live == null) {
                 // Будильник видалили, поки ми чекали — чекати більше нема для кого.
                 AlarmScheduler(this@AlarmWaitService).cancelDeadline(wait.alarmId)
-                stopEverything()
+                finishWait(wait.alarmId)
                 return
             }
 
@@ -194,7 +255,7 @@ class AlarmWaitService : Service() {
                     decision = step.reason,
                     sawAlert = sawAlert,
                     placeName = app.placesRepository.current().byId(alarm.placeId)?.name ?: region?.shortTitle,
-                    level = strongest?.level ?: app.settingsRepository.waitStatus.first()?.level,
+                    level = strongest?.level ?: app.settingsRepository.currentWaitStatus(wait.alarmId)?.level,
                     allClearAtMillis = allClearAtMillis,
                     pauseMinutes = alarm.pauseMinutes,
                     deadlineMillis = wait.deadlineMillis,
@@ -205,7 +266,7 @@ class AlarmWaitService : Service() {
                 app.decisionLog.log(
                     DecisionEntry(at = DecisionLog.now(), event = "ring", alarmId = alarm.id, region = region?.uid, note = reason.kind.name),
                 )
-                stopEverything()
+                finishWait(wait.alarmId)
             }
             if (step is WaitStep.Ring) return
             step as WaitStep.Wait
@@ -229,7 +290,8 @@ class AlarmWaitService : Service() {
             app.settingsRepository.setWaitStatus(status)
             // Назва місця, а якщо місця немає (обрано напряму чи видалено) — коротка назва регіону.
             val placeName = app.placesRepository.current().byId(alarm.placeId)?.name ?: region?.shortTitle
-            startForeground(
+            publish(
+                alarm.id,
                 buildNotification(alarm, wait, status, app.settingsRepository.snoozeMinutes.first(), placeName),
             )
 
@@ -249,7 +311,7 @@ class AlarmWaitService : Service() {
             app().decisionLog.log(
                 DecisionEntry(at = DecisionLog.now(), event = "snooze_from_wait", alarmId = alarmId, note = "$minutes хв"),
             )
-            stopEverything()
+            finishWait(alarmId)
         }
     }
 
@@ -257,18 +319,31 @@ class AlarmWaitService : Service() {
     private fun cancelAlarm(alarmId: Long) {
         app().decisionLog.log(DecisionEntry(at = DecisionLog.now(), event = "cancel_wait", alarmId = alarmId))
         AlarmScheduler(this).cancelDeadline(alarmId)
-        stopEverything()
+        finishWait(alarmId)
     }
 
-    private fun startForeground(notification: Notification) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                Notifications.WAITING_NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-            )
+    /** Показує сповіщення очікування: головне — через startForeground, решту — звичайним notify. */
+    private fun publish(alarmId: Long, notification: Notification) {
+        notifications[alarmId] = notification
+        if (foregroundId == null) foregroundId = alarmId
+        if (foregroundId == alarmId) {
+            startForeground(alarmId, notification)
         } else {
-            startForeground(Notifications.WAITING_NOTIFICATION_ID, notification)
+            notificationManager().notify(Notifications.waitingNotificationId(alarmId), notification)
+        }
+    }
+
+    private fun refreshForeground() {
+        val id = foregroundId ?: return
+        notifications[id]?.let { startForeground(id, it) }
+    }
+
+    private fun startForeground(alarmId: Long, notification: Notification) {
+        val id = Notifications.waitingNotificationId(alarmId)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(id, notification)
         }
     }
 
@@ -314,7 +389,7 @@ class AlarmWaitService : Service() {
         body.append(meta)
 
         val builder = NotificationCompat.Builder(this, Notifications.CHANNEL_WAITING)
-            .setSmallIcon(R.drawable.ic_hourglass_top)
+            .setSmallIcon(R.drawable.ic_bedtime)
             .setContentTitle(title)
             .setContentText(body.lines().firstOrNull { it.isNotBlank() })
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -322,22 +397,24 @@ class AlarmWaitService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setShowWhen(false)
-            .setContentIntent(openWaitingScreen())
+            .setContentIntent(openWaitingScreen(wait.alarmId))
         if (snoozeMinutes != null) {
             builder.addAction(0, getString(R.string.waiting_notif_snooze, snoozeMinutes), action(ACTION_SNOOZE, wait.alarmId))
         }
-        builder.addAction(0, getString(R.string.waiting_notif_skip), openWaitingScreen())
+        builder.addAction(0, getString(R.string.waiting_notif_skip), openWaitingScreen(wait.alarmId))
         return builder.build()
     }
 
     private fun isNight(): Boolean =
         resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
 
-    private fun openWaitingScreen(): PendingIntent = PendingIntent.getActivity(
+    /** Екран очікування саме цього будильника: у кожного сповіщення свій код запиту й свій id в Intent. */
+    private fun openWaitingScreen(alarmId: Long): PendingIntent = PendingIntent.getActivity(
         this,
-        REQUEST_OPEN_WAITING,
+        REQUEST_OPEN_WAITING + Notifications.waitingNotificationId(alarmId),
         Intent(this, MainActivity::class.java)
             .setAction(MainActivity.ACTION_SHOW_WAITING)
+            .putExtra(MainActivity.EXTRA_ALARM_ID, alarmId)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
@@ -355,11 +432,12 @@ class AlarmWaitService : Service() {
         )
     }
 
-    private fun acquireWakeLock(giveUpAtMillis: Long) {
+    private fun acquireWakeLock(wait: PendingWait) {
         val power = getSystemService(PowerManager::class.java) ?: return
+        wakeLocks.remove(wait.alarmId)?.takeIf { it.isHeld }?.release()
         // До моменту, коли будильник здасться, але не довше доби (PendingWait.MAX_WAIT_MILLIS).
-        val timeout = (giveUpAtMillis - System.currentTimeMillis()).coerceIn(0, PendingWait.MAX_WAIT_MILLIS)
-        wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG).apply {
+        val timeout = (wait.giveUpAtMillis() - System.currentTimeMillis()).coerceIn(0, PendingWait.MAX_WAIT_MILLIS)
+        wakeLocks[wait.alarmId] = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$WAKE_LOCK_TAG:${wait.alarmId}").apply {
             setReferenceCounted(false)
             acquire(timeout)
         }
@@ -367,20 +445,46 @@ class AlarmWaitService : Service() {
 
     private fun app() = application as VidbiyApplication
 
-    private fun stopEverything() {
+    private fun notificationManager() = getSystemService(NotificationManager::class.java)
+
+    /**
+     * Це очікування закінчилося (задзвонило, скасоване, відкладене, будильник видалено).
+     * Інші очікування не чіпаємо; службу зупиняємо, лише коли їх не лишилося.
+     */
+    private fun finishWait(alarmId: Long) {
         // Запис має дійти до диска, навіть якщо служба помре наступної миті,
         // тож веде його scope застосунку, а не наш.
-        app().applicationScope.launch { app().settingsRepository.clearPendingWait() }
-        pollJob?.cancel()
-        pollJob = null
-        wakeLock?.takeIf { it.isHeld }?.release()
-        wakeLock = null
+        app().applicationScope.launch { app().settingsRepository.clearPendingWait(alarmId) }
+        jobs.remove(alarmId)?.cancel()
+        wakeLocks.remove(alarmId)?.takeIf { it.isHeld }?.release()
+        notifications.remove(alarmId)
+
+        if (foregroundId == alarmId) {
+            foregroundId = notifications.keys.firstOrNull()
+            // Знімаємо сповіщення очікування, що закінчилося, але службу з foreground не випускаємо,
+            // якщо є кому передати роль: інакше Android міг би прибити її посеред чужого очікування.
+            stopForeground(STOP_FOREGROUND_DETACH)
+            notificationManager().cancel(Notifications.waitingNotificationId(alarmId))
+            refreshForeground()
+        } else {
+            notificationManager().cancel(Notifications.waitingNotificationId(alarmId))
+        }
+        stopIfIdle()
+    }
+
+    private fun stopIfIdle() {
+        if (jobs.isNotEmpty() || notifications.isNotEmpty()) return
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     override fun onDestroy() {
-        stopEverything()
+        // Записи про очікування лишаємо на диску: якщо службу прибила система, їх підніме
+        // перезапуск (resumeOtherWaits) або BootReceiver. Стирає їх лише finishWait.
+        jobs.values.forEach { it.cancel() }
+        jobs.clear()
+        wakeLocks.values.forEach { lock -> lock.takeIf { it.isHeld }?.release() }
+        wakeLocks.clear()
         scope.cancel()
         super.onDestroy()
     }
@@ -428,11 +532,8 @@ class AlarmWaitService : Service() {
         /** «Сьогодні не дзвони»: наступні дні лишаються як були. */
         fun cancelWaiting(context: Context, alarmId: Long) = send(context, ACTION_CANCEL, alarmId)
 
-        /** Викликається, коли будильник уже дзвонить: чекати більше нема чого. */
-        fun stop(context: Context) {
-            val intent = Intent(context, AlarmWaitService::class.java).apply { action = ACTION_STOP }
-            runCatching { context.startService(intent) }
-        }
+        /** Викликається, коли будильник уже дзвонить: цьому будильнику чекати більше нема чого. */
+        fun stop(context: Context, alarmId: Long) = send(context, ACTION_STOP, alarmId)
 
         private fun send(context: Context, action: String, alarmId: Long) {
             val intent = Intent(context, AlarmWaitService::class.java).apply {

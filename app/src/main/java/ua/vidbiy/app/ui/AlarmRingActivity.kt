@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -41,7 +43,9 @@ import kotlinx.serialization.json.Json
 import ua.vidbiy.app.R
 import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.alarm.AlarmRingService
+import ua.vidbiy.app.alarm.RingEntry
 import ua.vidbiy.app.alarm.RingReason
+import ua.vidbiy.app.alarm.RingState
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlertLevel
 import ua.vidbiy.app.data.SettingsRepository
@@ -74,16 +78,20 @@ class AlarmRingActivity : ComponentActivity() {
         val reason = intent.getStringExtra(EXTRA_REASON)
             ?.let { runCatching { json.decodeFromString<RingReason>(it) }.getOrNull() }
             ?: RingReason.Plain
+        // Запасний варіант, якщо служба ще не встигла заповнити RingState.
+        val fromIntent = RingEntry(alarmId, hour, minute, reason)
         val settings = (application as VidbiyApplication).settingsRepository
 
         setContent {
             val themeMode by settings.themeMode.collectAsState(initial = ThemeMode.System)
+            // Усі будильники, що дзвонять зараз: нові долучаються, поки екран відкритий.
+            val ringing by RingState.entries.collectAsState()
             VidbiyTheme(mode = themeMode) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     RingScreen(
-                        time = formatTime(hour, minute),
-                        reason = reason,
+                        entries = ringing.ifEmpty { listOf(fromIntent) },
                         snoozeMinutes = snoozeMinutes,
+                        // Служба відкладає й вимикає всіх разом; id потрібен лише як запасний.
                         onSnooze = {
                             startService(AlarmRingService.snoozeIntent(this, alarmId))
                             finish()
@@ -141,11 +149,12 @@ class AlarmRingActivity : ComponentActivity() {
 /**
  * «Будильник 06:45 · Дім», поточний час великим, дата; блок причини (крім звичайного
  * будильника); внизу «Відкласти на X хв» і «Вимкнути» з утриманням (FR-21).
+ * Якщо дзвонить кілька будильників, замість одного блоку причини — список: у кожного своя
+ * причина, а кнопки діють на всіх.
  */
 @Composable
 private fun RingScreen(
-    time: String,
-    reason: RingReason,
+    entries: List<RingEntry>,
     snoozeMinutes: Int,
     onSnooze: () -> Unit,
     onDismiss: () -> Unit,
@@ -160,11 +169,7 @@ private fun RingScreen(
     ) {
         Spacer(Modifier.heightIn(min = 48.dp))
         Text(
-            text = when {
-                reason.oneShot -> stringResource(R.string.ring_label_one_shot, reason.placeName.orEmpty())
-                reason.placeName != null -> stringResource(R.string.ring_label, time, reason.placeName)
-                else -> stringResource(R.string.ring_label_no_place, time)
-            },
+            text = if (entries.size > 1) stringResource(R.string.ring_label_multiple, entries.size) else entryLabel(entries.first()),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -172,7 +177,12 @@ private fun RingScreen(
         FieldHint(todayLabel())
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            if (reason.kind != RingReason.Kind.PLAIN) ReasonBlock(reason)
+            if (entries.size > 1) {
+                RingList(entries)
+            } else {
+                val reason = entries.first().reason
+                if (reason.kind != RingReason.Kind.PLAIN) ReasonBlock(reason)
+            }
         }
 
         Column(
@@ -194,6 +204,57 @@ private fun RingScreen(
             )
         }
     }
+}
+
+/** «Будильник 06:45 · Дім» / «Розбуди після відбою · Дім». */
+@Composable
+private fun entryLabel(entry: RingEntry): String {
+    val reason = entry.reason
+    return when {
+        reason.oneShot -> stringResource(R.string.ring_label_one_shot, reason.placeName.orEmpty())
+        reason.placeName != null -> stringResource(R.string.ring_label, formatTime(entry.hour, entry.minute), reason.placeName)
+        else -> stringResource(R.string.ring_label_no_place, formatTime(entry.hour, entry.minute))
+    }
+}
+
+/** Кілька будильників: кожен — карткою зі своїм підписом і причиною. */
+@Composable
+private fun RingList(entries: List<RingEntry>) {
+    Column(
+        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        entries.forEach { entry ->
+            val reason = entry.reason
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = entryLabel(entry),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    reasonTitle(reason)?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
+                }
+            }
+        }
+    }
+}
+
+/** Заголовок причини для списку; у звичайного будильника його немає. */
+@Composable
+private fun reasonTitle(reason: RingReason): String? = when (reason.kind) {
+    RingReason.Kind.ALL_CLEAR -> stringResource(R.string.ring_all_clear_title)
+    RingReason.Kind.NO_ALERT -> stringResource(R.string.ring_no_alert_title)
+    RingReason.Kind.DEADLINE -> stringResource(R.string.ring_deadline_title)
+    RingReason.Kind.NO_CONNECTION -> stringResource(R.string.ring_no_connection_title)
+    RingReason.Kind.STALE ->
+        stringResource(if (reason.oneShot) R.string.ring_no_data_title else R.string.ring_no_connection_title)
+    RingReason.Kind.TOO_LONG -> stringResource(R.string.ring_too_long_title)
+    RingReason.Kind.PLAIN -> null
 }
 
 @Composable

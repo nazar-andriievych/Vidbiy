@@ -2,6 +2,7 @@ package ua.vidbiy.app.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -92,9 +93,14 @@ class SettingsRepository(private val context: Context) {
     private val json = Json { ignoreUnknownKeys = true }
     private val regionKey = stringPreferencesKey("selected_region")
     private val proxyUrlKey = stringPreferencesKey("debug_proxy_url")
+    // Очікувань може бути кілька одразу (будильники в різних регіонах і разовий режим), тож
+    // списки. Ключі «pending_wait» / «wait_status» — версії, де очікування було лише одне:
+    // читаємо їх як список з одного запису, а першою ж зміною переписуємо в новий формат.
+    private val pendingWaitsKey = stringPreferencesKey("pending_waits")
+    private val waitStatusesKey = stringPreferencesKey("wait_statuses")
     private val pendingWaitKey = stringPreferencesKey("pending_wait")
-    private val themeModeKey = stringPreferencesKey("theme_mode")
     private val waitStatusKey = stringPreferencesKey("wait_status")
+    private val themeModeKey = stringPreferencesKey("theme_mode")
     private val snoozeMinutesKey = intPreferencesKey("snooze_minutes")
     private val oneShotWaitForKey = stringPreferencesKey("one_shot_wait_for")
     private val oneShotPauseKey = intPreferencesKey("one_shot_pause_minutes")
@@ -122,14 +128,6 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setSnoozeMinutes(minutes: Int) {
         context.settingsDataStore.edit { prefs -> prefs[snoozeMinutesKey] = minutes }
-    }
-
-    val waitStatus: Flow<WaitStatus?> = context.waitDataStore.data.map { prefs ->
-        prefs[waitStatusKey]?.let { raw -> runCatching { json.decodeFromString<WaitStatus>(raw) }.getOrNull() }
-    }
-
-    suspend fun setWaitStatus(status: WaitStatus) {
-        context.waitDataStore.edit { prefs -> prefs[waitStatusKey] = json.encodeToString(status) }
     }
 
     /** FR-32: тема застосунку; за замовчуванням — як у системі. */
@@ -165,27 +163,61 @@ class SettingsRepository(private val context: Context) {
     }
 
     /**
-     * Очікування, яке триває просто зараз. Потоком — щоб список будильників показував
+     * Очікування, які тривають просто зараз. Потоком — щоб список будильників показував
      * «чекає відбою» рівно доти, доки служба справді чекає, і сам гасив напис,
      * коли вона зупинилася.
      */
-    val pendingWait: Flow<PendingWait?> = context.waitDataStore.data.map { prefs ->
-        prefs[pendingWaitKey]?.let { raw ->
-            runCatching { json.decodeFromString<PendingWait>(raw) }.getOrNull()
-        }
-    }
+    val pendingWaits: Flow<List<PendingWait>> = context.waitDataStore.data.map { prefs -> readWaits(prefs) }
 
-    suspend fun currentPendingWait(): PendingWait? = pendingWait.first()
+    /** Що зараз бачить служба про кожне очікування. */
+    val waitStatuses: Flow<List<WaitStatus>> = context.waitDataStore.data.map { prefs -> readStatuses(prefs) }
 
+    suspend fun currentPendingWaits(): List<PendingWait> = pendingWaits.first()
+
+    suspend fun currentPendingWait(alarmId: Long): PendingWait? = currentPendingWaits().firstOrNull { it.alarmId == alarmId }
+
+    suspend fun currentWaitStatus(alarmId: Long): WaitStatus? =
+        waitStatuses.first().firstOrNull { it.alarmId == alarmId }
+
+    /** Додає очікування або замінює те, що вже є в цього будильника. */
     suspend fun setPendingWait(wait: PendingWait) {
-        context.waitDataStore.edit { prefs -> prefs[pendingWaitKey] = json.encodeToString(wait) }
+        context.waitDataStore.edit { prefs ->
+            writeWaits(prefs, WaitState.withWait(readWaits(prefs), wait))
+        }
     }
 
-    suspend fun clearPendingWait() {
+    /**
+     * Оновлює стан очікування. Очікування, якого вже немає, не воскрешає: запізнілий запис
+     * служби, що саме зупинялася, лишив би по собі сміття.
+     */
+    suspend fun setWaitStatus(status: WaitStatus) {
         context.waitDataStore.edit { prefs ->
-            prefs.remove(pendingWaitKey)
-            prefs.remove(waitStatusKey)
+            writeStatuses(prefs, WaitState.withStatus(readWaits(prefs), readStatuses(prefs), status))
         }
+    }
+
+    /** Очікування цього будильника закінчилося (дзвінок, скасування, видалення). Інші не чіпає. */
+    suspend fun clearPendingWait(alarmId: Long) {
+        context.waitDataStore.edit { prefs ->
+            writeWaits(prefs, WaitState.withoutWait(readWaits(prefs), alarmId))
+            writeStatuses(prefs, WaitState.withoutStatus(readStatuses(prefs), alarmId))
+        }
+    }
+
+    private fun readWaits(prefs: Preferences): List<PendingWait> =
+        WaitState.decodeWaits(prefs[pendingWaitsKey], prefs[pendingWaitKey])
+
+    private fun readStatuses(prefs: Preferences): List<WaitStatus> =
+        WaitState.decodeStatuses(prefs[waitStatusesKey], prefs[waitStatusKey])
+
+    private fun writeWaits(prefs: MutablePreferences, waits: List<PendingWait>) {
+        prefs.remove(pendingWaitKey)
+        if (waits.isEmpty()) prefs.remove(pendingWaitsKey) else prefs[pendingWaitsKey] = WaitState.encodeWaits(waits)
+    }
+
+    private fun writeStatuses(prefs: MutablePreferences, statuses: List<WaitStatus>) {
+        prefs.remove(waitStatusKey)
+        if (statuses.isEmpty()) prefs.remove(waitStatusesKey) else prefs[waitStatusesKey] = WaitState.encodeStatuses(statuses)
     }
 
     /**

@@ -75,6 +75,7 @@
     <string name="channel_alarm_description">Сповіщення, що супроводжує дзвінок</string>
     <string name="ring_title">Будильник</string>
     <string name="ring_text">Будильник на %1$s</string>
+    <string name="ring_text_multiple">Спрацювало будильників: %1$d</string>
     <string name="ring_snooze">Відкласти на %1$d хв</string>
     <string name="ring_dismiss">Вимкнути</string>
     <string name="channel_waiting">Очікування відбою</string>
@@ -203,6 +204,7 @@
     <!-- Екран дзвінка (design-spec 3.10, FR-21) -->
     <string name="ring_label">Будильник %1$s · %2$s</string>
     <string name="ring_label_no_place">Будильник %1$s</string>
+    <string name="ring_label_multiple">Спрацювало будильників: %1$d</string>
     <string name="ring_dismiss_hint">Утримуйте секунду, щоб вимкнути</string>
     <string name="ring_all_clear_title">Відбій тривоги</string>
     <string name="ring_all_clear_text">Відбій о %1$s</string>

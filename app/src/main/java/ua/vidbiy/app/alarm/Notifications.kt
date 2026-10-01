@@ -18,7 +18,14 @@ object Notifications {
     const val CHANNEL_WAITING = "waiting"
 
     const val ALARM_NOTIFICATION_ID = 1
+    /** Сповіщення очікування разового режиму; очікування будильників — див. [waitingNotificationId]. */
     const val WAITING_NOTIFICATION_ID = 2
+
+    /** Кожне очікування має своє сповіщення зі своїми кнопками. Id будильників — додатні. */
+    fun waitingNotificationId(alarmId: Long): Int =
+        if (alarmId == OneShot.ONE_SHOT_ID) WAITING_NOTIFICATION_ID else WAITING_NOTIFICATION_BASE_ID + alarmId.toInt()
+
+    private const val WAITING_NOTIFICATION_BASE_ID = 1000
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
