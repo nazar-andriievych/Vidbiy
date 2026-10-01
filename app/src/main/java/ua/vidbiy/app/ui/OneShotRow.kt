@@ -65,7 +65,7 @@ fun OneShotRow(
                     OneShotRowState.NO_ALERT -> RowIcon(R.drawable.ic_check)
                     OneShotRowState.ONLY_YELLOW -> Box(Modifier.size(12.dp).background(MaterialTheme.alertColors.yellow, CircleShape))
                     OneShotRowState.NO_DATA -> RowIcon(R.drawable.ic_cloud_off)
-                    OneShotRowState.IDLE -> RowIcon(R.drawable.ic_bedtime, MaterialTheme.colorScheme.primary)
+                    OneShotRowState.IDLE -> RowIcon(R.drawable.ic_hourglass_top, MaterialTheme.colorScheme.primary)
                 }
             }
             val (title, subtitle) = when (state) {
@@ -160,7 +160,7 @@ fun OneShotBanner(
                     Modifier.size(12.dp).background(if (level == AlertLevel.RED) colors.red else colors.yellow, CircleShape),
                 )
                 phase == WaitPhase.PAUSE -> Icon(painterResource(R.drawable.ic_schedule), null, Modifier.size(20.dp))
-                else -> Icon(painterResource(R.drawable.ic_bedtime), null, Modifier.size(20.dp))
+                else -> Icon(painterResource(R.drawable.ic_hourglass_top), null, Modifier.size(20.dp))
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(stringResource(R.string.one_shot_banner_title), style = MaterialTheme.typography.titleSmall)

@@ -189,7 +189,7 @@ private fun WaitingStrip(placeName: String?, status: WaitStatus?, onOpen: () -> 
                     Modifier.size(12.dp).background(if (level == AlertLevel.RED) colors.red else colors.yellow, CircleShape),
                 )
                 phase == WaitPhase.PAUSE -> Icon(painterResource(R.drawable.ic_schedule), null, Modifier.size(20.dp))
-                else -> Icon(painterResource(R.drawable.ic_bedtime), null, Modifier.size(20.dp))
+                else -> Icon(painterResource(R.drawable.ic_hourglass_top), null, Modifier.size(20.dp))
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, style = MaterialTheme.typography.titleSmall)

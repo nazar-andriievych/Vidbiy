@@ -83,7 +83,7 @@ PNG списку, редагування, очікування, дзвінка �
 ### 1.4 Іконки
 Лінійні (stroke 2, заокруглені кінці), 24 dp; у рядках 18–22.
 Можна брати Material Symbols Rounded (Outlined, weight 400) — близькі за стилем.
-Відповідність: будильник → `alarm`, місце → `location_on`, налаштування → `tune`, разовий режим → `bedtime` (місяць), крайній час → `schedule`, немає зв'язку → `cloud_off`, живлення → `power_settings_new`, мапа («Усі області») → `map`, скасувати дзвінок → `notifications_off`, дозволи: `notifications`, `alarm`, `smartphone`/`lock`, `battery_full`.
+Відповідність: будильник → `alarm`, місце → `location_on`, налаштування → `tune`, разовий режим і очікування → `hourglass_top` (пісочний годинник), крайній час → `schedule`, немає зв'язку → `cloud_off`, живлення → `power_settings_new`, мапа («Усі області») → `map`, скасувати дзвінок → `notifications_off`, дозволи: `notifications`, `alarm`, `smartphone`/`lock`, `battery_full`.
 
 ---
 

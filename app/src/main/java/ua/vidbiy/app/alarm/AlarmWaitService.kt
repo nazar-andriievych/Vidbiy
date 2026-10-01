@@ -314,7 +314,7 @@ class AlarmWaitService : Service() {
         body.append(meta)
 
         val builder = NotificationCompat.Builder(this, Notifications.CHANNEL_WAITING)
-            .setSmallIcon(R.drawable.ic_bedtime)
+            .setSmallIcon(R.drawable.ic_hourglass_top)
             .setContentTitle(title)
             .setContentText(body.lines().firstOrNull { it.isNotBlank() })
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))

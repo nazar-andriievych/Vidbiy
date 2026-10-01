@@ -275,7 +275,7 @@ private fun StateCircle(phase: WaitPhase, level: AlertLevel?) {
             when (phase) {
                 WaitPhase.CHECKING -> CircularProgressIndicator(color = content, modifier = Modifier.size(40.dp))
                 WaitPhase.PAUSE -> Icon(painterResource(R.drawable.ic_schedule), null, tint = content, modifier = Modifier.size(40.dp))
-                WaitPhase.ALERT -> Icon(painterResource(R.drawable.ic_bedtime), null, tint = content, modifier = Modifier.size(40.dp))
+                WaitPhase.ALERT -> Icon(painterResource(R.drawable.ic_hourglass_top), null, tint = content, modifier = Modifier.size(40.dp))
             }
         }
     }
