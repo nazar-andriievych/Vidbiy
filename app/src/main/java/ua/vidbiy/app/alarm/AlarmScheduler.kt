@@ -75,12 +75,58 @@ class AlarmScheduler(private val context: Context) {
         setAtMillis(alarmId, atMillis, Kind.DEADLINE)
     }
 
+    /**
+     * Скасовує страховку очікування: і крайній час, і «вартового». Очікування закінчується
+     * (дзвінок, відкладення, скасування) в тих самих місцях для обох, тож вони йдуть разом.
+     */
     fun cancelDeadline(alarmId: Long) {
         alarmManager.cancel(firePendingIntent(alarmId, Kind.DEADLINE))
+        cancelWatchdog(alarmId)
+    }
+
+    /**
+     * «Вартовий»: таймер, який служба очікування відсуває вперед при кожному опитуванні.
+     * Поки служба жива, він не встигає спрацювати. Якщо її вбила система, відсувати нікому,
+     * і за [atMillis] будильник задзвонить сам (замість мовчання до крайнього часу чи доби).
+     *
+     * Окремий PendingIntent з тим самим ключем (будильник + тип) — кожне виставлення замінює
+     * попереднє. Не `setAlarmClock`, щоб у рядку стану не висіло «наступний будильник».
+     */
+    fun scheduleWatchdog(alarmId: Long, atMillis: Long) {
+        val operation = watchdogPendingIntent(alarmId)
+        if (canScheduleExact()) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, operation)
+        } else {
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, operation)
+        }
+    }
+
+    fun cancelWatchdog(alarmId: Long) {
+        alarmManager.cancel(watchdogPendingIntent(alarmId))
     }
 
     fun cancel(alarmId: Long) {
         Kind.entries.forEach { alarmManager.cancel(firePendingIntent(alarmId, it)) }
+        cancelWatchdog(alarmId)
+    }
+
+    // requestCode не з формули firePendingIntent: її множник — кількість видів, і зміна його
+    // осиротила б уже виставлені будильники після оновлення застосунку.
+    private fun watchdogPendingIntent(alarmId: Long): PendingIntent {
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            action = AlarmReceiver.ACTION_FIRE_WATCHDOG
+            putExtra(AlarmReceiver.EXTRA_ALARM_ID, alarmId)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            WATCHDOG_REQUEST_BASE + alarmId.toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private companion object {
+        const val WATCHDOG_REQUEST_BASE = 1_000_000_000
     }
 
     private fun cancelSnooze(alarmId: Long) {

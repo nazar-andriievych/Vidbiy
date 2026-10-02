@@ -32,6 +32,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, Alarm.NEW_ID)
         val isRegularFire = intent.action == ACTION_FIRE
+        val isWatchdog = intent.action == ACTION_FIRE_WATCHDOG
         if (alarmId == Alarm.NEW_ID) return
         // Разовий режим не має власного розкладу: сюди він потрапляє лише з відкладення
         // або страховки очікування.
@@ -48,6 +49,32 @@ class AlarmReceiver : BroadcastReceiver() {
                 val lastLevel = app.settingsRepository.currentWaitStatus(alarmId)?.level
                 if (live == null) {
                     // Будильник видалили, а спрацювання лишилося — просто мовчимо.
+                    return@launch
+                }
+                if (isWatchdog) {
+                    // Служба не відсунула вартового: її вбила система. Очікування вже закінчене
+                    // (дзвінок, відкладення, скасування) — таймер просто запізнився, мовчимо.
+                    if (wait == null) return@launch
+                    AlarmScheduler(context).cancelDeadline(alarmId)
+                    val alarm = wait.alarm ?: live
+                    val placeName = app.placesRepository.current().byId(alarm.placeId)?.name ?: alarm.region?.shortTitle
+                    val reason = RingReason(
+                        kind = RingReason.Kind.APP_FAILURE,
+                        placeName = placeName,
+                        level = lastLevel,
+                        oneShot = alarm.id == OneShot.ONE_SHOT_ID,
+                    )
+                    Log.w(TAG, "Вартовий спрацював — служба очікування мовчить, дзвонимо: будильник=$alarmId")
+                    AlarmRingService.startRinging(context, alarm, reason)
+                    app.decisionLog.log(
+                        DecisionEntry(
+                            at = DecisionLog.now(),
+                            event = "ring",
+                            alarmId = alarm.id,
+                            region = alarm.region?.uid,
+                            note = "WATCHDOG: ${reason.kind}",
+                        ),
+                    )
                     return@launch
                 }
                 // Страховка очікування дзвонить тим будильником, що чекав; нове спрацювання — поточним.
@@ -140,6 +167,8 @@ class AlarmReceiver : BroadcastReceiver() {
         const val ACTION_FIRE_DEADLINE = "ua.vidbiy.app.action.FIRE_DEADLINE"
         const val EXTRA_ALARM_ID = "alarm_id"
 
-        private val HANDLED_ACTIONS = setOf(ACTION_FIRE, ACTION_FIRE_SNOOZE, ACTION_FIRE_DEADLINE)
+        const val ACTION_FIRE_WATCHDOG = "ua.vidbiy.app.action.FIRE_WATCHDOG"
+
+        private val HANDLED_ACTIONS = setOf(ACTION_FIRE, ACTION_FIRE_SNOOZE, ACTION_FIRE_DEADLINE, ACTION_FIRE_WATCHDOG)
     }
 }

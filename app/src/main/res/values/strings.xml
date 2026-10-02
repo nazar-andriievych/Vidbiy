@@ -212,6 +212,8 @@
     <string name="ring_no_connection_title">Немає зв’язку з сервісом</string>
     <string name="ring_no_connection_text">Не вдалося перевірити тривогу — тому дзвоню.</string>
     <string name="ring_stale_text">Свіжих даних немає понад 3 хв — тому дзвоню.</string>
+    <string name="ring_app_failure_title">Збій у застосунку</string>
+    <string name="ring_app_failure_text">Не вдалося стежити за тривогою — тому дзвоню.</string>
     <string name="ring_too_long_title">Тривога триває понад добу</string>
     <string name="ring_too_long_text">Будильник більше не чекає на відбій.</string>
     <string name="ring_no_alert_title">Тривоги немає</string>

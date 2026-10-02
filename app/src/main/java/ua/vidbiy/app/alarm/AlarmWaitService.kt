@@ -155,7 +155,7 @@ class AlarmWaitService : Service() {
         val alarm = wait.alarm ?: runCatching { app().findAlarm(wait.alarmId) }.getOrNull()
         if (alarm != null) {
             val reason = RingReason(
-                kind = RingReason.Kind.NO_CONNECTION,
+                kind = RingReason.Kind.APP_FAILURE,
                 oneShot = alarm.id == OneShot.ONE_SHOT_ID,
             )
             AlarmRingService.startRinging(this@AlarmWaitService, alarm, reason)
@@ -186,6 +186,11 @@ class AlarmWaitService : Service() {
                 finishWait(wait.alarmId)
                 return
             }
+
+            // «Я жива»: відсуваємо вартового. Якщо службу вб'ють, цього ніхто не зробить,
+            // і за WATCHDOG_MILLIS будильник задзвонить сам.
+            AlarmScheduler(this@AlarmWaitService)
+                .scheduleWatchdog(wait.alarmId, System.currentTimeMillis() + WATCHDOG_MILLIS)
 
             // Налаштування — ті, з якими очікування почалося (PendingWait.alarm).
             val alarm = wait.alarm ?: live
@@ -455,6 +460,7 @@ class AlarmWaitService : Service() {
         // Запис має дійти до диска, навіть якщо служба помре наступної миті,
         // тож веде його scope застосунку, а не наш.
         app().applicationScope.launch { app().settingsRepository.clearPendingWait(alarmId) }
+        runCatching { AlarmScheduler(this).cancelWatchdog(alarmId) }
         jobs.remove(alarmId)?.cancel()
         wakeLocks.remove(alarmId)?.takeIf { it.isHeld }?.release()
         notifications.remove(alarmId)
@@ -497,6 +503,9 @@ class AlarmWaitService : Service() {
 
         /** NFR-3 дозволяє до 2 хв затримки після відбою, тож 30 с дають запас. */
         private const val POLL_INTERVAL_MILLIS = 30_000L
+
+        /** Через скільки без «я жива» від служби задзвонить вартовий (десять опитувань підряд пропущено). */
+        private const val WATCHDOG_MILLIS = 5 * 60_000L
 
         /** FR-8: скільки на старті пробуємо отримати свіжі дані, перш ніж дзвонити без них. */
         private const val STARTUP_WINDOW_MILLIS = 30_000L

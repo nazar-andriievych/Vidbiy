@@ -254,6 +254,7 @@ private fun reasonTitle(reason: RingReason): String? = when (reason.kind) {
     RingReason.Kind.STALE ->
         stringResource(if (reason.oneShot) R.string.ring_no_data_title else R.string.ring_no_connection_title)
     RingReason.Kind.TOO_LONG -> stringResource(R.string.ring_too_long_title)
+    RingReason.Kind.APP_FAILURE -> stringResource(R.string.ring_app_failure_title)
     RingReason.Kind.PLAIN -> null
 }
 
@@ -292,6 +293,11 @@ private fun ReasonBlock(reason: RingReason) {
             R.drawable.ic_schedule,
             stringResource(R.string.ring_too_long_title),
             stringResource(R.string.ring_too_long_text),
+        )
+        RingReason.Kind.APP_FAILURE -> Triple(
+            R.drawable.ic_info,
+            stringResource(R.string.ring_app_failure_title),
+            stringResource(R.string.ring_app_failure_text),
         )
         RingReason.Kind.PLAIN -> return
     }
