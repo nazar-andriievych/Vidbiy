@@ -112,6 +112,7 @@ private enum class Tab(@StringRes val label: Int, @DrawableRes val icon: Int) {
 @Composable
 fun VidbiyApp(viewModel: AlarmsViewModel) {
     val alarms by viewModel.alarms.collectAsStateWithLifecycle()
+    val alarmsUnreadable by viewModel.alarmsUnreadable.collectAsStateWithLifecycle()
     val places by viewModel.places.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val overlay by viewModel.overlay.collectAsStateWithLifecycle()
@@ -245,6 +246,7 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                         onNeedPlace = { tab = Tab.Places },
                         missingPermissions = missingPermissions,
                         onOpenPermissions = viewModel::openPermissions,
+                        alarmsUnreadable = alarmsUnreadable,
                     )
                     Tab.Places -> PlacesTab(
                         places = places,

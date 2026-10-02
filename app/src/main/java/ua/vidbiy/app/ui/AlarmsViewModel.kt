@@ -72,6 +72,10 @@ class AlarmsViewModel(
     val alarms: StateFlow<List<Alarm>> = repository.alarms
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Частину будильників не вдалося прочитати — на головному банер (див. [AlarmsRepository.unreadable]). */
+    val alarmsUnreadable: StateFlow<Boolean> = repository.unreadable
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     /** Eagerly: основне місце має бути під рукою в ту мить, коли натиснули «Новий будильник». */
     val places: StateFlow<PlacesState> = placesRepository.state
         .stateIn(viewModelScope, SharingStarted.Eagerly, PlacesState())

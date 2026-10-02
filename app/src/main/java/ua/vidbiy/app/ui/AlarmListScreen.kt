@@ -71,6 +71,7 @@ fun AlarmsTab(
     onNeedPlace: () -> Unit,
     missingPermissions: List<Permission>,
     onOpenPermissions: () -> Unit,
+    alarmsUnreadable: Boolean = false,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -83,6 +84,9 @@ fun AlarmsTab(
                 addLabel = stringResource(R.string.action_new_alarm),
                 onAdd = onAdd,
             )
+        }
+        if (alarmsUnreadable) {
+            item { UnreadableAlarmsBanner(modifier = Modifier.padding(horizontal = Dimens.ScreenPadding)) }
         }
         if (missingPermissions.isNotEmpty()) {
             item {

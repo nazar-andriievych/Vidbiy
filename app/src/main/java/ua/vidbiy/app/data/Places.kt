@@ -1,6 +1,7 @@
 package ua.vidbiy.app.data
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -60,14 +61,17 @@ class PlacesRepository(private val context: Context) {
 
     suspend fun current(): PlacesState = state.first()
 
-    /** Додає місце; перше стає основним (FR-26a). Повертає збережене — уже з id. */
+    /**
+     * Додає місце; перше стає основним (FR-26a). Повертає збережене — уже з id.
+     */
     suspend fun add(name: String, region: SelectedRegion): Place {
         lateinit var added: Place
         context.placesDataStore.edit { prefs ->
-            val places = decode(prefs[placesKey])
-            added = Place(id = (places.maxOfOrNull { it.id } ?: 0L) + 1, name = name.clean(), region = region)
-            prefs[placesKey] = json.encodeToString(places + added)
-            if (places.isEmpty()) prefs[primaryKey] = added.id
+            val places = readForEdit(prefs)
+            val place = Place(id = (places.maxOfOrNull { it.id } ?: 0L) + 1, name = name.clean(), region = region)
+            prefs[placesKey] = json.encodeToString(places + place)
+            if (places.isEmpty()) prefs[primaryKey] = place.id
+            added = place
         }
         return added
     }
@@ -84,7 +88,7 @@ class PlacesRepository(private val context: Context) {
     suspend fun delete(id: Long): Boolean {
         var deleted = false
         context.placesDataStore.edit { prefs ->
-            val places = decode(prefs[placesKey])
+            val places = readForEdit(prefs)
             val primaryId = prefs[primaryKey] ?: places.firstOrNull()?.id
             if (id == primaryId) return@edit
             prefs[placesKey] = json.encodeToString(places.filterNot { it.id == id })
@@ -95,17 +99,24 @@ class PlacesRepository(private val context: Context) {
 
     private suspend fun update(id: Long, transform: (Place) -> Place) {
         context.placesDataStore.edit { prefs ->
-            val places = decode(prefs[placesKey]).map { if (it.id == id) transform(it) else it }
+            val places = readForEdit(prefs).map { if (it.id == id) transform(it) else it }
             prefs[placesKey] = json.encodeToString(places)
         }
     }
 
     private fun String.clean() = trim().take(Place.MAX_NAME_LENGTH)
 
-    private fun decode(raw: String?): List<Place> {
-        if (raw.isNullOrBlank()) return emptyList()
-        return runCatching { json.decodeFromString<List<Place>>(raw) }.getOrDefault(emptyList())
+    /**
+     * Для змін: читає список по одному елементу, нечитабельне викидається назавжди
+     * (місце легко додати знову, звернутися по відновлення нікуди).
+     */
+    private fun readForEdit(prefs: androidx.datastore.preferences.core.MutablePreferences): List<Place> {
+        val read = json.decodeListLenient<Place>(prefs[placesKey])
+        if (read.dropped > 0) Log.e("VidbiyPlaces", "Викинуто нечитабельних місць: ${read.dropped}")
+        return read.items
     }
+
+    private fun decode(raw: String?): List<Place> = json.decodeListLenient<Place>(raw).items
 }
 
 /**

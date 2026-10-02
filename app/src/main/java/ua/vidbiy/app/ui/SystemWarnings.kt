@@ -172,6 +172,26 @@ fun PermissionsBanner(missing: List<Permission>, onOpen: () -> Unit, modifier: M
     }
 }
 
+/**
+ * Банер «Не вдалося прочитати будильники»: частину збережених будильників не вдалося розібрати
+ * (наприклад, після оновлення), і їх викинуто. Тієї ж форми, що й банер дозволів, але без кнопки:
+ * зникає сам, коли користувач додасть чи видалить будильник. У макеті цього стану немає.
+ */
+@Composable
+fun UnreadableAlarmsBanner(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.background,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(R.string.unreadable_banner_title), style = MaterialTheme.typography.titleSmall)
+            FieldHint(stringResource(R.string.unreadable_banner_text))
+        }
+    }
+}
+
 /** Рядок «Дозволи» на вкладці «Налаштування» (design-spec 3.6). */
 @Composable
 fun PermissionsRow(onOpen: () -> Unit, modifier: Modifier = Modifier) {

@@ -214,6 +214,8 @@
     <string name="ring_stale_text">Свіжих даних немає понад 3 хв — тому дзвоню.</string>
     <string name="ring_app_failure_title">Збій у застосунку</string>
     <string name="ring_app_failure_text">Не вдалося стежити за тривогою — тому дзвоню.</string>
+    <string name="unreadable_banner_title">Не вдалося прочитати частину будильників</string>
+    <string name="unreadable_banner_text">Якщо якогось будильника бракує, створіть його знову. Це повідомлення зникне, коли ви додасте або видалите будильник.</string>
     <string name="ring_too_long_title">Тривога триває понад добу</string>
     <string name="ring_too_long_text">Будильник більше не чекає на відбій.</string>
     <string name="ring_no_alert_title">Тривоги немає</string>
