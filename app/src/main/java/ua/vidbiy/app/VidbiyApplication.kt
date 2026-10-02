@@ -1,6 +1,8 @@
 package ua.vidbiy.app
 
 import android.app.Application
+import android.util.Log
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Deferred
@@ -31,8 +33,15 @@ class VidbiyApplication : Application() {
     val placesEditor: PlacesEditor by lazy { PlacesEditor(placesRepository, alarmsRepository) }
     val decisionLog: DecisionLog by lazy { DecisionLog(this) }
 
-    /** Живе стільки ж, скільки процес: сюди йде робота, яку не можна кидати посеред шляху. */
-    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /**
+     * Живе стільки ж, скільки процес: сюди йде робота, яку не можна кидати посеред шляху.
+     * Необроблений виняток тут валив би весь процес, а з ним і дзвінок, що саме грає
+     * (наприклад, коли диск не дає записати стан), тож лише пишемо його в лог.
+     */
+    val applicationScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default +
+            CoroutineExceptionHandler { _, e -> Log.e("VidbiyApp", "Необроблений виняток у фоновій роботі", e) },
+    )
 
     /**
      * Перенесення даних старих версій. Приймачі будильника чекають на нього, перш ніж

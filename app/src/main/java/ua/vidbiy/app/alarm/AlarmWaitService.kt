@@ -19,6 +19,7 @@ import android.util.Log
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -68,7 +69,12 @@ import java.time.format.DateTimeFormatter
  */
 class AlarmWaitService : Service() {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    // Обробник лише пише в лог: сам цикл очікування ловить свої збої й дзвонить (pollUntilClear),
+    // а необроблений виняток у решті корутин завалив би процес разом із дзвінком, що грає.
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate +
+            CoroutineExceptionHandler { _, e -> Log.e(TAG, "Необроблений виняток у службі очікування", e) },
+    )
     private val jobs = mutableMapOf<Long, Job>()
     private val wakeLocks = mutableMapOf<Long, PowerManager.WakeLock>()
 
@@ -159,6 +165,11 @@ class AlarmWaitService : Service() {
                 oneShot = alarm.id == OneShot.ONE_SHOT_ID,
             )
             AlarmRingService.startRinging(this@AlarmWaitService, alarm, reason)
+            runCatching {
+                app().decisionLog.log(
+                    DecisionEntry(at = DecisionLog.now(), event = "ring", alarmId = alarm.id, region = alarm.region?.uid, note = "LOOP_FAILURE: ${reason.kind}"),
+                )
+            }
         }
         finishWait(wait.alarmId)
     }
