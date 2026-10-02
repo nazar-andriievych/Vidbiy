@@ -19,3 +19,8 @@ node_modules
 
 # Local scratch files (API dumps etc.)
 /tmp/
+
+# Signing keys
+*.jks
+*.keystore
+keystore.properties
