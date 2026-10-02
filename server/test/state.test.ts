@@ -113,17 +113,32 @@ describe("AlertBoard: відповідь", () => {
     expect(ids(board.response(T0))).toEqual([]);
   });
 
-  it("вебхуки продовжують свіжість не довше ніж на 15 хв після останньої звірки (FR-30)", async () => {
+  it("вебхуки продовжують свіжість не довше ніж на 5 хв після останньої звірки (FR-30)", async () => {
     const { board } = await syncedBoard();
     // Знімок був о T0, далі /alerts мовчить, а вебхуки йдуть.
-    await board.receive(event("124", true, T0 + 10 * MINUTE), T0 + 10 * MINUTE);
-    expect(board.response(T0 + 10 * MINUTE).age_seconds).toBe(0);
+    await board.receive(event("124", true, T0 + 4 * MINUTE), T0 + 4 * MINUTE);
+    expect(board.response(T0 + 4 * MINUTE).age_seconds).toBe(0);
 
-    await board.receive(event("125", true, T0 + 20 * MINUTE), T0 + 20 * MINUTE);
-    const response = board.response(T0 + 20 * MINUTE);
+    await board.receive(event("125", true, T0 + 9 * MINUTE), T0 + 9 * MINUTE);
+    const response = board.response(T0 + 9 * MINUTE);
 
-    expect(response.confirmed_at).toBe(new Date(T0 + 15 * MINUTE).toISOString());
-    expect(response.age_seconds).toBe(5 * 60);
+    expect(response.confirmed_at).toBe(new Date(T0 + 5 * MINUTE).toISOString());
+    // 4 хв понад вікно — більше за поріг застосунку (3 хв): він задзвонить за fail-safe.
+    expect(response.age_seconds).toBe(4 * 60);
+  });
+
+  it("рідкий режим запобіжника (знімок раз на 5 хв) не старить дані, поки йдуть вебхуки", async () => {
+    const { board } = await syncedBoard();
+    // Знімок настає не точно о nextAt, а на найближчому будильнику об'єкта — до +30 с.
+    const nextSnapshot = T0 + 5 * MINUTE + 30 * SECOND;
+    for (let at = T0 + MINUTE; at < nextSnapshot; at += MINUTE) {
+      await board.receive(event("124", true, at), at);
+    }
+
+    expect(board.response(nextSnapshot - SECOND).age_seconds).toBeLessThan(60);
+
+    await board.loadSnapshot(new Map(), nextSnapshot);
+    expect(board.response(nextSnapshot).age_seconds).toBe(0);
   });
 
   it("вік рахується від останнього вебхука будь-якого типу: це пульс каналу", async () => {
