@@ -33,6 +33,7 @@ import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.SettingsRepository
 import ua.vidbiy.app.ui.AlarmRingActivity
+import ua.vidbiy.app.ui.formatTime
 
 /**
  * Дзвінок будильника: програє мелодію, вібрує й тримає повноекранну нотифікацію.
@@ -105,7 +106,7 @@ class AlarmRingService : Service() {
         ringing[alarmId] = RingEntry(alarmId, hour, minute, reason)
         RingState.set(ringing.values.toList())
 
-        startForegroundNotification(alarmId, hour, minute, reasonJson)
+        startForegroundNotification(alarmId, hour, minute, reason, reasonJson)
         if (!alreadyRinging) {
             acquireWakeLock()
             startSound(ringtoneUri)
@@ -132,7 +133,7 @@ class AlarmRingService : Service() {
             .onFailure { Log.w(TAG, "Не вдалося відкрити екран дзвінка", it) }
     }
 
-    private fun startForegroundNotification(alarmId: Long, hour: Int, minute: Int, reasonJson: String?) {
+    private fun startForegroundNotification(alarmId: Long, hour: Int, minute: Int, reason: RingReason, reasonJson: String?) {
         // Один код запиту: повторний показ оновлює той самий повноекранний інтент, а не множить їх.
         val fullScreen = PendingIntent.getActivity(
             this,
@@ -148,7 +149,7 @@ class AlarmRingService : Service() {
                 if (ringing.size > 1) {
                     getString(R.string.ring_text_multiple, ringing.size)
                 } else {
-                    getString(R.string.ring_text, "%02d:%02d".format(hour, minute))
+                    ringLabel(hour, minute, reason)
                 },
             )
             .setCategory(NotificationCompat.CATEGORY_ALARM)
@@ -170,6 +171,19 @@ class AlarmRingService : Service() {
             )
         } else {
             startForeground(Notifications.ALARM_NOTIFICATION_ID, notification)
+        }
+    }
+
+    /**
+     * Той самий підпис, що вгорі екрана дзвінка: «Будильник 06:45 · Дім» або «Розбуди після відбою · Дім».
+     * У разового режиму час — момент увімкнення, тож «Будильник на 22:56» вводив би в оману.
+     */
+    private fun ringLabel(hour: Int, minute: Int, reason: RingReason): String {
+        val time = formatTime(hour, minute)
+        return when {
+            reason.oneShot -> getString(R.string.ring_label_one_shot, reason.placeName.orEmpty())
+            reason.placeName != null -> getString(R.string.ring_label, time, reason.placeName)
+            else -> getString(R.string.ring_label_no_place, time)
         }
     }
 

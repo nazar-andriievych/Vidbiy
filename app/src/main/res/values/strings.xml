@@ -74,7 +74,6 @@
     <string name="channel_alarm">Дзвінок будильника</string>
     <string name="channel_alarm_description">Сповіщення, що супроводжує дзвінок</string>
     <string name="ring_title">Будильник</string>
-    <string name="ring_text">Будильник на %1$s</string>
     <string name="ring_text_multiple">Спрацювало будильників: %1$d</string>
     <string name="ring_snooze">Відкласти на %1$d хв</string>
     <string name="ring_dismiss">Вимкнути</string>
