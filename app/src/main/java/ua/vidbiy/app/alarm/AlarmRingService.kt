@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
@@ -42,6 +44,24 @@ class AlarmRingService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var player: MediaPlayer? = null
+
+    /** Мелодії, які ще можна спробувати, якщо поточна не грає. */
+    private val soundQueue = ArrayDeque<Uri>()
+
+    // USAGE_ALARM — той самий потік, що й у системного будильника:
+    // його чути в «Не турбувати» й керує ним гучність будильника, а не медіа.
+    private val soundAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_ALARM)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .build()
+
+    /**
+     * Фокус аудіо: просимо інші застосунки (музика, подкаст, білий шум) замовкнути на час дзвінка,
+     * а після вимкнення — продовжити. TRANSIENT означає «ненадовго», тому вони стають на паузу,
+     * а не зупиняються зовсім. Відмова чи втрата фокуса дзвінок не зупиняє: будильник грає все одно.
+     */
+    private var focusRequest: AudioFocusRequest? = null
+
     private var vibrator: Vibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var autoStopJob: Job? = null
@@ -156,37 +176,73 @@ class AlarmRingService : Service() {
         )
     }
 
-    private fun startSound(ringtoneUri: String?) {
-        val attributes = AudioAttributes.Builder()
-            // USAGE_ALARM — той самий потік, що й у системного будильника:
-            // його чути в «Не турбувати» й керує ним гучність будильника, а не медіа.
-            .setUsage(AudioAttributes.USAGE_ALARM)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-
-        val uri = ringtoneUri?.let(Uri::parse)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-
-        player = play(uri, attributes) ?: fallbackPlayer(attributes)
-    }
-
-    private fun play(uri: Uri?, attributes: AudioAttributes): MediaPlayer? = runCatching {
-        MediaPlayer().apply {
-            setAudioAttributes(attributes)
-            setDataSource(this@AlarmRingService, uri ?: error("Немає URI мелодії"))
-            isLooping = true
-            prepare()
-            start()
-        }
-    }.onFailure { Log.w(TAG, "Не вдалося програти мелодію $uri", it) }.getOrNull()
-
     /**
      * Обрану мелодію могли видалити або вона могла виявитися недоступною.
-     * Мовчазний будильник — найгірший зі сценаріїв, тож пробуємо типову, а потім рінгтон дзвінка.
+     * Мовчазний будильник — найгірший зі сценаріїв, тож пробуємо по черзі: обрану, типову мелодію
+     * будильника, рінгтон дзвінка і нарешті власний звук з APK — його неможливо «не знайти».
      */
-    private fun fallbackPlayer(attributes: AudioAttributes): MediaPlayer? =
-        play(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM), attributes)
-            ?: play(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE), attributes)
+    private fun startSound(ringtoneUri: String?) {
+        requestAudioFocus()
+        soundQueue.clear()
+        soundQueue += listOfNotNull(
+            ringtoneUri?.let(Uri::parse),
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+            Uri.parse("android.resource://$packageName/${R.raw.alarm_fallback}"),
+        ).distinct()
+        playNextSound()
+    }
+
+    private fun requestAudioFocus() {
+        val audio = getSystemService(AudioManager::class.java) ?: return
+        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            .setAudioAttributes(soundAttributes)
+            .build()
+        focusRequest = request
+        runCatching { audio.requestAudioFocus(request) }
+            .onFailure { Log.w(TAG, "Не вдалося отримати фокус аудіо", it) }
+    }
+
+    private fun abandonAudioFocus() {
+        val request = focusRequest ?: return
+        focusRequest = null
+        runCatching { getSystemService(AudioManager::class.java)?.abandonAudioFocusRequest(request) }
+    }
+
+    private fun playNextSound() {
+        while (soundQueue.isNotEmpty()) {
+            player = play(soundQueue.removeFirst()) ?: continue
+            return
+        }
+        Log.e(TAG, "Жодна мелодія не грає — лишається тільки вібрація")
+    }
+
+    private fun play(uri: Uri): MediaPlayer? {
+        val player = MediaPlayer()
+        return runCatching {
+            player.apply {
+                setAudioAttributes(soundAttributes)
+                setDataSource(this@AlarmRingService, uri)
+                isLooping = true
+                // Файл може відкритися, а зламатися вже під час програвання (битий кінець файлу,
+                // збій декодера). Без цього обробника звук тихо зник би, а екран дзвонив би далі.
+                setOnErrorListener { failed, what, extra ->
+                    Log.w(TAG, "Мелодія $uri обірвалася: what=$what extra=$extra")
+                    failed.release()
+                    if (this@AlarmRingService.player === failed) {
+                        this@AlarmRingService.player = null
+                        playNextSound()
+                    }
+                    true
+                }
+                prepare()
+                start()
+            }
+        }.onFailure {
+            Log.w(TAG, "Не вдалося програти мелодію $uri", it)
+            player.release()
+        }.getOrNull()
+    }
 
     private fun startVibration() {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -214,9 +270,11 @@ class AlarmRingService : Service() {
 
     private fun stopEverything() {
         autoStopJob?.cancel()
+        soundQueue.clear()
         runCatching { player?.stop() }
         player?.release()
         player = null
+        abandonAudioFocus()
         vibrator?.cancel()
         vibrator = null
         wakeLock?.takeIf { it.isHeld }?.release()
