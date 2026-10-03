@@ -59,13 +59,16 @@ fun OneShotRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-                when (state) {
-                    OneShotRowState.CHECKING -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.5.dp)
-                    OneShotRowState.NO_ALERT -> RowIcon(R.drawable.ic_check)
-                    OneShotRowState.ONLY_YELLOW -> Box(Modifier.size(12.dp).background(MaterialTheme.alertColors.yellow, CircleShape))
-                    OneShotRowState.NO_DATA -> RowIcon(R.drawable.ic_cloud_off)
-                    OneShotRowState.IDLE -> RowIcon(R.drawable.ic_hourglass_top, MaterialTheme.colorScheme.primary)
+            // In idle the row has no leading icon: the ⏻ button on the right already marks the action.
+            // The check spinner sits around the cancel button on the right, so the text does not jump.
+            if (state != OneShotRowState.IDLE && state != OneShotRowState.CHECKING) {
+                Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                    when (state) {
+                        OneShotRowState.NO_ALERT -> RowIcon(R.drawable.ic_check)
+                        OneShotRowState.ONLY_YELLOW -> Box(Modifier.size(12.dp).background(MaterialTheme.alertColors.yellow, CircleShape))
+                        OneShotRowState.NO_DATA -> RowIcon(R.drawable.ic_cloud_off)
+                        OneShotRowState.IDLE, OneShotRowState.CHECKING -> Unit
+                    }
                 }
             }
             val (title, subtitle) = when (state) {
@@ -85,14 +88,17 @@ fun OneShotRow(
                 FieldHint(subtitle)
             }
             when (state) {
-                OneShotRowState.CHECKING -> FilledTonalIconButton(
-                    onClick = onCancelCheck,
-                    modifier = Modifier.size(Dimens.TouchTarget),
-                    colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    ),
-                ) {
-                    Icon(painterResource(R.drawable.ic_close), stringResource(R.string.one_shot_cancel_check))
+                OneShotRowState.CHECKING -> Box(Modifier.size(Dimens.TouchTarget), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(Dimens.TouchTarget), strokeWidth = 2.5.dp)
+                    FilledTonalIconButton(
+                        onClick = onCancelCheck,
+                        modifier = Modifier.size(Dimens.TouchTarget - 8.dp),
+                        colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        ),
+                    ) {
+                        Icon(painterResource(R.drawable.ic_close), stringResource(R.string.one_shot_cancel_check))
+                    }
                 }
                 OneShotRowState.NO_DATA -> FilledTonalButton(onClick = onStart) {
                     Text(stringResource(R.string.one_shot_retry), style = MaterialTheme.typography.labelLarge)
@@ -160,7 +166,6 @@ fun OneShotBanner(
                     Modifier.size(12.dp).background(if (level == AlertLevel.RED) colors.red else colors.yellow, CircleShape),
                 )
                 phase == WaitPhase.PAUSE -> Icon(painterResource(R.drawable.ic_schedule), null, Modifier.size(20.dp))
-                else -> Icon(painterResource(R.drawable.ic_hourglass_top), null, Modifier.size(20.dp))
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(stringResource(R.string.one_shot_banner_title), style = MaterialTheme.typography.titleSmall)
