@@ -57,6 +57,18 @@ data class PendingWait(
 }
 
 /**
+ * Відкладений дзвінок (FR-20). Сам дзвінок живе в AlarmManager, але система стирає його
+ * під час перезавантаження, оновлення чи примусової зупинки застосунку — а з ним зникло б
+ * і відкладення. Запис на диску дає змогу поставити його знову й показати в інтерфейсі.
+ */
+@Serializable
+data class PendingSnooze(
+    val alarmId: Long,
+    /** Коли задзвонить. */
+    val ringAtMillis: Long,
+)
+
+/**
  * Що зараз бачить служба очікування — для екрана очікування, банера й сповіщення.
  * Служба перезаписує його після кожної перевірки.
  */
@@ -100,6 +112,7 @@ class SettingsRepository(private val context: Context) {
     private val waitStatusesKey = stringPreferencesKey("wait_statuses")
     private val pendingWaitKey = stringPreferencesKey("pending_wait")
     private val waitStatusKey = stringPreferencesKey("wait_status")
+    private val pendingSnoozesKey = stringPreferencesKey("pending_snoozes")
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val snoozeMinutesKey = intPreferencesKey("snooze_minutes")
     private val oneShotWaitForKey = stringPreferencesKey("one_shot_wait_for")
@@ -202,6 +215,33 @@ class SettingsRepository(private val context: Context) {
             writeWaits(prefs, WaitState.withoutWait(readWaits(prefs), alarmId))
             writeStatuses(prefs, WaitState.withoutStatus(readStatuses(prefs), alarmId))
         }
+    }
+
+    /**
+     * Відкладені дзвінки. Лежать поруч з очікуваннями й так само не йдуть у резервну копію:
+     * «задзвони через 10 хв» на новому телефоні вже нічого не означає.
+     */
+    val pendingSnoozes: Flow<List<PendingSnooze>> = context.waitDataStore.data.map { prefs ->
+        WaitState.decodeSnoozes(prefs[pendingSnoozesKey])
+    }
+
+    suspend fun currentPendingSnoozes(): List<PendingSnooze> = pendingSnoozes.first()
+
+    /** Додає відкладення або замінює те, що вже є в цього будильника. */
+    suspend fun setPendingSnooze(snooze: PendingSnooze) {
+        context.waitDataStore.edit { prefs ->
+            writeSnoozes(prefs, WaitState.withSnooze(WaitState.decodeSnoozes(prefs[pendingSnoozesKey]), snooze))
+        }
+    }
+
+    suspend fun clearPendingSnooze(alarmId: Long) {
+        context.waitDataStore.edit { prefs ->
+            writeSnoozes(prefs, WaitState.withoutSnooze(WaitState.decodeSnoozes(prefs[pendingSnoozesKey]), alarmId))
+        }
+    }
+
+    private fun writeSnoozes(prefs: MutablePreferences, snoozes: List<PendingSnooze>) {
+        if (snoozes.isEmpty()) prefs.remove(pendingSnoozesKey) else prefs[pendingSnoozesKey] = WaitState.encodeSnoozes(snoozes)
     }
 
     private fun readWaits(prefs: Preferences): List<PendingWait> =

@@ -90,4 +90,28 @@ class WaitStateTest {
         assertTrue(WaitState.decodeWaits("not json", null).isEmpty())
         assertTrue(WaitState.decodeStatuses("{", null).isEmpty())
     }
+
+    @Test
+    fun `snoozing again replaces the previous snooze of the same alarm`() {
+        val snoozes = WaitState.withSnooze(listOf(PendingSnooze(1, 1_000), PendingSnooze(-1, 2_000)), PendingSnooze(1, 5_000))
+        assertEquals(listOf(PendingSnooze(-1, 2_000), PendingSnooze(1, 5_000)), snoozes)
+    }
+
+    @Test
+    fun `cancelling one snooze leaves the other`() {
+        val snoozes = WaitState.withoutSnooze(listOf(PendingSnooze(1, 1_000), PendingSnooze(-1, 2_000)), 1)
+        assertEquals(listOf(PendingSnooze(-1, 2_000)), snoozes)
+    }
+
+    @Test
+    fun `snoozes survive a round trip through json`() {
+        val snoozes = listOf(PendingSnooze(1, 1_000), PendingSnooze(-1, 2_000))
+        assertEquals(snoozes, WaitState.decodeSnoozes(WaitState.encodeSnoozes(snoozes)))
+    }
+
+    @Test
+    fun `missing or corrupted snoozes mean none instead of a crash`() {
+        assertTrue(WaitState.decodeSnoozes(null).isEmpty())
+        assertTrue(WaitState.decodeSnoozes("[{").isEmpty())
+    }
 }

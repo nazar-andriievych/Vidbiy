@@ -17,6 +17,9 @@ object Notifications {
     /** Очікування відбою: тиха нотифікація, яка просто висить зі станом (FR-8). */
     const val CHANNEL_WAITING = "waiting"
 
+    /** Відкладений дзвінок: тихе сповіщення «Відкладено до 15:46». */
+    const val CHANNEL_SNOOZE = "snooze"
+
     const val ALARM_NOTIFICATION_ID = 1
     /** Сповіщення очікування разового режиму; очікування будильників — див. [waitingNotificationId]. */
     const val WAITING_NOTIFICATION_ID = 2
@@ -26,6 +29,13 @@ object Notifications {
         if (alarmId == OneShot.ONE_SHOT_ID) WAITING_NOTIFICATION_ID else WAITING_NOTIFICATION_BASE_ID + alarmId.toInt()
 
     private const val WAITING_NOTIFICATION_BASE_ID = 1000
+
+    /** Сповіщення відкладення — своє в кожного будильника, окремо від очікування. */
+    fun snoozeNotificationId(alarmId: Long): Int =
+        if (alarmId == OneShot.ONE_SHOT_ID) SNOOZE_ONE_SHOT_NOTIFICATION_ID else SNOOZE_NOTIFICATION_BASE_ID + alarmId.toInt()
+
+    private const val SNOOZE_ONE_SHOT_NOTIFICATION_ID = 3
+    private const val SNOOZE_NOTIFICATION_BASE_ID = 1_000_000
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -55,5 +65,16 @@ object Notifications {
             enableVibration(false)
         }
         manager.createNotificationChannel(waiting)
+
+        val snooze = NotificationChannel(
+            CHANNEL_SNOOZE,
+            context.getString(ua.vidbiy.app.R.string.channel_snooze),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = context.getString(ua.vidbiy.app.R.string.channel_snooze_description)
+            setSound(null, null)
+            enableVibration(false)
+        }
+        manager.createNotificationChannel(snooze)
     }
 }

@@ -60,9 +60,12 @@ class AlarmScheduler(private val context: Context) {
         schedule(alarm)
     }
 
-    /** FR-9: відкладення на [minutes] хвилин. */
-    fun snooze(alarmId: Long, minutes: Int, now: LocalDateTime = LocalDateTime.now()) {
-        setAt(alarmId, now.plusMinutes(minutes.toLong()), Kind.SNOOZE)
+    /**
+     * FR-20: відкладений дзвінок на [atMillis]. Момент, що вже минув, система виконує одразу.
+     * Записати відкладення на диск і показати його — справа [Snoozes]: планувальник у сховище не пише.
+     */
+    fun snoozeAt(alarmId: Long, atMillis: Long) {
+        setAtMillis(alarmId, atMillis, Kind.SNOOZE)
     }
 
     /**
@@ -129,7 +132,7 @@ class AlarmScheduler(private val context: Context) {
         const val WATCHDOG_REQUEST_BASE = 1_000_000_000
     }
 
-    private fun cancelSnooze(alarmId: Long) {
+    fun cancelSnooze(alarmId: Long) {
         alarmManager.cancel(firePendingIntent(alarmId, Kind.SNOOZE))
     }
 

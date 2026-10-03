@@ -322,7 +322,7 @@ class AlarmWaitService : Service() {
         scope.launch {
             val minutes = app().settingsRepository.snoozeMinutes.first()
             AlarmScheduler(this@AlarmWaitService).cancelDeadline(alarmId)
-            AlarmScheduler(this@AlarmWaitService).snooze(alarmId, minutes)
+            Snoozes.snooze(this@AlarmWaitService, alarmId, minutes)
             Log.i(TAG, "Відкладено з очікування на $minutes хв: будильник=$alarmId")
             app().decisionLog.log(
                 DecisionEntry(at = DecisionLog.now(), event = "snooze_from_wait", alarmId = alarmId, note = "$minutes хв"),

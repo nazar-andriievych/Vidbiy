@@ -49,4 +49,16 @@ internal object WaitState {
     fun withoutWait(waits: List<PendingWait>, alarmId: Long): List<PendingWait> = waits.filter { it.alarmId != alarmId }
 
     fun withoutStatus(statuses: List<WaitStatus>, alarmId: Long): List<WaitStatus> = statuses.filter { it.alarmId != alarmId }
+
+    /** Зіпсований запис — порожній список, як і з очікуваннями. */
+    fun decodeSnoozes(raw: String?): List<PendingSnooze> =
+        raw?.let { runCatching { json.decodeFromString<List<PendingSnooze>>(it) }.getOrNull() }.orEmpty()
+
+    fun encodeSnoozes(snoozes: List<PendingSnooze>): String = json.encodeToString(snoozes)
+
+    /** У будильника одне відкладення: нове (відклали ще раз) замінює попереднє. */
+    fun withSnooze(snoozes: List<PendingSnooze>, snooze: PendingSnooze): List<PendingSnooze> =
+        snoozes.filter { it.alarmId != snooze.alarmId } + snooze
+
+    fun withoutSnooze(snoozes: List<PendingSnooze>, alarmId: Long): List<PendingSnooze> = snoozes.filter { it.alarmId != alarmId }
 }

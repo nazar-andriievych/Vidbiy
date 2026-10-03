@@ -18,6 +18,8 @@ import ua.vidbiy.app.data.PendingWait
  * запусками. Тому після старту (а також після оновлення застосунку й переведення
  * годинника) ставимо всі ввімкнені будильники наново.
  *
+ * Відкладені дзвінки AlarmManager теж забуває — ставимо їх знову з диска ([Snoozes]).
+ *
  * Окремо відновлюємо очікування відбою: якщо телефон перезавантажився під час тривоги,
  * будильник, що чекав, інакше зник би разом зі службою й крайнім часом.
  */
@@ -33,6 +35,7 @@ class BootReceiver : BroadcastReceiver() {
             try {
                 app.dataReady.await()
                 AlarmScheduler(context).scheduleAll(app.alarmsRepository.disableMissed())
+                Snoozes.restore(context, afterReset = true)
                 restoreWaiting(context, app, intent.action)
             } finally {
                 pendingResult.finish()

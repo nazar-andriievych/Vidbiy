@@ -20,6 +20,7 @@ import ua.vidbiy.app.alarm.AlarmScheduler
 import ua.vidbiy.app.alarm.AlarmWaitService
 import ua.vidbiy.app.alarm.OneShot
 import ua.vidbiy.app.alarm.OneShotCheck
+import ua.vidbiy.app.alarm.Snoozes
 import ua.vidbiy.app.alarm.decideRing
 import ua.vidbiy.app.alarm.nextTriggerAt
 import ua.vidbiy.app.alarm.hasFreshYellow
@@ -31,6 +32,7 @@ import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.WaitFor
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlarmsRepository
+import ua.vidbiy.app.data.PendingSnooze
 import ua.vidbiy.app.data.PendingWait
 import ua.vidbiy.app.data.Place
 import ua.vidbiy.app.data.PlacesEditor
@@ -91,6 +93,15 @@ class AlarmsViewModel(
     /** Що зараз бачить служба про кожне очікування: рівень, причина, свіжість, пауза. */
     val waitStatuses: StateFlow<List<WaitStatus>> = settings.waitStatuses
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Відкладені дзвінки — щоб картка й рядок разового режиму показували «Відкладено до …». */
+    val pendingSnoozes: StateFlow<List<PendingSnooze>> = settings.pendingSnoozes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** «Скасувати» на картці чи банері: одразу, без підтвердження. */
+    fun cancelSnooze(alarmId: Long) {
+        Snoozes.cancel(app, alarmId)
+    }
 
     /** FR-19: тривалість відкладення. */
     val snoozeMinutes: StateFlow<Int> = settings.snoozeMinutes
@@ -297,6 +308,8 @@ class AlarmsViewModel(
         val next = alarm.nextTriggerAt(LocalDateTime.now()) ?: return
         // FR-7b: змінений будильник більше не чекає за старими налаштуваннями.
         if (draftStopsWaiting()) AlarmWaitService.cancelWaiting(app, alarm.id)
+        // Відкладення від попереднього дзвінка після редагування вже не актуальне (див. applyEdit).
+        if (alarm.id != Alarm.NEW_ID) Snoozes.cancel(app, alarm.id)
         _draft.value = null
         _savedNextRing.value = next
         viewModelScope.launch { scheduler.applyEdit(repository.save(alarm)) }
@@ -307,13 +320,15 @@ class AlarmsViewModel(
         _draft.value = null
         if (alarm.id != Alarm.NEW_ID) {
             if (pendingWaits.value.any { it.alarmId == alarm.id }) AlarmWaitService.cancelWaiting(app, alarm.id)
+            Snoozes.cancel(app, alarm.id)
             scheduler.cancel(alarm.id)
             viewModelScope.launch { repository.delete(alarm.id) }
         }
     }
 
     fun setEnabled(alarm: Alarm, enabled: Boolean) {
-        // schedule() сам скасовує спрацювання вимкненого будильника.
+        // schedule() сам скасовує спрацювання вимкненого будильника, разом із відкладенням.
+        if (!enabled) Snoozes.cancel(app, alarm.id)
         scheduler.schedule(alarm.copy(enabled = enabled))
         viewModelScope.launch { repository.setEnabled(alarm.id, enabled) }
     }

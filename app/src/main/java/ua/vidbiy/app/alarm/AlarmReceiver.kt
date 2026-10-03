@@ -43,6 +43,8 @@ class AlarmReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
                 app.dataReady.await()
+                // Відкладення спрацювало — у списку й у шторці його більше не показуємо.
+                if (intent.action == ACTION_FIRE_SNOOZE) Snoozes.fired(context, alarmId)
                 val live = app.findAlarm(alarmId)
                 // Прочитати до дзвінка: дзвінок зупиняє службу очікування, і вона стирає свій стан.
                 val wait = app.settingsRepository.currentPendingWait(alarmId)

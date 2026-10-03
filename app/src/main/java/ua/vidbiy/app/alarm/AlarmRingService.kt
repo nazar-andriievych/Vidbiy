@@ -77,9 +77,8 @@ class AlarmRingService : Service() {
             ACTION_START -> startRinging(intent)
             ACTION_SNOOZE -> {
                 // Відкладення, як і вимкнення, стосується всіх будильників, що дзвонять.
-                val scheduler = AlarmScheduler(this)
                 val ids = ringing.keys.toList().ifEmpty { listOf(intent.getLongExtra(EXTRA_ALARM_ID, Alarm.NEW_ID)) }
-                ids.forEach { scheduler.snooze(alarmId = it, minutes = snoozeMinutes) }
+                ids.forEach { Snoozes.snooze(this, alarmId = it, minutes = snoozeMinutes) }
                 stopEverything()
             }
 

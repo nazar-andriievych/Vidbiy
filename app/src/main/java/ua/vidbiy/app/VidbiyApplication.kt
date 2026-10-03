@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import ua.vidbiy.app.alarm.AlarmScheduler
 import ua.vidbiy.app.alarm.Notifications
 import ua.vidbiy.app.alarm.OneShot
+import ua.vidbiy.app.alarm.Snoozes
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlarmsRepository
 import ua.vidbiy.app.data.DecisionLog
@@ -80,6 +81,7 @@ class VidbiyApplication : Application() {
         applicationScope.launch {
             dataReady.await()
             alarmScheduler.scheduleAll(alarmsRepository.disableMissed())
+            Snoozes.restore(this@VidbiyApplication, afterReset = false)
         }
     }
 }

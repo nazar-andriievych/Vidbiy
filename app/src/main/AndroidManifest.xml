@@ -74,6 +74,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".alarm.SnoozeCancelReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".alarm.BootReceiver"
             android:exported="false">
             <intent-filter>

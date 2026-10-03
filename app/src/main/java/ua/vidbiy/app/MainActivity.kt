@@ -118,6 +118,7 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
     val overlay by viewModel.overlay.collectAsStateWithLifecycle()
     val waits by viewModel.pendingWaits.collectAsStateWithLifecycle()
     val waitStatuses by viewModel.waitStatuses.collectAsStateWithLifecycle()
+    val snoozes by viewModel.pendingSnoozes.collectAsStateWithLifecycle()
     val snoozeMinutes by viewModel.snoozeMinutes.collectAsStateWithLifecycle()
     val oneShotRow by viewModel.oneShotRow.collectAsStateWithLifecycle()
     val oneShotWaitFor by viewModel.oneShotWaitFor.collectAsStateWithLifecycle()
@@ -235,6 +236,8 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                         places = places,
                         waits = waits,
                         waitStatuses = waitStatuses,
+                        snoozes = snoozes,
+                        onCancelSnooze = viewModel::cancelSnooze,
                         contentPadding = content,
                         onAdd = viewModel::startNew,
                         onEdit = viewModel::startEdit,

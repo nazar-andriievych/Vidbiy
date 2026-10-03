@@ -80,6 +80,15 @@
     <string name="ring_dismiss">Вимкнути</string>
     <string name="channel_waiting">Очікування відбою</string>
     <string name="channel_waiting_description">Тихе сповіщення, поки будильник чекає відбою</string>
+    <string name="channel_snooze">Відкладений дзвінок</string>
+    <string name="channel_snooze_description">Тихе сповіщення: коли задзвонить відкладений будильник</string>
+    <string name="snooze_notif_title">Відкладено до %1$s</string>
+    <string name="snooze_notif_text_alarm">Будильник %1$s</string>
+    <string name="snooze_notif_text_one_shot">Розбуди після відбою</string>
+    <string name="snooze_cancel">Скасувати</string>
+    <string name="snooze_cancel_description">Скасувати відкладений дзвінок</string>
+    <string name="snooze_banner_title">Задзвоню о %1$s</string>
+    <string name="snooze_banner_subtitle">Відкладено</string>
 
     <!-- Редагування будильника (design-spec 3.2) -->
     <string name="action_close_without_saving">Закрити без збереження</string>

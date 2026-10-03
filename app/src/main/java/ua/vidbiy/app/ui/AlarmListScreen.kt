@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,7 @@ import ua.vidbiy.app.R
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.alarm.OneShot
 import ua.vidbiy.app.data.AlertLevel
+import ua.vidbiy.app.data.PendingSnooze
 import ua.vidbiy.app.data.PendingWait
 import ua.vidbiy.app.data.WaitStatus
 import ua.vidbiy.app.ui.theme.alertColors
@@ -60,6 +62,8 @@ fun AlarmsTab(
     places: PlacesState,
     waits: List<PendingWait>,
     waitStatuses: List<WaitStatus>,
+    snoozes: List<PendingSnooze>,
+    onCancelSnooze: (alarmId: Long) -> Unit,
     contentPadding: PaddingValues,
     onAdd: () -> Unit,
     onEdit: (Alarm) -> Unit,
@@ -102,11 +106,20 @@ fun AlarmsTab(
         // показує сам елемент, що чекає: рядок режиму стає банером, картка — смугою.
         item {
             val oneShotWait = waits.firstOrNull { it.alarmId == OneShot.ONE_SHOT_ID }
+            val oneShotSnooze = snoozes.firstOrNull { it.alarmId == OneShot.ONE_SHOT_ID }
             if (oneShotWait != null) {
                 OneShotBanner(
                     placeName = oneShotWait.alarm?.let { placeName(it, places) } ?: places.primary?.name,
                     status = waitStatuses.firstOrNull { it.alarmId == OneShot.ONE_SHOT_ID },
                     onOpen = { onOpenWaiting(OneShot.ONE_SHOT_ID) },
+                )
+            } else if (oneShotSnooze != null) {
+                // Режим відклали: дзвінок буде, хоч очікування вже немає — інакше рядок виглядав би вимкненим.
+                SnoozeStrip(
+                    title = stringResource(R.string.snooze_banner_title, formatClock(oneShotSnooze.ringAtMillis)),
+                    subtitle = listOfNotNull(stringResource(R.string.snooze_banner_subtitle), places.primary?.name).joinToString(" · "),
+                    onCancel = { onCancelSnooze(OneShot.ONE_SHOT_ID) },
+                    modifier = Modifier.padding(horizontal = Dimens.ScreenPadding),
                 )
             } else {
                 OneShotRow(
@@ -122,8 +135,10 @@ fun AlarmsTab(
         if (alarms.isEmpty()) {
             item { EmptyAlarms() }
         } else {
-            // Будильник, що чекає, — першим: інакше він міг би опинитися нижче видимої частини.
-            val ordered = alarms.sortedByDescending { alarm -> waits.any { it.alarmId == alarm.id } }
+            // Будильник, що чекає чи відкладений, — першим: інакше він міг би опинитися нижче видимої частини.
+            val ordered = alarms.sortedByDescending { alarm ->
+                waits.any { it.alarmId == alarm.id } || snoozes.any { it.alarmId == alarm.id }
+            }
             items(ordered, key = { it.id }) { alarm ->
                 val wait = waits.firstOrNull { it.alarmId == alarm.id }
                 AlarmCard(
@@ -132,6 +147,8 @@ fun AlarmsTab(
                     placeName = placeName(wait?.alarm ?: alarm, places),
                     wait = wait,
                     waitStatus = waitStatuses.firstOrNull { wait != null && it.alarmId == alarm.id },
+                    snooze = snoozes.firstOrNull { it.alarmId == alarm.id },
+                    onCancelSnooze = { onCancelSnooze(alarm.id) },
                     onClick = { onEdit(alarm) },
                     onToggle = { onToggle(alarm, it) },
                     onOpenWaiting = { onOpenWaiting(alarm.id) },
@@ -206,6 +223,38 @@ private fun WaitingStrip(placeName: String?, status: WaitStatus?, onOpen: () -> 
 }
 
 /**
+ * Відкладений дзвінок (FR-20) — у картці будильника й замість рядка разового режиму:
+ * «Відкладено до 15:46» і «Скасувати», що скасовує одразу (людина вже прокинулася, коли відкладала).
+ */
+@Composable
+internal fun SnoozeStrip(title: String, subtitle: String?, onCancel: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(painterResource(R.drawable.ic_schedule), null, Modifier.size(20.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                if (!subtitle.isNullOrEmpty()) {
+                    Text(subtitle, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            val description = stringResource(R.string.snooze_cancel_description)
+            TextButton(onClick = onCancel, modifier = Modifier.semantics { contentDescription = description }) {
+                Text(stringResource(R.string.snooze_cancel), style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}
+
+/**
  * Картка будильника (design-spec 2, `01-alarms--list`): час (і крайній час поруч, якщо заданий),
  * під ним один рядок — дні, місце й крапки рівня. Пауза — на екрані редагування. Поки будильник чекає
  * відбою ([wait]), світча немає (дії — на екрані очікування), а під часом — смуга очікування.
@@ -216,6 +265,8 @@ private fun AlarmCard(
     placeName: String?,
     wait: PendingWait?,
     waitStatus: WaitStatus?,
+    snooze: PendingSnooze?,
+    onCancelSnooze: () -> Unit,
     onClick: () -> Unit,
     onToggle: (Boolean) -> Unit,
     onOpenWaiting: () -> Unit,
@@ -239,7 +290,7 @@ private fun AlarmCard(
                             text = formatTime(alarm.hour, alarm.minute),
                             style = MaterialTheme.typography.displayMedium,
                             // Одноразовий будильник уже зняв «увімкнено», але поки чекає — він живий.
-                            color = if (alarm.enabled || wait != null) {
+                            color = if (alarm.enabled || wait != null || snooze != null) {
                                 MaterialTheme.colorScheme.onSurface
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
@@ -273,10 +324,19 @@ private fun AlarmCard(
                         placeName = placeName.takeIf { wait == null },
                     )
                 }
-                if (wait == null) Switch(checked = alarm.enabled, onCheckedChange = onToggle)
+                // Відкладений — теж без світча: скасування — на смузі відкладення.
+                if (wait == null && snooze == null) Switch(checked = alarm.enabled, onCheckedChange = onToggle)
             }
 
-            if (wait != null) WaitingStrip(placeName, waitStatus, onOpenWaiting)
+            if (wait != null) {
+                WaitingStrip(placeName, waitStatus, onOpenWaiting)
+            } else if (snooze != null) {
+                SnoozeStrip(
+                    title = stringResource(R.string.snooze_notif_title, formatClock(snooze.ringAtMillis)),
+                    subtitle = null,
+                    onCancel = onCancelSnooze,
+                )
+            }
         }
     }
 }
