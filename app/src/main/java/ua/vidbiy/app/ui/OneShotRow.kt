@@ -22,12 +22,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ua.vidbiy.app.R
-import ua.vidbiy.app.data.AlertLevel
 import ua.vidbiy.app.data.Place
-import ua.vidbiy.app.data.WaitFor
 import ua.vidbiy.app.data.WaitStatus
 import ua.vidbiy.app.ui.theme.Dimens
 import ua.vidbiy.app.ui.theme.alertColors
@@ -121,59 +118,32 @@ private fun RowIcon(icon: Int, tint: androidx.compose.ui.graphics.Color = Materi
 
 /**
  * Банер активного режиму (`09-one-shot--3-main-active-banner`): «Розбуджу після відбою»,
- * «Жовта тривога · Дім», шеврон → екран очікування.
+ * «Жовта тривога · Дім» і дії очікування (FR-18) — окремого екрана очікування немає.
  */
 @Composable
 fun OneShotBanner(
     placeName: String?,
     status: WaitStatus?,
-    onOpen: () -> Unit,
+    pauseMinutes: Int,
+    snoozeMinutes: Int,
+    onSnooze: () -> Unit,
+    onSkip: () -> Unit,
 ) {
-    val colors = MaterialTheme.alertColors
-    val phase = status.phase
-    val level = status?.level
-    val (container, content) = when {
-        phase == WaitPhase.PAUSE -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-        level == AlertLevel.RED -> colors.redContainer to colors.onRedContainer
-        level == AlertLevel.YELLOW -> colors.yellowContainer to colors.onYellowContainer
-        else -> MaterialTheme.colorScheme.surfaceContainerHigh to MaterialTheme.colorScheme.onSurface
-    }
-    val subtitle = when (phase) {
+    val details = when (status.phase) {
         WaitPhase.PAUSE -> listOfNotNull(
             stringResource(R.string.one_shot_banner_pause, formatClock(status!!.ringAtMillis!!)),
             placeName,
         )
-        else -> listOfNotNull(
-            level?.let { stringResource(if (it == AlertLevel.RED) R.string.level_red else R.string.level_yellow) },
-            placeName,
-        )
-    }.joinToString(" · ")
-
-    Surface(
-        onClick = onOpen,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenPadding),
-        shape = MaterialTheme.shapes.medium,
-        color = container,
-        contentColor = content,
-    ) {
-        Row(
-            modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 16.dp, end = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            when {
-                level != null && phase == WaitPhase.ALERT -> Box(
-                    Modifier.size(12.dp).background(if (level == AlertLevel.RED) colors.red else colors.yellow, CircleShape),
-                )
-                phase == WaitPhase.PAUSE -> Icon(painterResource(R.drawable.ic_schedule), null, Modifier.size(20.dp))
-            }
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(stringResource(R.string.one_shot_banner_title), style = MaterialTheme.typography.titleSmall)
-                if (subtitle.isNotEmpty()) {
-                    Text(subtitle, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-            }
-            Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null)
-        }
+        else -> listOfNotNull(status?.level?.let { stringResource(it.titleRes) }, placeName)
     }
+    WaitPanel(
+        title = stringResource(R.string.one_shot_banner_title),
+        details = details,
+        status = status,
+        pauseMinutes = pauseMinutes,
+        snoozeMinutes = snoozeMinutes,
+        onSnooze = onSnooze,
+        onSkip = onSkip,
+        modifier = Modifier.padding(horizontal = Dimens.ScreenPadding),
+    )
 }

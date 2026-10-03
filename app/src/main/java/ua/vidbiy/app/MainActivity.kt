@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -44,9 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.delay
 import androidx.lifecycle.viewmodel.compose.viewModel
-import ua.vidbiy.app.alarm.OneShot
 import ua.vidbiy.app.ui.AlarmEditScreen
 import ua.vidbiy.app.ui.AlarmsTab
 import ua.vidbiy.app.ui.AlarmsViewModel
@@ -59,8 +58,6 @@ import ua.vidbiy.app.ui.RegionPickerScreen
 import ua.vidbiy.app.ui.PermissionsScreen
 import ua.vidbiy.app.ui.SettingsTab
 import ua.vidbiy.app.ui.rememberMissingPermissions
-import ua.vidbiy.app.ui.WaitingScreen
-import ua.vidbiy.app.ui.placeName
 import ua.vidbiy.app.ui.theme.VidbiyTheme
 
 class MainActivity : ComponentActivity() {
@@ -86,21 +83,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
-        if (intent?.action != ACTION_SHOW_WAITING) return
-        // Сповіщення кожного очікування несе id свого будильника.
-        val alarmId = if (intent.hasExtra(EXTRA_ALARM_ID)) intent.getLongExtra(EXTRA_ALARM_ID, 0L) else null
-        viewModel.openWaiting(alarmId)
+        if (intent?.action != ACTION_SHOW_ALARMS) return
+        viewModel.requestShowAlarms()
     }
 
     companion object {
-        /** Відкрити екран очікування: зі сповіщення («Не дзвонити…» або натиск на нього). */
-        const val ACTION_SHOW_WAITING = "ua.vidbiy.app.action.SHOW_WAITING"
-        const val EXTRA_ALARM_ID = "alarm_id"
+        /** Показати список будильників зі сповіщення очікування («Не дзвонити…» або натиск на нього). */
+        const val ACTION_SHOW_ALARMS = "ua.vidbiy.app.action.SHOW_ALARMS"
     }
 }
-
-/** Скільки екран очікування чекає, поки служба запише щойно почате очікування. */
-private const val WAIT_APPEAR_GRACE_MILLIS = 3_000L
 
 /** Вкладки нижньої навігації (design-spec 2). */
 private enum class Tab(@StringRes val label: Int, @DrawableRes val icon: Int) {
@@ -123,11 +114,11 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
     val oneShotRow by viewModel.oneShotRow.collectAsStateWithLifecycle()
     val oneShotWaitFor by viewModel.oneShotWaitFor.collectAsStateWithLifecycle()
     val oneShotPause by viewModel.oneShotPauseMinutes.collectAsStateWithLifecycle()
-    val oneShotAlarm by viewModel.oneShotAlarm.collectAsStateWithLifecycle()
-    val oneShotJustEnabled by viewModel.oneShotJustEnabled.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     // rememberSaveable переживає поворот екрана й повернення до застосунку, як стан у Bundle.
     var tab by rememberSaveable { mutableStateOf(Tab.Alarms) }
+    // Тут, а не у вкладці: щоб сповіщення могло прокрутити список до картки, що чекає.
+    val alarmsListState = rememberLazyListState()
 
     RequestNotificationPermission()
 
@@ -143,49 +134,30 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
             snackbarScope.launch { snackbar.showSnackbar(message) }
         }
     }
+    if (viewModel.oneShotEnabled.collectAsStateWithLifecycle().value) {
+        val message = stringResource(R.string.one_shot_enabled)
+        LaunchedEffect(Unit) {
+            viewModel.consumeOneShotEnabled()
+            snackbarScope.launch { snackbar.showSnackbar(message) }
+        }
+    }
+    // Сповіщення очікування: картка, що чекає, і банер режиму — нагорі вкладки «Будильники».
+    if (viewModel.showAlarms.collectAsStateWithLifecycle().value) {
+        LaunchedEffect(Unit) {
+            viewModel.consumeShowAlarms()
+            tab = Tab.Alarms
+            alarmsListState.scrollToItem(0)
+        }
+    }
 
     // Екранів небагато, тож навігаційна бібліотека надлишкова: повноекранні підекрани
     // (редагування, вибір регіону, нове місце) перекривають вкладки, поки відкриті.
     val editing = draft
     val current = overlay
-    // Екран очікування — того, на яке натиснули; без вказівки — будь-якого, що чекає.
-    val waiting = (current as? Overlay.Waiting)?.let { target ->
-        waits.firstOrNull { it.alarmId == target.alarmId } ?: waits.firstOrNull().takeIf { target.alarmId == null }
-    }
-    // Він показує налаштування, з якими очікування почалося (PendingWait.alarm).
-    val waitingAlarm = waiting?.let { wait ->
-        wait.alarm ?: if (wait.alarmId == OneShot.ONE_SHOT_ID) oneShotAlarm else alarms.firstOrNull { it.id == wait.alarmId }
-    }
     // Дозволи перевіряються тут, щоб банер на головному й екран дозволів бачили один стан.
     val missingPermissions = rememberMissingPermissions()
     when {
         current == Overlay.Permissions -> PermissionsScreen(onBack = viewModel::closeOverlay)
-        current is Overlay.Waiting -> {
-            val wait = waiting
-            if (wait != null && waitingAlarm != null) {
-                WaitingScreen(
-                    alarm = waitingAlarm,
-                    placeName = placeName(waitingAlarm, places),
-                    wait = wait,
-                    status = waitStatuses.firstOrNull { it.alarmId == wait.alarmId },
-                    snoozeMinutes = snoozeMinutes,
-                    onBack = viewModel::closeOverlay,
-                    onSnooze = { viewModel.snoozeWaiting(wait.alarmId) },
-                    onSkip = { viewModel.cancelWaiting(wait.alarmId) },
-                    oneShot = wait.alarmId == OneShot.ONE_SHOT_ID,
-                    justEnabled = oneShotJustEnabled,
-                )
-            } else {
-                // Очікування закінчилося (задзвонив, скасували) — екрану більше нема що показувати.
-                // Невелика затримка: щойно ввімкнений режим відкриває екран раніше, ніж служба
-                // встигає записати своє очікування. Щойно воно з'явиться, ця гілка зникне
-                // з композиції разом з ефектом.
-                LaunchedEffect(Unit) {
-                    delay(WAIT_APPEAR_GRACE_MILLIS)
-                    viewModel.closeOverlay()
-                }
-            }
-        }
         current == Overlay.AlarmRegion && editing != null -> RegionPickerScreen(
             title = stringResource(R.string.region_title),
             confirmLabel = stringResource(R.string.action_done),
@@ -242,7 +214,9 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                         onAdd = viewModel::startNew,
                         onEdit = viewModel::startEdit,
                         onToggle = viewModel::setEnabled,
-                        onOpenWaiting = viewModel::openWaiting,
+                        snoozeMinutes = snoozeMinutes,
+                        onSnoozeWaiting = viewModel::snoozeWaiting,
+                        onSkipWaiting = viewModel::cancelWaiting,
                         oneShotRow = oneShotRow,
                         onStartOneShot = viewModel::startOneShot,
                         onCancelOneShotCheck = viewModel::cancelOneShotCheck,
@@ -250,6 +224,7 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                         missingPermissions = missingPermissions,
                         onOpenPermissions = viewModel::openPermissions,
                         alarmsUnreadable = alarmsUnreadable,
+                        listState = alarmsListState,
                     )
                     Tab.Places -> PlacesTab(
                         places = places,

@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,18 +42,20 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ua.vidbiy.app.ui.theme.Dimens
 
 /**
- * Кнопка, що спрацьовує лише після утримання (design-spec 2, NFR-1): «Сьогодні не дзвони»,
- * «Вимкнути». Випадковий дотик уві сні нічого не скасує.
+ * Кнопка, що спрацьовує лише після утримання (design-spec 2, NFR-1): «Не дзвонити» на панелі
+ * очікування, «Вимкнути». Випадковий дотик уві сні нічого не скасує.
  *
  * Поки палець на кнопці, її заливає прогрес; відпустив раніше — прогрес відкочується,
  * а під кнопкою на кілька секунд з'являється [hint] («Утримуйте секунду, щоб …»). Постійного
  * підпису немає: заповнення саме показує, що треба тримати (design-spec 2).
+ * Якщо кнопка вузька, підказку показує власник через [onHintVisibleChange] ([showHint] = false).
  * Для TalkBack утримання незручне, тому дія доступна ще й як окрема accessibility-дія.
  */
 @Composable
@@ -66,6 +67,9 @@ fun HoldButton(
     icon: Int? = null,
     accent: Boolean = false,
     holdMillis: Int = 1_000,
+    height: Dp = Dimens.ButtonHeight,
+    showHint: Boolean = true,
+    onHintVisibleChange: (Boolean) -> Unit = {},
 ) {
     val border = if (accent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
     val content = if (accent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
@@ -77,18 +81,21 @@ fun HoldButton(
     // Лічильник коротких натисків: кожен новий перезапускає таймер підказки.
     var shortPresses by remember { mutableIntStateOf(0) }
     var hintVisible by remember { mutableStateOf(false) }
+    val hintChanged by rememberUpdatedState(onHintVisibleChange)
     LaunchedEffect(shortPresses) {
         if (shortPresses == 0) return@LaunchedEffect
         hintVisible = true
+        hintChanged(true)
         delay(HINT_MILLIS)
         hintVisible = false
+        hintChanged(false)
     }
 
     Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(Dimens.ButtonHeight)
+                .height(height)
                 .clip(CircleShape)
                 .border(if (accent) 1.5.dp else 1.dp, border, CircleShape)
                 .drawBehind {
@@ -124,10 +131,10 @@ fun HoldButton(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (icon != null) Icon(painterResource(icon), contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
-                Text(text, style = MaterialTheme.typography.labelLarge, color = content)
+                FittingLabel(text, content)
             }
         }
-        AnimatedVisibility(visible = hintVisible) {
+        AnimatedVisibility(visible = showHint && hintVisible) {
             FieldHint(hint, Modifier.padding(top = 8.dp))
         }
     }

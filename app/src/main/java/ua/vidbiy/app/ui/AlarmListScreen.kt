@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
@@ -39,11 +41,9 @@ import androidx.compose.ui.unit.sp
 import ua.vidbiy.app.R
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.alarm.OneShot
-import ua.vidbiy.app.data.AlertLevel
 import ua.vidbiy.app.data.PendingSnooze
 import ua.vidbiy.app.data.PendingWait
 import ua.vidbiy.app.data.WaitStatus
-import ua.vidbiy.app.ui.theme.alertColors
 import ua.vidbiy.app.data.PlacesState
 import ua.vidbiy.app.data.shortTitle
 import ua.vidbiy.app.data.WaitFor
@@ -68,7 +68,9 @@ fun AlarmsTab(
     onAdd: () -> Unit,
     onEdit: (Alarm) -> Unit,
     onToggle: (Alarm, Boolean) -> Unit,
-    onOpenWaiting: (alarmId: Long) -> Unit,
+    snoozeMinutes: Int,
+    onSnoozeWaiting: (alarmId: Long) -> Unit,
+    onSkipWaiting: (alarmId: Long) -> Unit,
     oneShotRow: OneShotRowState,
     onStartOneShot: () -> Unit,
     onCancelOneShotCheck: () -> Unit,
@@ -76,9 +78,11 @@ fun AlarmsTab(
     missingPermissions: List<Permission>,
     onOpenPermissions: () -> Unit,
     alarmsUnreadable: Boolean = false,
+    listState: LazyListState = rememberLazyListState(),
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(Dimens.ListGap),
     ) {
@@ -102,8 +106,8 @@ fun AlarmsTab(
             }
         }
 
-        // Порядок з design-spec 3.1: рядок разового режиму → картки. Стан очікування
-        // показує сам елемент, що чекає: рядок режиму стає банером, картка — смугою.
+        // Порядок з design-spec 3.1: рядок разового режиму → картки. Стан очікування й дії
+        // показує сам елемент, що чекає: рядок режиму стає банером, картка — панеллю.
         item {
             val oneShotWait = waits.firstOrNull { it.alarmId == OneShot.ONE_SHOT_ID }
             val oneShotSnooze = snoozes.firstOrNull { it.alarmId == OneShot.ONE_SHOT_ID }
@@ -111,7 +115,10 @@ fun AlarmsTab(
                 OneShotBanner(
                     placeName = oneShotWait.alarm?.let { placeName(it, places) } ?: places.primary?.name,
                     status = waitStatuses.firstOrNull { it.alarmId == OneShot.ONE_SHOT_ID },
-                    onOpen = { onOpenWaiting(OneShot.ONE_SHOT_ID) },
+                    pauseMinutes = oneShotWait.alarm?.pauseMinutes ?: 0,
+                    snoozeMinutes = snoozeMinutes,
+                    onSnooze = { onSnoozeWaiting(OneShot.ONE_SHOT_ID) },
+                    onSkip = { onSkipWaiting(OneShot.ONE_SHOT_ID) },
                 )
             } else if (oneShotSnooze != null) {
                 // Режим відклали: дзвінок буде, хоч очікування вже немає — інакше рядок виглядав би вимкненим.
@@ -151,7 +158,9 @@ fun AlarmsTab(
                     onCancelSnooze = { onCancelSnooze(alarm.id) },
                     onClick = { onEdit(alarm) },
                     onToggle = { onToggle(alarm, it) },
-                    onOpenWaiting = { onOpenWaiting(alarm.id) },
+                    snoozeMinutes = snoozeMinutes,
+                    onSnoozeWaiting = { onSnoozeWaiting(alarm.id) },
+                    onSkipWaiting = { onSkipWaiting(alarm.id) },
                 )
             }
         }
@@ -161,66 +170,6 @@ fun AlarmsTab(
 /** Назва місця, а якщо місця немає (обрано напряму чи видалено) — коротка назва регіону. */
 fun placeName(alarm: Alarm, places: PlacesState): String? =
     places.byId(alarm.placeId)?.name ?: alarm.region?.shortTitle
-
-/**
- * Смуга очікування в картці будильника (design-spec 2): контейнер кольору рівня, крапка,
- * «Чекає відбою», «Червона тривога · Дім», шеврон → екран очікування.
- */
-@Composable
-private fun WaitingStrip(placeName: String?, status: WaitStatus?, onOpen: () -> Unit) {
-    val now = rememberNowMillis()
-    val colors = MaterialTheme.alertColors
-    val phase = status.phase
-    val level = status?.level
-    val (container, content) = when {
-        phase == WaitPhase.PAUSE -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-        level == AlertLevel.RED -> colors.redContainer to colors.onRedContainer
-        level == AlertLevel.YELLOW -> colors.yellowContainer to colors.onYellowContainer
-        else -> MaterialTheme.colorScheme.surfaceContainerHigh to MaterialTheme.colorScheme.onSurface
-    }
-    val title = when (phase) {
-        WaitPhase.ALERT -> stringResource(R.string.wait_strip_alert)
-        WaitPhase.PAUSE -> stringResource(R.string.wait_strip_pause, formatClock(status!!.ringAtMillis!!))
-        WaitPhase.CHECKING -> stringResource(R.string.wait_strip_checking)
-    }
-    // «Оновлено …» — лише коли дані застаріли (design-spec 0, п. 4); крайній час — на екрані очікування.
-    val updated = status?.confirmedAtMillis
-        ?.takeIf { showsStaleWarning(it, now) }
-        ?.let { stringResource(R.string.banner_updated_ago, ((now - it) / 60_000L).toInt()) }
-    val subtitle = listOfNotNull(
-        level?.let { stringResource(if (it == AlertLevel.RED) R.string.level_red else R.string.level_yellow) },
-        placeName,
-        updated,
-    ).joinToString(" · ")
-
-    Surface(
-        onClick = onOpen,
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = container,
-        contentColor = content,
-    ) {
-        Row(
-            modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            when {
-                level != null && phase == WaitPhase.ALERT -> Box(
-                    Modifier.size(12.dp).background(if (level == AlertLevel.RED) colors.red else colors.yellow, CircleShape),
-                )
-                phase == WaitPhase.PAUSE -> Icon(painterResource(R.drawable.ic_schedule), null, Modifier.size(20.dp))
-            }
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, style = MaterialTheme.typography.titleSmall)
-                if (subtitle.isNotEmpty()) {
-                    Text(subtitle, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-            }
-            Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null)
-        }
-    }
-}
 
 /**
  * Відкладений дзвінок (FR-20) — у картці будильника й замість рядка разового режиму:
@@ -257,7 +206,7 @@ internal fun SnoozeStrip(title: String, subtitle: String?, onCancel: () -> Unit,
 /**
  * Картка будильника (design-spec 2, `01-alarms--list`): час (і крайній час поруч, якщо заданий),
  * під ним один рядок — дні, місце й крапки рівня. Пауза — на екрані редагування. Поки будильник чекає
- * відбою ([wait]), світча немає (дії — на екрані очікування), а під часом — смуга очікування.
+ * відбою ([wait]), світча немає, а під часом — панель очікування з діями (FR-18).
  */
 @Composable
 private fun AlarmCard(
@@ -269,7 +218,9 @@ private fun AlarmCard(
     onCancelSnooze: () -> Unit,
     onClick: () -> Unit,
     onToggle: (Boolean) -> Unit,
-    onOpenWaiting: () -> Unit,
+    snoozeMinutes: Int,
+    onSnoozeWaiting: () -> Unit,
+    onSkipWaiting: () -> Unit,
 ) {
     // Щоб «Один раз · сьогодні» саме перейшло на «завтра», коли час будильника мине.
     val now = rememberNowMillis()
@@ -320,7 +271,7 @@ private fun AlarmCard(
                     CardSummary(
                         alarm = alarm,
                         days = daysLabel(alarm, LocalDateTime.ofInstant(Instant.ofEpochMilli(now), ZoneId.systemDefault())),
-                        // Поки чекає, місце й рівень показує смуга очікування.
+                        // Поки чекає, місце й рівень показує панель очікування.
                         placeName = placeName.takeIf { wait == null },
                     )
                 }
@@ -329,7 +280,20 @@ private fun AlarmCard(
             }
 
             if (wait != null) {
-                WaitingStrip(placeName, waitStatus, onOpenWaiting)
+                WaitPanel(
+                    title = when (waitStatus.phase) {
+                        WaitPhase.ALERT -> stringResource(R.string.wait_strip_alert)
+                        WaitPhase.PAUSE -> stringResource(R.string.wait_strip_pause, formatClock(waitStatus!!.ringAtMillis!!))
+                        WaitPhase.CHECKING -> stringResource(R.string.wait_strip_checking)
+                    },
+                    details = listOfNotNull(waitStatus?.level?.let { stringResource(it.titleRes) }, placeName),
+                    status = waitStatus,
+                    // FR-7c: пауза — з налаштувань, з якими очікування почалося.
+                    pauseMinutes = (wait.alarm ?: alarm).pauseMinutes,
+                    snoozeMinutes = snoozeMinutes,
+                    onSnooze = onSnoozeWaiting,
+                    onSkip = onSkipWaiting,
+                )
             } else if (snooze != null) {
                 SnoozeStrip(
                     title = stringResource(R.string.snooze_notif_title, formatClock(snooze.ringAtMillis)),

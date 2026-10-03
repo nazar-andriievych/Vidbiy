@@ -366,7 +366,7 @@ class AlarmWaitService : Service() {
     /**
      * Сповіщення очікування (design-spec 3.9): заголовок, рівень кольором, причина,
      * «Дім · оновлено 06:51 · крайній час 08:00». Дії: «Через X хв» відкладає одразу,
-     * «Не дзвонити…» лише відкриває екран очікування — там скасування утриманням (NFR-1).
+     * «Не дзвонити…» лише відкриває список — там скасування утриманням на панелі очікування (NFR-1).
      */
     private fun buildNotification(
         alarm: Alarm?,
@@ -413,24 +413,24 @@ class AlarmWaitService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setShowWhen(false)
-            .setContentIntent(openWaitingScreen(wait.alarmId))
+            .setContentIntent(openAlarms(wait.alarmId))
         if (snoozeMinutes != null) {
             builder.addAction(0, getString(R.string.waiting_notif_snooze, snoozeMinutes), action(ACTION_SNOOZE, wait.alarmId))
         }
-        builder.addAction(0, getString(R.string.waiting_notif_skip), openWaitingScreen(wait.alarmId))
+        // FR-18: не скасовує, а відкриває список — скасування там утриманням на панелі очікування.
+        builder.addAction(0, getString(R.string.waiting_notif_skip), openAlarms(wait.alarmId))
         return builder.build()
     }
 
     private fun isNight(): Boolean =
         resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
 
-    /** Екран очікування саме цього будильника: у кожного сповіщення свій код запиту й свій id в Intent. */
-    private fun openWaitingScreen(alarmId: Long): PendingIntent = PendingIntent.getActivity(
+    /** Список будильників, де картка, що чекає, — першою; у кожного сповіщення свій код запиту. */
+    private fun openAlarms(alarmId: Long): PendingIntent = PendingIntent.getActivity(
         this,
-        REQUEST_OPEN_WAITING + Notifications.waitingNotificationId(alarmId),
+        REQUEST_OPEN_ALARMS + Notifications.waitingNotificationId(alarmId),
         Intent(this, MainActivity::class.java)
-            .setAction(MainActivity.ACTION_SHOW_WAITING)
-            .putExtra(MainActivity.EXTRA_ALARM_ID, alarmId)
+            .setAction(MainActivity.ACTION_SHOW_ALARMS)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
@@ -510,7 +510,7 @@ class AlarmWaitService : Service() {
         private const val TAG = "VidbiyWait"
         private const val WAKE_LOCK_TAG = "vidbiy:wait"
         private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-        private const val REQUEST_OPEN_WAITING = 7001
+        private const val REQUEST_OPEN_ALARMS = 7001
 
         /** NFR-3 дозволяє до 2 хв затримки після відбою, тож 30 с дають запас. */
         private const val POLL_INTERVAL_MILLIS = 30_000L
@@ -546,7 +546,7 @@ class AlarmWaitService : Service() {
             context.startForegroundService(intent)
         }
 
-        /** «Подзвони через X хв» з екрана очікування. */
+        /** «Через X хв» з панелі очікування. */
         fun snooze(context: Context, alarmId: Long) = send(context, ACTION_SNOOZE, alarmId)
 
         /** «Сьогодні не дзвони»: наступні дні лишаються як були. */

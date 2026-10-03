@@ -9,7 +9,6 @@ import android.os.SystemClock
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -54,9 +53,6 @@ sealed interface Overlay {
     data object AddPlace : Overlay
 
     data class PlaceRegion(val placeId: Long) : Overlay
-
-    /** Екран очікування (design-spec 3.8) цього будильника; [alarmId] null — будь-якого, що чекає. */
-    data class Waiting(val alarmId: Long?) : Overlay
 
     /** Екран дозволів (design-spec 3.7). */
     data object Permissions : Overlay
@@ -123,17 +119,16 @@ class AlarmsViewModel(
         viewModelScope.launch { settings.setOneShotPauseMinutes(minutes) }
     }
 
-    /** Віртуальний будильник режиму — для екрана очікування. */
-    val oneShotAlarm: StateFlow<Alarm> = combine(places, oneShotWaitFor, oneShotPauseMinutes) { p, waitFor, pause ->
-        OneShot.alarm(p.primary, waitFor, pause)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, OneShot.alarm(null, WaitFor.RED_AND_YELLOW, 0))
-
     private val _oneShotRow = MutableStateFlow(OneShotRowState.IDLE)
     val oneShotRow: StateFlow<OneShotRowState> = _oneShotRow.asStateFlow()
 
-    /** Режим щойно ввімкнули: екран очікування показує «Увімкнено · Можна спати». */
-    private val _oneShotJustEnabled = MutableStateFlow(false)
-    val oneShotJustEnabled: StateFlow<Boolean> = _oneShotJustEnabled.asStateFlow()
+    /** Режим щойно ввімкнули — Snackbar «Увімкнено. Можна спати — розбуджу після відбою». */
+    private val _oneShotEnabled = MutableStateFlow(false)
+    val oneShotEnabled: StateFlow<Boolean> = _oneShotEnabled.asStateFlow()
+
+    fun consumeOneShotEnabled() {
+        _oneShotEnabled.value = false
+    }
 
     private var oneShotJob: Job? = null
 
@@ -196,8 +191,7 @@ class AlarmsViewModel(
                     scheduler.scheduleDeadline(OneShot.ONE_SHOT_ID, wait.giveUpAtMillis())
                     AlarmWaitService.startWaiting(app, wait)
                     _oneShotRow.value = OneShotRowState.IDLE
-                    _oneShotJustEnabled.value = true
-                    _overlay.value = Overlay.Waiting(OneShot.ONE_SHOT_ID)
+                    _oneShotEnabled.value = true
                 }
                 OneShotCheck.NO_ALERT, OneShotCheck.ONLY_YELLOW, OneShotCheck.NO_DATA -> {
                     _oneShotRow.value = when (check) {
@@ -226,19 +220,29 @@ class AlarmsViewModel(
         _overlay.value = Overlay.Permissions
     }
 
-    fun openWaiting(alarmId: Long? = null) {
-        _overlay.value = Overlay.Waiting(alarmId)
+    /**
+     * Натиснули сповіщення очікування: показати список, де картка, що чекає, стоїть першою.
+     * Відкритий підекран закривається; редагування — ні, щоб не загубити зміни.
+     */
+    private val _showAlarms = MutableStateFlow(false)
+    val showAlarms: StateFlow<Boolean> = _showAlarms.asStateFlow()
+
+    fun requestShowAlarms() {
+        _overlay.value = null
+        _showAlarms.value = true
     }
 
-    /** «Сьогодні не дзвони» (утриманням на екрані очікування). */
+    fun consumeShowAlarms() {
+        _showAlarms.value = false
+    }
+
+    /** «Не дзвонити» (утриманням на панелі очікування). */
     fun cancelWaiting(alarmId: Long) {
-        _overlay.value = null
         AlarmWaitService.cancelWaiting(app, alarmId)
     }
 
-    /** «Подзвони через X хв»: задзвонить через X хв, навіть якщо тривога триває (FR-20). */
+    /** «Через X хв»: задзвонить через X хв, навіть якщо тривога триває (FR-20). */
     fun snoozeWaiting(alarmId: Long) {
-        _overlay.value = null
         AlarmWaitService.snooze(app, alarmId)
     }
 
@@ -247,7 +251,6 @@ class AlarmsViewModel(
 
     fun closeOverlay() {
         _overlay.value = null
-        _oneShotJustEnabled.value = false
     }
 
     /** FR-32: тема застосунку. */
