@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { AlarmKeeper } from "./alarm-keeper";
 import { CallBudget, type BudgetState, type CallPath } from "./budget";
 import { MockAlerts, type MockOptions, type MockScenario, type MockState } from "./mock";
 import { ReloadSchedule, type ReloadState } from "./reload";
@@ -50,12 +51,13 @@ export class AlertsHub extends DurableObject<Env> {
   private budget = new CallBudget();
   private reload = ReloadSchedule.restore(undefined);
   private checking: Promise<void> | null = null;
-  private alarmArmed = false;
+  private readonly alarmKeeper: AlarmKeeper;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.board = new AlertBoard(storageFor(ctx.storage), new EventLog(logStorageFor(ctx.storage)));
     this.mock = env.MOCK === "1" || env.MOCK === "true" ? new MockAlerts() : null;
+    this.alarmKeeper = new AlarmKeeper(ctx.storage, ALARM_INTERVAL_MS);
   }
 
   async getAlerts(): Promise<AlertsResponse> {
@@ -109,17 +111,16 @@ export class AlertsHub extends DurableObject<Env> {
       await this.check();
     } finally {
       // Будильник одноразовий: наступний ставимо самі, навіть якщо перевірка впала.
-      await this.ctx.storage.setAlarm(Date.now() + ALARM_INTERVAL_MS);
-      this.alarmArmed = true;
+      const now = Date.now();
+      await this.ctx.storage.setAlarm(now + ALARM_INTERVAL_MS);
+      this.alarmKeeper.armed(now);
     }
   }
 
+  /** Підстраховка ланцюжка будильників — див. `alarm-keeper.ts`. */
   private async armAlarm(): Promise<void> {
-    if (this.mock || this.alarmArmed) return;
-    if ((await this.ctx.storage.getAlarm()) === null) {
-      await this.ctx.storage.setAlarm(Date.now() + ALARM_INTERVAL_MS);
-    }
-    this.alarmArmed = true;
+    if (this.mock) return;
+    await this.alarmKeeper.ensure(Date.now());
   }
 
   /** Одна перевірка за раз, хоч скільки викликів прийшло одночасно. */
