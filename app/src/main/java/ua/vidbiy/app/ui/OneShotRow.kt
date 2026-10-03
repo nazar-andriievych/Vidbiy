@@ -133,13 +133,16 @@ fun OneShotBanner(
 ) {
     val title = when (status.phase) {
         WaitPhase.PAUSE -> stringResource(R.string.wait_strip_pause, formatClock(status!!.ringAtMillis!!))
-        else -> stringResource(R.string.one_shot_banner_title)
+        else -> if (pauseMinutes > 0) {
+            stringResource(R.string.one_shot_banner_title_pause, pauseMinutes)
+        } else {
+            stringResource(R.string.one_shot_banner_title)
+        }
     }
     WaitPanel(
         title = title,
         details = listOfNotNull(status?.level?.let { stringResource(it.titleRes) }, placeName),
         status = status,
-        pauseMinutes = pauseMinutes,
         snoozeMinutes = snoozeMinutes,
         onSnooze = onSnooze,
         onSkip = onSkip,

@@ -282,14 +282,16 @@ private fun AlarmCard(
             if (wait != null) {
                 WaitPanel(
                     title = when (waitStatus.phase) {
-                        WaitPhase.ALERT -> stringResource(R.string.wait_strip_alert)
+                        // FR-7c: пауза — з налаштувань, з якими очікування почалося.
+                        WaitPhase.ALERT -> (wait.alarm ?: alarm).pauseMinutes.let { pause ->
+                            if (pause > 0) stringResource(R.string.wait_title_alert_pause, pause)
+                            else stringResource(R.string.wait_title_alert)
+                        }
                         WaitPhase.PAUSE -> stringResource(R.string.wait_strip_pause, formatClock(waitStatus!!.ringAtMillis!!))
                         WaitPhase.CHECKING -> stringResource(R.string.wait_strip_checking)
                     },
                     details = listOfNotNull(waitStatus?.level?.let { stringResource(it.titleRes) }, placeName),
                     status = waitStatus,
-                    // FR-7c: пауза — з налаштувань, з якими очікування почалося.
-                    pauseMinutes = (wait.alarm ?: alarm).pauseMinutes,
                     snoozeMinutes = snoozeMinutes,
                     onSnooze = onSnoozeWaiting,
                     onSkip = onSkipWaiting,

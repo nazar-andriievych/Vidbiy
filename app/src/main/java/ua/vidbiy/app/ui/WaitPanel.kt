@@ -95,8 +95,8 @@ fun formatClock(millis: Long): String =
  * Панель очікування (design-spec 2, FR-18) — у картці будильника й замість рядка разового режиму.
  * Окремого екрана очікування немає (рішення 2026-10-03): стан і дії — тут.
  *
- * Контейнер кольору рівня, крапка, [title], під ним [details] (рівень, місце) і «оновлено N хв тому»,
- * коли дані застаріли. Третій рядок — лише те, чого немає вище: пауза після відбою, застереження
+ * Контейнер кольору рівня, крапка, [title] — стан разом з планом («Задзвоню через 5 хв після
+ * відбою»), під ним [details] (рівень, місце). Третій рядок — лише те, чого немає вище: застереження
  * в паузі або попередження «Немає зв'язку». Внизу «Через X хв» і «Не дзвонити» з утриманням,
  * під ними на всю ширину — підказка після короткого натиску.
  */
@@ -105,7 +105,6 @@ fun WaitPanel(
     title: String,
     details: List<String>,
     status: WaitStatus?,
-    pauseMinutes: Int,
     snoozeMinutes: Int,
     onSnooze: () -> Unit,
     onSkip: () -> Unit,
@@ -123,16 +122,11 @@ fun WaitPanel(
     }
     val stale = showsStaleWarning(status?.confirmedAtMillis, now)
     var skipHint by remember { mutableStateOf(false) }
-    // «Оновлено …» — лише коли дані застаріли (design-spec 0, п. 4).
-    val updated = status?.confirmedAtMillis
-        ?.takeIf { stale }
-        ?.let { stringResource(R.string.banner_updated_ago, ((now - it) / 60_000L).toInt()) }
-    val subtitle = (details + listOfNotNull(updated)).joinToString(" · ")
-    // Пауза 0 і стан «тривога» нічого не додають до «Чекає відбою» — тоді рядка немає.
+    val subtitle = details.joinToString(" · ")
+    // Без «оновлено N хв тому» в рядку вище: «Немає зв'язку» каже те саме й показується за тієї ж умови.
     val note = when {
         stale -> stringResource(R.string.wait_note_stale)
         phase == WaitPhase.PAUSE -> stringResource(R.string.wait_note_in_pause)
-        phase == WaitPhase.ALERT && pauseMinutes > 0 -> stringResource(R.string.wait_note_pause, pauseMinutes)
         else -> null
     }
 
