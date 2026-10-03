@@ -239,7 +239,6 @@
     <string name="one_shot_no_place">Спершу додайте основне місце в «Мої місця»</string>
     <string name="one_shot_banner_title">Розбуджу після відбою</string>
     <string name="one_shot_enabled">Увімкнено. Можна спати — розбуджу після відбою</string>
-    <string name="one_shot_banner_pause">Відбій · задзвоню о %1$s</string>
     <string name="one_shot_notif_title">Разовий режим: чекаю на відбій тривоги</string>
     <string name="one_shot_notif_title_pause">Разовий режим: відбій, задзвоню о %1$s</string>
     <string name="ring_label_one_shot">Розбуди після відбою · %1$s</string>

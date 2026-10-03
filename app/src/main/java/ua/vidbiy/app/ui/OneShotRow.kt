@@ -119,6 +119,8 @@ private fun RowIcon(icon: Int, tint: androidx.compose.ui.graphics.Color = Materi
 /**
  * Банер активного режиму (`09-one-shot--3-main-active-banner`): «Розбуджу після відбою»,
  * «Жовта тривога · Дім» і дії очікування (FR-18) — окремого екрана очікування немає.
+ * Після відбою заголовок — стан, як у картці: «Відбій · задзвоню о 22:56». «Розбуджу після
+ * відбою», коли відбій уже настав, читалося б як «тривога ще триває».
  */
 @Composable
 fun OneShotBanner(
@@ -129,16 +131,13 @@ fun OneShotBanner(
     onSnooze: () -> Unit,
     onSkip: () -> Unit,
 ) {
-    val details = when (status.phase) {
-        WaitPhase.PAUSE -> listOfNotNull(
-            stringResource(R.string.one_shot_banner_pause, formatClock(status!!.ringAtMillis!!)),
-            placeName,
-        )
-        else -> listOfNotNull(status?.level?.let { stringResource(it.titleRes) }, placeName)
+    val title = when (status.phase) {
+        WaitPhase.PAUSE -> stringResource(R.string.wait_strip_pause, formatClock(status!!.ringAtMillis!!))
+        else -> stringResource(R.string.one_shot_banner_title)
     }
     WaitPanel(
-        title = stringResource(R.string.one_shot_banner_title),
-        details = details,
+        title = title,
+        details = listOfNotNull(status?.level?.let { stringResource(it.titleRes) }, placeName),
         status = status,
         pauseMinutes = pauseMinutes,
         snoozeMinutes = snoozeMinutes,
