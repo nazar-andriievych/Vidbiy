@@ -478,11 +478,11 @@ class AlarmWaitService : Service() {
 
         if (foregroundId == alarmId) {
             foregroundId = notifications.keys.firstOrNull()
-            // Знімаємо сповіщення очікування, що закінчилося, але службу з foreground не випускаємо,
-            // якщо є кому передати роль: інакше Android міг би прибити її посеред чужого очікування.
-            stopForeground(STOP_FOREGROUND_DETACH)
+            // Не DETACH + cancel: DETACH знімає прапорець foreground асинхронно, cancel приходить раніше
+            // й ігнорується, і сповіщення лишається в шторці назавжди. Тому або передаємо роль іншому
+            // очікуванню (startForeground з новим id сам знімає старе сповіщення), або знімаємо разом із foreground.
+            if (foregroundId != null) refreshForeground() else stopForeground(STOP_FOREGROUND_REMOVE)
             notificationManager().cancel(Notifications.waitingNotificationId(alarmId))
-            refreshForeground()
         } else {
             notificationManager().cancel(Notifications.waitingNotificationId(alarmId))
         }
