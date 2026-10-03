@@ -1,6 +1,8 @@
 package ua.vidbiy.app
 
+import android.app.Activity
 import android.app.Application
+import android.os.Bundle
 import android.util.Log
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -52,6 +54,16 @@ class VidbiyApplication : Application() {
     lateinit var dataReady: Deferred<Unit>
         private set
 
+    /** Скільки екранів застосунку зараз видно (між onStart і onStop). */
+    private var startedActivities = 0
+
+    /**
+     * Чи відкритий застосунок на екрані. Коли телефон розблокований і ним користуються, Android
+     * показує замість повноекранного дзвінка лише спливне сповіщення (а Samsung — підсвітку країв).
+     * Поки застосунок видно, служба дзвінка сама відкриває екран дзвінка — це дозволено.
+     */
+    val isVisible: Boolean get() = startedActivities > 0
+
     /**
      * Будильник за id, включно з віртуальним будильником разового режиму (OneShot):
      * його немає в сховищі, він збирається з налаштувань режиму й основного місця.
@@ -70,6 +82,15 @@ class VidbiyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         Notifications.createChannels(this)
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityStarted(activity: Activity) { startedActivities++ }
+            override fun onActivityStopped(activity: Activity) { startedActivities-- }
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+        })
         dataReady = applicationScope.async {
             runCatching { LegacyMigration.run(settingsRepository, placesRepository, alarmsRepository) }
             Unit

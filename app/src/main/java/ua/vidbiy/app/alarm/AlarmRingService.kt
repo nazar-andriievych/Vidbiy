@@ -109,6 +109,7 @@ class AlarmRingService : Service() {
         if (!alreadyRinging) {
             acquireWakeLock()
             startSound(ringtoneUri)
+            if ((application as VidbiyApplication).isVisible) openRingScreen(alarmId, hour, minute, reasonJson)
         }
         if (vibrate && vibrator == null) startVibration()
 
@@ -119,6 +120,16 @@ class AlarmRingService : Service() {
             delay(AUTO_STOP_MINUTES * 60_000L)
             stopEverything()
         }
+    }
+
+    /**
+     * Повноекранний інтент на розблокованому телефоні, яким користуються, система замінює
+     * спливним сповіщенням. Поки застосунок на екрані, відкриваємо екран дзвінка самі.
+     * Не вийшло — лишається сповіщення: звук від цього не зупиниться.
+     */
+    private fun openRingScreen(alarmId: Long, hour: Int, minute: Int, reasonJson: String?) {
+        runCatching { startActivity(AlarmRingActivity.intent(this, alarmId, hour, minute, reasonJson, snoozeMinutes)) }
+            .onFailure { Log.w(TAG, "Не вдалося відкрити екран дзвінка", it) }
     }
 
     private fun startForegroundNotification(alarmId: Long, hour: Int, minute: Int, reasonJson: String?) {
