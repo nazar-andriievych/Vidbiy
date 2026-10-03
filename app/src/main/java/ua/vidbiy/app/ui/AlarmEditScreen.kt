@@ -52,7 +52,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -214,8 +213,8 @@ fun AlarmEditScreen(
 }
 
 /**
- * Час одразу барабанами, як у годиннику Samsung, — без окремого діалогу. Під ними —
- * «Спрацює завтра о 06:45», що оновлюється під час прокрутки.
+ * Час одразу барабанами, як у годиннику Samsung, — без окремого діалогу. Коли будильник
+ * спрацює, написано в рядку над днями (RepeatHeader).
  */
 @Composable
 private fun TimeWheels(alarm: Alarm, onChange: ((Alarm) -> Alarm) -> Unit) {
@@ -244,20 +243,7 @@ private fun TimeWheels(alarm: Alarm, onChange: ((Alarm) -> Alarm) -> Unit) {
                 textStyle = style,
             )
         }
-        val next = alarm.nextTriggerAt(LocalDateTime.now())
-        if (next != null) {
-            Text(stringResource(R.string.saved_next_ring, nextRingLabel(next)), style = MaterialTheme.typography.bodyLarge)
-            // Одне речення про результат замість підказок під кожним полем (design-spec 0, п. 5).
-            alertPlan(alarm)?.let { plan ->
-                Text(
-                    text = plan,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 2.dp, start = 16.dp, end = 16.dp),
-                )
-            }
-        } else {
+        if (alarm.nextTriggerAt(LocalDateTime.now()) == null) {
             // Дата сьогодні, а час уже минув: «Зберегти» вимкнене, тут пояснюємо чому.
             Text(
                 text = stringResource(R.string.time_passed),
@@ -268,23 +254,6 @@ private fun TimeWheels(alarm: Alarm, onChange: ((Alarm) -> Alarm) -> Unit) {
     }
 }
 
-/**
- * «Під час тривоги — через 5 хв після відбою, не пізніше 08:00». null — будильник не
- * враховує тривоги (тоді досить «Спрацює …»).
- */
-@Composable
-private fun alertPlan(alarm: Alarm): String? {
-    if (!alarm.respectAlerts) return null
-    if (alarm.region == null) return stringResource(R.string.plan_no_region)
-    val base = if (alarm.pauseMinutes > 0) {
-        stringResource(R.string.plan_pause, alarm.pauseMinutes)
-    } else {
-        stringResource(R.string.plan_now)
-    }
-    val deadline = alarm.deadlineMinute ?: return base
-    return stringResource(R.string.plan_deadline, base, deadlineValue(deadline, alarm.hour * 60 + alarm.minute))
-}
-
 /** «08:00» або «01:00 наступного дня», якщо крайній час не пізніший за час будильника (FR-6). */
 @Composable
 private fun deadlineValue(deadlineMinute: Int, alarmMinute: Int): String {
@@ -293,7 +262,7 @@ private fun deadlineValue(deadlineMinute: Int, alarmMinute: Int): String {
 }
 
 /**
- * Рядок над днями, як у годиннику Samsung: «Повторювати» або «Дата · пт, 9 жовт.» (+ ×),
+ * Рядок над днями, як у годиннику Samsung: «Спрацює завтра о 07:00» (+ × для дати),
  * праворуч — календар. Календар — M3 DatePickerDialog; минулі дні в ньому недоступні.
  */
 @Composable
@@ -303,8 +272,10 @@ private fun RepeatHeader(alarm: Alarm, onDateChange: (LocalDate?) -> Unit) {
     val date = alarm.date
 
     Row(modifier = Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        val next = alarm.nextTriggerAt(LocalDateTime.now())
         FieldLabel(
-            text = date?.let { stringResource(R.string.date_value, formatShortDate(it)) }
+            text = next?.let { stringResource(R.string.saved_next_ring, nextRingLabel(it)) }
+                ?: date?.let { stringResource(R.string.date_value, formatShortDate(it)) }
                 ?: stringResource(R.string.repeat_title),
             modifier = Modifier.weight(1f),
         )

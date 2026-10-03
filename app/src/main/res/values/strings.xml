@@ -113,10 +113,6 @@
     <string name="pause_hint">Якщо за цей час тривога почнеться знову — чекатиму далі.</string>
     <string name="pause_sheet_title">Скільки чекати після відбою, хв</string>
     <string name="pause_none">Одразу</string>
-    <string name="plan_now">Під час тривоги — одразу після відбою</string>
-    <string name="plan_pause">Під час тривоги — через %1$d хв після відбою</string>
-    <string name="plan_deadline">%1$s, не пізніше %2$s</string>
-    <string name="plan_no_region">Регіон не обрано — дзвонитиме як звичайний</string>
     <string name="deadline">Крайній час</string>
     <string name="deadline_none">Не задано</string>
     <string name="deadline_hint">Задзвонить у цей час, навіть якщо відбою не буде.</string>
