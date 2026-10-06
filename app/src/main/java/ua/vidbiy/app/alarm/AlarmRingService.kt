@@ -88,7 +88,12 @@ class AlarmRingService : Service() {
                 stopEverything()
             }
 
-            ACTION_DISMISS -> stopEverything()
+            ACTION_DISMISS -> {
+                // Людина вимкнула дзвінок — страховка автовідкладення більше не потрібна.
+                val scheduler = AlarmScheduler(this)
+                ringing.keys.forEach { scheduler.cancelSnooze(it) }
+                stopEverything()
+            }
             else -> stopEverything()
         }
         return START_NOT_STICKY
@@ -113,6 +118,7 @@ class AlarmRingService : Service() {
         RingState.set(ringing.values.toList())
         // Будильник дзвонить знову — давнє «Пропущений будильник» уже нічого не каже.
         notificationManager()?.cancel(Notifications.missedNotificationId(alarmId))
+        armAutoSnoozeBackstop(alarmId, autoRepeats)
 
         startForegroundNotification(alarmId, hour, minute, reason, reasonJson)
         if (!alreadyRinging) {
@@ -129,6 +135,20 @@ class AlarmRingService : Service() {
             delay(RING_MILLIS)
             onRingTimeout()
         }
+    }
+
+    /**
+     * Автовідкладення нижче живе в пам'яті цієї служби. Якщо систему чи збій її вб'є посеред
+     * дзвінка, будильник замовк би без сліду, тож одразу ставимо в AlarmManager той самий дзвінок,
+     * що дало б автовідкладення: «зараз + дзвінок + X хв». Звичайне автовідкладення, ручне
+     * «Відкласти» і «Скасувати» замінюють чи прибирають його (той самий PendingIntent), «Вимкнути» —
+     * скасовує. Запису на диску в страховки немає: у списку вона не показується, а лічильник
+     * повторів після неї починається з нуля — у бік зайвого дзвінка, не тиші.
+     * Третій дзвінок (далі лише «Пропущений будильник») страховки не має.
+     */
+    private fun armAutoSnoozeBackstop(alarmId: Long, autoRepeats: Int) {
+        if (ringTimeout(autoRepeats) !is RingTimeout.AutoSnooze) return
+        AlarmScheduler(this).snoozeAt(alarmId, System.currentTimeMillis() + RING_MILLIS + snoozeMinutes * 60_000L)
     }
 
     /**
