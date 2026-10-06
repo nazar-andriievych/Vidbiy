@@ -6,6 +6,7 @@ import org.junit.Test
 import ua.vidbiy.app.data.Hromada
 import ua.vidbiy.app.data.Oblast
 import ua.vidbiy.app.data.Raion
+import ua.vidbiy.app.data.SelectedRegion
 import ua.vidbiy.app.data.toSelection
 
 class AlertMatchingTest {
@@ -54,5 +55,30 @@ class AlertMatchingTest {
     @Test
     fun `порожній список тривог нікого не накриває`() {
         assertFalse(hromada.toSelection(oblast, raion).isUnderAlert(emptyList()))
+    }
+
+    // FR-29: Харків і Запоріжжя ukrainealarm веде окремо від їхнього району.
+    private val kharkiv = Hromada(uid = "1293", title = "м. Харків та Харківська територіальна громада")
+    private val kharkivRaion = Raion(uid = "124", title = "Харківський район", hromadas = listOf(kharkiv))
+    private val kharkivOblast = Oblast(uid = "22", title = "Харківська область", raions = listOf(kharkivRaion))
+
+    @Test
+    fun `тривога району не накриває Харків`() {
+        assertFalse(kharkiv.toSelection(kharkivOblast, kharkivRaion).isUnderAlert(listOf("124")))
+    }
+
+    @Test
+    fun `тривога в самому Харкові і в області його накриває`() {
+        val selection = kharkiv.toSelection(kharkivOblast, kharkivRaion)
+        assertTrue(selection.isUnderAlert(listOf("1293")))
+        assertTrue(selection.isUnderAlert(listOf("22")))
+    }
+
+    @Test
+    fun `збережений до виправлення Запоріжжя з районом теж не чекає тривоги району`() {
+        val saved = SelectedRegion(uid = "564", title = "м. Запоріжжя", coveringUids = setOf("564", "149", "12"))
+        assertFalse(saved.isUnderAlert(listOf("149")))
+        assertTrue(saved.isUnderAlert(listOf("564")))
+        assertTrue(saved.isUnderAlert(listOf("12")))
     }
 }

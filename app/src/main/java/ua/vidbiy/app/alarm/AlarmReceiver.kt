@@ -13,6 +13,7 @@ import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.DecisionEntry
 import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.PendingWait
+import ua.vidbiy.app.data.alertUids
 import ua.vidbiy.app.data.shortTitle
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -108,7 +109,7 @@ class AlarmReceiver : BroadcastReceiver() {
                         event = "fire",
                         alarmId = alarm.id,
                         region = region?.uid,
-                        covering = region?.coveringUids?.sorted().orEmpty(),
+                        covering = region?.alertUids?.sorted().orEmpty(),
                         waitFor = alarm.waitFor.name,
                         pauseMinutes = alarm.pauseMinutes,
                         note = "${intent.action?.substringAfterLast('.')}, враховувати тривоги=${alarm.respectAlerts}",

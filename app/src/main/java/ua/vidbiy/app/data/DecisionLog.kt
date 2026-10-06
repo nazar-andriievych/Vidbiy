@@ -122,7 +122,7 @@ class DecisionLog(context: Context) {
         /** Рівні над покривними регіонами: `75:yellow@2026-09-29T07:30:12+03:00`. */
         fun describeLevels(region: SelectedRegion?, alerts: Map<String, List<ActiveLevel>>?): List<String> {
             if (region == null || alerts == null) return emptyList()
-            return region.coveringUids.sorted().flatMap { uid ->
+            return region.alertUids.sorted().flatMap { uid ->
                 alerts[uid].orEmpty().map { level ->
                     val since = Instant.ofEpochMilli(level.sinceMillis).atZone(ZoneId.systemDefault()).format(LEVEL_TIME)
                     "$uid:${level.level.name.lowercase()}@$since"

@@ -5,6 +5,7 @@ import ua.vidbiy.app.data.AlertLevel
 import ua.vidbiy.app.data.AlertsSnapshot
 import ua.vidbiy.app.data.SelectedRegion
 import ua.vidbiy.app.data.WaitFor
+import ua.vidbiy.app.data.alertUids
 
 /** Чому будильник дзвонить (або чому й далі мовчить). */
 enum class RingDecision {
@@ -76,7 +77,7 @@ fun decideRing(
  * її район, її область). Разом вони й дають найвищий рівень для користувача.
  */
 fun SelectedRegion.levelsOver(alerts: Map<String, List<ActiveLevel>>): List<ActiveLevel> =
-    coveringUids.flatMap { alerts[it].orEmpty() }
+    alertUids.flatMap { alerts[it].orEmpty() }
 
 private fun WaitFor.counts(level: AlertLevel): Boolean = when (this) {
     WaitFor.RED_AND_YELLOW -> true

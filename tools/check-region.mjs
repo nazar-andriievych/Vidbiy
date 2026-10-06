@@ -33,6 +33,9 @@ if (!query) {
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const catalog = JSON.parse(readFileSync(join(root, "app/src/main/assets/regions.json"), "utf8"));
 
+/** Міста, які ukrainealarm веде окремо від району (FR-29): громада → область. Як SEPARATE_CITIES у Region.kt. */
+const SEPARATE_CITIES = { 1293: "22", 564: "12" };
+
 /** Усі регіони довідника з ланцюжком покриття. */
 const entries = [];
 for (const oblast of catalog.oblasts) {
@@ -43,7 +46,7 @@ for (const oblast of catalog.oblasts) {
       entries.push({
         uid: hromada.uid,
         title: hromada.title,
-        covering: [hromada.uid, raion.uid, oblast.uid],
+        covering: SEPARATE_CITIES[hromada.uid] ? [hromada.uid, oblast.uid] : [hromada.uid, raion.uid, oblast.uid],
         chain: [hromada.title, raion.title, oblast.title],
       });
     }

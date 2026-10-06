@@ -27,6 +27,7 @@ data class Hromada(val uid: String, val title: String)
  *
  * Список зберігається разом із вибором, а не рахується щоразу з довідника:
  * у момент дзвінка потрібне миттєве рішення, без розбору 200-кілобайтного JSON.
+ * Рішення бере не його, а [alertUids]: там правила, що змінились після збереження.
  */
 @Serializable
 data class SelectedRegion(
@@ -50,8 +51,30 @@ fun Hromada.toSelection(oblast: Oblast, raion: Raion) = SelectedRegion(
     uid = uid,
     title = title,
     path = "${oblast.title} · ${raion.title}",
-    coveringUids = setOf(uid, raion.uid, oblast.uid),
+    coveringUids = SEPARATE_CITIES[uid]?.let { setOf(uid, it) } ?: setOf(uid, raion.uid, oblast.uid),
 )
+
+/**
+ * Міста, які ukrainealarm веде окремо від їхнього району (FR-29): UID громади → UID області.
+ *
+ * У нашому довіднику це громади, а в ukrainealarm — регіони верхнього рівня зі своїм статусом.
+ * Тривога району там означає «район без міста»: за 48 год (2026-10-04 … 10-06) Харківський район
+ * був у тривозі без міста ~8 год, Запорізький — ~2 год. Тривога, що стосується міста, оголошується
+ * на саме місто, тож район для нього не рахуємо. Область лишаємо: тривог на всю область за цей час
+ * не було, а якщо вони є, то найімовірніше стосуються й міста.
+ */
+val SEPARATE_CITIES: Map<String, String> = mapOf(
+    "1293" to "22", // м. Харків — Харківська область
+    "564" to "12", // м. Запоріжжя — Запорізька область
+)
+
+/**
+ * UID регіонів, тривога в яких накриває обраний, — за нинішніми правилами.
+ * Будильники й місця, збережені до виправлення FR-29, мають у [SelectedRegion.coveringUids]
+ * ще й район міста; тут правило застосовується до них без перезбереження.
+ */
+val SelectedRegion.alertUids: Set<String>
+    get() = SEPARATE_CITIES[uid]?.let { setOf(uid, it) } ?: coveringUids
 
 /**
  * Короткі назви для інтерфейсу (design-spec 3.3): у довіднику «Обухівський район» і

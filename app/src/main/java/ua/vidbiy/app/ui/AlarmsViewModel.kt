@@ -40,6 +40,7 @@ import ua.vidbiy.app.data.PlacesState
 import ua.vidbiy.app.data.SelectedRegion
 import ua.vidbiy.app.data.SettingsRepository
 import ua.vidbiy.app.data.WaitStatus
+import ua.vidbiy.app.data.alertUids
 import ua.vidbiy.app.data.withoutPastDate
 import ua.vidbiy.app.ui.theme.ThemeMode
 import java.time.LocalDateTime
@@ -167,7 +168,7 @@ class AlarmsViewModel(
                         event = "one_shot_check",
                         alarmId = OneShot.ONE_SHOT_ID,
                         region = region.uid,
-                        covering = region.coveringUids.sorted(),
+                        covering = region.alertUids.sorted(),
                         waitFor = snapshot.waitFor.name,
                         ageSeconds = known.effectiveAgeSeconds(SystemClock.elapsedRealtime()),
                         confirmedAt = known.confirmedAt,

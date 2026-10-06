@@ -1,6 +1,7 @@
 package ua.vidbiy.app.alarm
 
 import ua.vidbiy.app.data.SelectedRegion
+import ua.vidbiy.app.data.alertUids
 
 /**
  * Чи накриває хоч одна з активних тривог обраний регіон.
@@ -10,4 +11,4 @@ import ua.vidbiy.app.data.SelectedRegion
  * у самій громаді, у її районі або в її області. Сусідні громади — не наш випадок.
  */
 fun SelectedRegion.isUnderAlert(activeAlertUids: Collection<String>): Boolean =
-    activeAlertUids.any { it in coveringUids }
+    activeAlertUids.any { it in alertUids }

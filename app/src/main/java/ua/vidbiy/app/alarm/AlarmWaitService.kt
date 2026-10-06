@@ -43,6 +43,7 @@ import ua.vidbiy.app.data.DecisionEntry
 import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.PendingWait
 import ua.vidbiy.app.data.WaitStatus
+import ua.vidbiy.app.data.alertUids
 import ua.vidbiy.app.data.shortTitle
 import ua.vidbiy.app.ui.theme.DarkAlertColors
 import ua.vidbiy.app.ui.theme.LightAlertColors
@@ -231,7 +232,7 @@ class AlarmWaitService : Service() {
                     event = "poll",
                     alarmId = alarm.id,
                     region = region?.uid,
-                    covering = region?.coveringUids?.sorted().orEmpty(),
+                    covering = region?.alertUids?.sorted().orEmpty(),
                     waitFor = alarm.waitFor.name,
                     pauseMinutes = alarm.pauseMinutes,
                     ageSeconds = age,
