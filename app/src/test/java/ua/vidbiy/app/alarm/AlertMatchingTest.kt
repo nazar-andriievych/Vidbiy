@@ -81,4 +81,12 @@ class AlertMatchingTest {
         assertTrue(saved.isUnderAlert(listOf("564")))
         assertTrue(saved.isUnderAlert(listOf("12")))
     }
+
+    @Test
+    fun `збережена Миколаївська 1181 чекає тривог громади 1180`() {
+        val saved = SelectedRegion(uid = "1181", title = "Миколаївська територіальна громада", coveringUids = setOf("1181", "114", "20"))
+        assertTrue(saved.isUnderAlert(listOf("1180")))
+        assertTrue(saved.isUnderAlert(listOf("114")))
+        assertFalse(saved.isUnderAlert(listOf("1182")))
+    }
 }

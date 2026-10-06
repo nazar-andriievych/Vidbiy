@@ -69,12 +69,20 @@ val SEPARATE_CITIES: Map<String, String> = mapOf(
 )
 
 /**
+ * Громади з довідника alerts.in.ua, яких немає в ukrainealarm: UID → UID, під яким ukrainealarm
+ * веде цю територію. У Сумському районі дві «Миколаївські» громади, а ukrainealarm знає лише 1180;
+ * 1181 з довідника прибрано (tools/build-regions.mjs), а збережені раніше вибори рахуються як 1180.
+ */
+val MERGED_UIDS: Map<String, String> = mapOf("1181" to "1180")
+
+/**
  * UID регіонів, тривога в яких накриває обраний, — за нинішніми правилами.
- * Будильники й місця, збережені до виправлення FR-29, мають у [SelectedRegion.coveringUids]
- * ще й район міста; тут правило застосовується до них без перезбереження.
+ * Будильники й місця, збережені раніше, мають у [SelectedRegion.coveringUids] ще й район міста
+ * (FR-29) чи громаду, якої вже немає в довіднику; тут правила застосовуються без перезбереження.
  */
 val SelectedRegion.alertUids: Set<String>
-    get() = SEPARATE_CITIES[uid]?.let { setOf(uid, it) } ?: coveringUids
+    get() = (SEPARATE_CITIES[uid]?.let { setOf(uid, it) } ?: coveringUids)
+        .mapTo(mutableSetOf()) { MERGED_UIDS[it] ?: it }
 
 /**
  * Короткі назви для інтерфейсу (design-spec 3.3): у довіднику «Обухівський район» і
