@@ -110,6 +110,18 @@ class WaitStateTest {
     }
 
     @Test
+    fun `snoozes saved before auto-snooze read as manual ones`() {
+        val snoozes = WaitState.decodeSnoozes("""[{"alarmId":1,"ringAtMillis":1000}]""")
+        assertEquals(listOf(PendingSnooze(1, 1_000, autoRepeats = 0)), snoozes)
+    }
+
+    @Test
+    fun `auto-snooze count survives a round trip through json`() {
+        val snoozes = listOf(PendingSnooze(1, 1_000, autoRepeats = 2))
+        assertEquals(snoozes, WaitState.decodeSnoozes(WaitState.encodeSnoozes(snoozes)))
+    }
+
+    @Test
     fun `missing or corrupted snoozes mean none instead of a crash`() {
         assertTrue(WaitState.decodeSnoozes(null).isEmpty())
         assertTrue(WaitState.decodeSnoozes("[{").isEmpty())

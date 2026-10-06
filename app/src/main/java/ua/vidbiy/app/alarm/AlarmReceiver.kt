@@ -44,7 +44,7 @@ class AlarmReceiver : BroadcastReceiver() {
             try {
                 app.dataReady.await()
                 // Відкладення спрацювало — у списку й у шторці його більше не показуємо.
-                if (intent.action == ACTION_FIRE_SNOOZE) Snoozes.fired(context, alarmId)
+                val autoRepeats = if (intent.action == ACTION_FIRE_SNOOZE) Snoozes.fired(context, alarmId) else 0
                 val live = app.findAlarm(alarmId)
                 // Прочитати до дзвінка: дзвінок зупиняє службу очікування, і вона стирає свій стан.
                 val wait = app.settingsRepository.currentPendingWait(alarmId)
@@ -144,7 +144,12 @@ class AlarmReceiver : BroadcastReceiver() {
                     } else {
                         RingReason.Plain
                     }
-                    AlarmRingService.startRinging(context, alarm, reason.copy(oneShot = alarm.id == OneShot.ONE_SHOT_ID))
+                    AlarmRingService.startRinging(
+                        context,
+                        alarm,
+                        reason.copy(oneShot = alarm.id == OneShot.ONE_SHOT_ID),
+                        autoRepeats = autoRepeats,
+                    )
                     app.decisionLog.log(
                         DecisionEntry(
                             at = DecisionLog.now(),

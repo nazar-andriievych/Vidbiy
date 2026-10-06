@@ -84,6 +84,10 @@
     <string name="snooze_notif_title">Відкладено до %1$s</string>
     <string name="snooze_notif_text_alarm">Будильник %1$s</string>
     <string name="snooze_notif_text_one_shot">Розбуди після відбою</string>
+    <string name="channel_missed">Пропущений будильник</string>
+    <string name="channel_missed_description">Будильник дзвонив і відкладався сам, але його так ніхто й не вимкнув</string>
+    <string name="missed_title">Пропущений будильник</string>
+    <string name="missed_text">%1$s\nДзвонив разом %2$d хв з перервами — його ніхто не вимкнув.</string>
     <string name="snooze_cancel">Скасувати</string>
     <string name="snooze_cancel_description">Скасувати відкладений дзвінок</string>
     <string name="snooze_banner_title">Задзвоню о %1$s</string>

@@ -1,5 +1,6 @@
 package ua.vidbiy.app.alarm
 
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
@@ -26,11 +27,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ua.vidbiy.app.BuildConfig
+import ua.vidbiy.app.MainActivity
 import ua.vidbiy.app.R
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.data.Alarm
+import ua.vidbiy.app.data.DecisionEntry
+import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.SettingsRepository
 import ua.vidbiy.app.ui.AlarmRingActivity
 import ua.vidbiy.app.ui.formatTime
@@ -98,13 +103,16 @@ class AlarmRingService : Service() {
         val reasonJson = intent.getStringExtra(EXTRA_REASON)
         val reason = reasonJson?.let { runCatching { json.decodeFromString<RingReason>(it) }.getOrNull() } ?: RingReason.Plain
         snoozeMinutes = intent.getIntExtra(EXTRA_SNOOZE_MINUTES, SettingsRepository.DEFAULT_SNOOZE_MINUTES)
+        val autoRepeats = intent.getIntExtra(EXTRA_AUTO_REPEATS, 0)
 
         // Другий будильник (той самий регіон закінчився одночасно, або наспів інший час) долучається
         // до дзвінка, що вже йде: звук один, а на екрані видно всі. Той самий будильник двічі
         // (скажімо, відкладення, що збіглося з дзвінком) просто оновлює свій запис.
         val alreadyRinging = ringing.isNotEmpty()
-        ringing[alarmId] = RingEntry(alarmId, hour, minute, reason)
+        ringing[alarmId] = RingEntry(alarmId, hour, minute, reason, autoRepeats)
         RingState.set(ringing.values.toList())
+        // Будильник дзвонить знову — давнє «Пропущений будильник» уже нічого не каже.
+        notificationManager()?.cancel(Notifications.missedNotificationId(alarmId))
 
         startForegroundNotification(alarmId, hour, minute, reason, reasonJson)
         if (!alreadyRinging) {
@@ -115,13 +123,70 @@ class AlarmRingService : Service() {
         if (vibrate && vibrator == null) startVibration()
 
         // Будильник, який дзвонить годинами, розряджає телефон і дратує сусідів.
-        // Через 10 хвилин замовкаємо — так само, як системний годинник.
+        // Через 10 хвилин замовкаємо, але не назавжди: відкладаємося самі (FR-21a).
         autoStopJob?.cancel()
         autoStopJob = scope.launch {
-            delay(AUTO_STOP_MINUTES * 60_000L)
-            stopEverything()
+            delay(RING_MILLIS)
+            onRingTimeout()
         }
     }
+
+    /**
+     * Дзвінок ніхто не вимкнув і не відклав. Не почула його саме та людина, яку треба розбудити,
+     * тож кожен будильник відкладає себе сам — до [MAX_AUTO_SNOOZES] разів, а далі лишає
+     * сповіщення «Пропущений будильник», щоб пропуск не зник безслідно.
+     */
+    private fun onRingTimeout() {
+        val app = application as VidbiyApplication
+        for (entry in ringing.values) {
+            val next = ringTimeout(entry.autoRepeats)
+            when (next) {
+                is RingTimeout.AutoSnooze ->
+                    Snoozes.snooze(this, alarmId = entry.alarmId, minutes = snoozeMinutes, autoRepeats = next.autoRepeats)
+
+                RingTimeout.GiveUp -> showMissed(entry)
+            }
+            Log.i(TAG, "Дзвінок без відповіді: будильник=${entry.alarmId}, повторів=${entry.autoRepeats} → $next")
+            app.applicationScope.launch {
+                app.decisionLog.log(
+                    DecisionEntry(
+                        at = DecisionLog.now(),
+                        event = if (next is RingTimeout.AutoSnooze) "auto_snooze" else "missed",
+                        alarmId = entry.alarmId,
+                        note = "повтор ${entry.autoRepeats} з $MAX_AUTO_SNOOZES, відкладення $snoozeMinutes хв",
+                    ),
+                )
+            }
+        }
+        stopEverything()
+    }
+
+    /** Звичайне (не постійне) сповіщення: висить, поки людина його не змахне чи будильник не задзвонить знову. */
+    private fun showMissed(entry: RingEntry) {
+        val id = Notifications.missedNotificationId(entry.alarmId)
+        val open = PendingIntent.getActivity(
+            this,
+            id,
+            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val totalMinutes = RING_MILLIS / 60_000L * (MAX_AUTO_SNOOZES + 1)
+        val label = ringLabel(entry.hour, entry.minute, entry.reason)
+        val notification = NotificationCompat.Builder(this, Notifications.CHANNEL_MISSED)
+            .setSmallIcon(R.drawable.ic_alarm)
+            .setContentTitle(getString(R.string.missed_title))
+            .setContentText(label)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(getString(R.string.missed_text, label, totalMinutes)))
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setShowWhen(true)
+            .setAutoCancel(true)
+            .setContentIntent(open)
+            .build()
+        notificationManager()?.notify(id, notification)
+    }
+
+    private fun notificationManager(): NotificationManager? = getSystemService(NotificationManager::class.java)
 
     /**
      * Повноекранний інтент на розблокованому телефоні, яким користуються, система замінює
@@ -288,7 +353,7 @@ class AlarmRingService : Service() {
         val power = getSystemService(PowerManager::class.java) ?: return
         wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG).apply {
             setReferenceCounted(false)
-            acquire((AUTO_STOP_MINUTES + 1) * 60_000L)
+            acquire(RING_MILLIS + 60_000L)
         }
     }
 
@@ -318,7 +383,9 @@ class AlarmRingService : Service() {
     companion object {
         private const val TAG = "AlarmRingService"
         private const val WAKE_LOCK_TAG = "vidbiy:ring"
-        private const val AUTO_STOP_MINUTES = 10L
+
+        /** Скільки дзвонить один дзвінок. У debug можна скоротити: `-Pvidbiy.ringMinutes=1`. */
+        private val RING_MILLIS = BuildConfig.RING_MINUTES * 60_000L
 
         const val ACTION_START = "ua.vidbiy.app.action.START_RINGING"
         const val ACTION_SNOOZE = "ua.vidbiy.app.action.SNOOZE"
@@ -331,13 +398,20 @@ class AlarmRingService : Service() {
         private const val EXTRA_RINGTONE_URI = "ringtone_uri"
         private const val EXTRA_REASON = "reason"
         private const val EXTRA_SNOOZE_MINUTES = "snooze_minutes"
+        private const val EXTRA_AUTO_REPEATS = "auto_repeats"
         private val json = Json { ignoreUnknownKeys = true }
 
         /**
          * Почати дзвінок. [reason] показується на екрані дзвінка (FR-21); тривалість
          * відкладення (FR-19) читаємо тут, щоб кнопки й сповіщення знали її одразу.
          */
-        suspend fun startRinging(context: Context, alarm: Alarm, reason: RingReason = RingReason.Plain) {
+        suspend fun startRinging(
+            context: Context,
+            alarm: Alarm,
+            reason: RingReason = RingReason.Plain,
+            /** Скільки разів цей дзвінок уже відкладався сам (FR-21a); 0 — звичайний дзвінок. */
+            autoRepeats: Int = 0,
+        ) {
             val app = context.applicationContext as VidbiyApplication
             val snooze = app.settingsRepository.snoozeMinutes.first()
 
@@ -350,6 +424,7 @@ class AlarmRingService : Service() {
                 putExtra(EXTRA_RINGTONE_URI, alarm.ringtoneUri)
                 putExtra(EXTRA_REASON, json.encodeToString(reason))
                 putExtra(EXTRA_SNOOZE_MINUTES, snooze)
+                putExtra(EXTRA_AUTO_REPEATS, autoRepeats)
             }
             context.startForegroundService(intent)
             // Дзвінок і очікування відбою одного будильника взаємно виключні. Очікування зупиняємо лише тепер,

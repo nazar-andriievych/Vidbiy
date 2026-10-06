@@ -10,6 +10,8 @@ data class RingEntry(
     val hour: Int,
     val minute: Int,
     val reason: RingReason,
+    /** Скільки разів цей дзвінок уже відкладався сам (FR-21a). */
+    val autoRepeats: Int = 0,
 )
 
 /**

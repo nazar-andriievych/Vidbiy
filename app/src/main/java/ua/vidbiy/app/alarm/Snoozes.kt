@@ -40,8 +40,15 @@ object Snoozes {
      */
     private const val FIRING_WINDOW_MILLIS = 60_000L
 
-    fun snooze(context: Context, alarmId: Long, minutes: Int, nowMillis: Long = System.currentTimeMillis()) {
-        val snooze = PendingSnooze(alarmId, nowMillis + minutes * 60_000L)
+    /** [autoRepeats] — номер автовідкладення (FR-21a); людина, що відклала сама, починає ланцюжок з 0. */
+    fun snooze(
+        context: Context,
+        alarmId: Long,
+        minutes: Int,
+        autoRepeats: Int = 0,
+        nowMillis: Long = System.currentTimeMillis(),
+    ) {
+        val snooze = PendingSnooze(alarmId, nowMillis + minutes * 60_000L, autoRepeats)
         // AlarmManager — одразу й синхронно: служба, яка нас викликала, зараз зупиниться.
         AlarmScheduler(context).snoozeAt(alarmId, snooze.ringAtMillis)
         val app = context.app()
@@ -63,10 +70,16 @@ object Snoozes {
         }
     }
 
-    /** Відкладення задзвонило: запис і сповіщення більше не потрібні. */
-    suspend fun fired(context: Context, alarmId: Long) {
+    /**
+     * Відкладення задзвонило: запис і сповіщення більше не потрібні.
+     * Повертає, скільки разів будильник уже відкладався сам: дзвінок продовжує цей ланцюжок (FR-21a).
+     */
+    suspend fun fired(context: Context, alarmId: Long): Int {
         hide(context, alarmId)
-        context.app().settingsRepository.clearPendingSnooze(alarmId)
+        val repository = context.app().settingsRepository
+        val autoRepeats = repository.currentPendingSnoozes().firstOrNull { it.alarmId == alarmId }?.autoRepeats ?: 0
+        repository.clearPendingSnooze(alarmId)
+        return autoRepeats
     }
 
     /**

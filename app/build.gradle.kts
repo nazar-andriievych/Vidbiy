@@ -27,6 +27,11 @@ android {
         val local = (project.findProperty("vidbiy.proxyUrl") as String?)?.takeIf { name == "debug" }
         buildConfigField("String", "PROXY_URL", "\"${local ?: "https://vidbiy-proxy.nazar-dev.workers.dev"}\"")
 
+        // Тривалість одного дзвінка, хв (FR-21a). Для перевірки на телефоні: -Pvidbiy.ringMinutes=1 (лише debug).
+        val ringMinutes = (project.findProperty("vidbiy.ringMinutes") as String?)
+            ?.takeIf { name == "debug" }?.toLongOrNull()?.takeIf { it > 0 } ?: 10L
+        buildConfigField("long", "RING_MINUTES", "${ringMinutes}L")
+
         // Резервна копія Android: у debug вимкнена, інакше після перевстановлення
         // повертаються старі тестові дані. Перевірити відновлення: -Pvidbiy.backup=true.
         val backupInDebug = project.findProperty("vidbiy.backup") == "true"
