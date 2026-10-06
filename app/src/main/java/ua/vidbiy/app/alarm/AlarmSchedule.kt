@@ -3,6 +3,7 @@ package ua.vidbiy.app.alarm
 import ua.vidbiy.app.data.Alarm
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 
 /**
  * Момент наступного спрацювання будильника після [now].
@@ -40,3 +41,16 @@ fun Alarm.deadlineAfter(triggerAt: LocalDateTime): LocalDateTime? {
     val todayAt = LocalDateTime.of(triggerAt.toLocalDate(), LocalTime.of(minute / 60, minute % 60))
     return if (todayAt.isAfter(triggerAt)) todayAt else todayAt.plusDays(1)
 }
+
+/**
+ * Момент на годиннику телефона → мітка часу для AlarmManager.
+ *
+ * Переходи на літній і зимовий час (Україна: остання неділя березня 03:00 → 04:00,
+ * остання неділя жовтня 04:00 → 03:00) вирішує java.time:
+ * - час, якого цієї ночі немає (03:30 навесні), зсувається вперед на годину — 04:30;
+ * - час, що трапляється двічі (03:30 восени), береться першим, ще за літнім часом.
+ * Відомий край: якщо будильник на 03:30 уже відзвонив першого разу, а розклад перерахують
+ * у другу, «зимову» годину 03:00–04:00, 03:30 вийде ще попереду — і він задзвонить удруге.
+ */
+fun LocalDateTime.toEpochMillis(zone: ZoneId = ZoneId.systemDefault()): Long =
+    atZone(zone).toInstant().toEpochMilli()

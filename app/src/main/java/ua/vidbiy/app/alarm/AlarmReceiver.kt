@@ -16,7 +16,6 @@ import ua.vidbiy.app.data.PendingWait
 import ua.vidbiy.app.data.alertUids
 import ua.vidbiy.app.data.shortTitle
 import java.time.LocalDateTime
-import java.time.ZoneId
 
 /**
  * Сюди система стукає в момент спрацювання будильника.
@@ -122,8 +121,7 @@ class AlarmReceiver : BroadcastReceiver() {
                     val now = LocalDateTime.now()
                     val wait = PendingWait(
                         alarmId = alarm.id,
-                        deadlineMillis = alarm.deadlineAfter(now)
-                            ?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli(),
+                        deadlineMillis = alarm.deadlineAfter(now)?.toEpochMillis(),
                         startedAtMillis = System.currentTimeMillis(),
                         alarm = alarm,
                     )

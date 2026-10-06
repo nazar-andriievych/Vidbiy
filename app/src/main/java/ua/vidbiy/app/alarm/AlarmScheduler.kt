@@ -8,7 +8,6 @@ import android.os.Build
 import ua.vidbiy.app.MainActivity
 import ua.vidbiy.app.data.Alarm
 import java.time.LocalDateTime
-import java.time.ZoneId
 
 /**
  * Реєструє спрацювання в системному AlarmManager.
@@ -137,7 +136,7 @@ class AlarmScheduler(private val context: Context) {
     }
 
     private fun setAt(alarmId: Long, at: LocalDateTime, kind: Kind) {
-        setAtMillis(alarmId, at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(), kind)
+        setAtMillis(alarmId, at.toEpochMillis(), kind)
     }
 
     private fun setAtMillis(alarmId: Long, triggerAtMillis: Long, kind: Kind) {
