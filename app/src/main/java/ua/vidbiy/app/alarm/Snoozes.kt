@@ -49,6 +49,11 @@ object Snoozes {
         nowMillis: Long = System.currentTimeMillis(),
     ) {
         val snooze = PendingSnooze(alarmId, nowMillis + minutes * 60_000L, autoRepeats)
+        if (LockedBoot.isLocked(context)) {
+            // До розблокування звичайного сховища немає — відкладення живе поруч із розкладом.
+            LockedBoot.snooze(context, snooze)
+            return
+        }
         // AlarmManager — одразу й синхронно: служба, яка нас викликала, зараз зупиниться.
         AlarmScheduler(context).snoozeAt(alarmId, snooze.ringAtMillis)
         val app = context.app()

@@ -3,6 +3,14 @@
 
     <!-- Лише для debug-збірки: локальний воркер (`npm run dev`) працює по http,
          а з Android 9 звичайний http заборонений. У релізі цього немає. -->
-    <application android:usesCleartextTraffic="true" />
+    <application android:usesCleartextTraffic="true">
+
+        <!-- Імітація збою циклу очікування для docs/testing.md (LOGIC-1).
+             DUMP має adb shell, а сторонні застосунки — ні. -->
+        <receiver
+            android:name=".alarm.DebugFailureReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+    </application>
 
 </manifest>

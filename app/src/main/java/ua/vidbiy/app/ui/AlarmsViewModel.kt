@@ -271,8 +271,7 @@ class AlarmsViewModel(
 
     /** FR-7: завжди стандартні значення; регіон — основне місце. */
     fun startNew() {
-        val primary = places.value.primary
-        _draft.value = Alarm(hour = 7, minute = 0, region = primary?.region, placeId = primary?.id)
+        _draft.value = newAlarmDraft(places.value.primary)
     }
 
     fun startEdit(alarm: Alarm) {
@@ -293,9 +292,11 @@ class AlarmsViewModel(
      */
     fun draftStopsWaiting(): Boolean {
         val draft = _draft.value ?: return false
-        if (pendingWaits.value.none { it.alarmId == draft.id }) return false
-        val saved = alarms.value.firstOrNull { it.id == draft.id } ?: return false
-        return saved != draft.copy(enabled = saved.enabled)
+        return draftStopsWaiting(
+            draft = draft,
+            saved = alarms.value.firstOrNull { it.id == draft.id },
+            isWaiting = pendingWaits.value.any { it.alarmId == draft.id },
+        )
     }
 
     /** Коли спрацює щойно збережений будильник — для повідомлення «Спрацює завтра о 06:45». */
@@ -397,4 +398,17 @@ class AlarmsViewModel(
             }
         }
     }
+}
+
+/** FR-7: новий будильник — завжди стандартні значення; регіон — з основного місця (FR-26). */
+fun newAlarmDraft(primary: Place?): Alarm = Alarm(hour = 7, minute = 0, region = primary?.region, placeId = primary?.id)
+
+/**
+ * FR-7b: збереження [draft] припинить очікування, якщо будильник зараз чекає ([isWaiting])
+ * і в ньому щось змінили порівняно зі збереженим [saved]. Перемикач «увімкнено» не рахується:
+ * «Зберегти» завжди вмикає будильник.
+ */
+fun draftStopsWaiting(draft: Alarm, saved: Alarm?, isWaiting: Boolean): Boolean {
+    if (!isWaiting || saved == null) return false
+    return saved != draft.copy(enabled = saved.enabled)
 }

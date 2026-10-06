@@ -20,15 +20,27 @@ import ua.vidbiy.app.data.PendingWait
  *
  * Відкладені дзвінки AlarmManager теж забуває — ставимо їх знову з диска ([Snoozes]).
  *
+ * До першого розблокування сховище недоступне — тоді будильники ставить [LockedBoot].
+ *
  * Окремо відновлюємо очікування відбою: якщо телефон перезавантажився під час тривоги,
  * будильник, що чекав, інакше зник би разом зі службою й крайнім часом.
  */
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action !in HANDLED_ACTIONS) return
+        if (intent.action != Intent.ACTION_LOCKED_BOOT_COMPLETED && intent.action !in HANDLED_ACTIONS) return
+        if (LockedBoot.isLocked(context)) {
+            // Телефон увімкнувся (чи переведено годинник), але ще не розблокований: будильники —
+            // з копії розкладу (LockedBoot). Звичайний BOOT_COMPLETED прийде після розблокування.
+            LockedBoot.schedule(context)
+            return
+        }
+        // Без PIN телефон розблокований одразу, і слідом прийде звичайний BOOT_COMPLETED.
+        if (intent.action == Intent.ACTION_LOCKED_BOOT_COMPLETED) return
 
         val app = context.applicationContext as VidbiyApplication
+        // Процес міг стартувати ще до розблокування — тоді звичайна робота починається тут.
+        app.onUserUnlocked()
         val pendingResult = goAsync()
 
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
@@ -65,16 +77,12 @@ class BootReceiver : BroadcastReceiver() {
         }
 
         // Запис зі старої версії не знав, коли почалося очікування: рахуємо від зараз.
-        val restored = wait.copy(startedAtMillis = wait.startedAtMillis.takeIf { it > 0 } ?: System.currentTimeMillis())
+        val restored = wait.withKnownStart(System.currentTimeMillis())
         if (System.currentTimeMillis() >= restored.giveUpAtMillis()) {
             // Крайній час настав, поки телефон завантажувався — дзвонимо одразу (FR-16).
             app.settingsRepository.clearPendingWait(wait.alarmId)
-            val deadline = restored.deadlineMillis
-            val reason = if (deadline != null && System.currentTimeMillis() >= deadline) {
-                RingReason(RingReason.Kind.DEADLINE, deadlineMillis = deadline)
-            } else {
-                RingReason(RingReason.Kind.TOO_LONG)
-            }
+            val kind = backstopReason(restored.deadlineMillis, System.currentTimeMillis())
+            val reason = RingReason(kind, deadlineMillis = restored.deadlineMillis.takeIf { kind == RingReason.Kind.DEADLINE })
             AlarmRingService.startRinging(context, alarm, reason)
             return
         }
@@ -85,8 +93,8 @@ class BootReceiver : BroadcastReceiver() {
 
     private companion object {
         val HANDLED_ACTIONS = setOf(
-            // ACTION_LOCKED_BOOT_COMPLETED тут не підходить: сховище будильників
-            // зашифроване ключем користувача й до першого розблокування недоступне.
+            // ACTION_LOCKED_BOOT_COMPLETED обробляється окремо: до першого розблокування
+            // сховище будильників недоступне, і дзвонить копія розкладу (LockedBoot).
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_TIME_CHANGED,

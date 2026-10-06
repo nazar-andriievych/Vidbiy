@@ -16,21 +16,21 @@ class LenientDecodeTest {
     private val oldAlarm = """{"id":1,"hour":7,"minute":30}"""
 
     @Test
-    fun `old minimal alarm still decodes with defaults`() {
+    fun `старий мінімальний будильник читається зі значеннями за замовчуванням`() {
         val read = json.decodeListLenient<Alarm>("[$oldAlarm]")
         assertEquals(0, read.dropped)
         assertEquals(Alarm(id = 1, hour = 7, minute = 30), read.items.single())
     }
 
     @Test
-    fun `unknown fields from a newer version are ignored`() {
+    fun `незнайомі поля з новішої версії ігноруються`() {
         val read = json.decodeListLenient<Alarm>("""[{"id":1,"hour":7,"minute":30,"future":true}]""")
         assertEquals(0, read.dropped)
         assertEquals(1, read.items.size)
     }
 
     @Test
-    fun `one bad element is dropped and the rest survive`() {
+    fun `зіпсований елемент викидається, решта лишається`() {
         val bad = """{"id":2,"minute":0}""" // немає обов'язкового hour
         val read = json.decodeListLenient<Alarm>("[$oldAlarm,$bad]")
         assertEquals(1, read.dropped)
@@ -38,21 +38,21 @@ class LenientDecodeTest {
     }
 
     @Test
-    fun `garbage string gives an empty list and counts as dropped`() {
+    fun `сміття замість JSON — порожній список і одна втрата`() {
         val read = json.decodeListLenient<Alarm>("{not json")
         assertEquals(0, read.items.size)
         assertEquals(1, read.dropped)
     }
 
     @Test
-    fun `valid json that is not an array counts as dropped`() {
+    fun `JSON, що не є масивом, — одна втрата`() {
         val read = json.decodeListLenient<Alarm>("""{"id":1}""")
         assertEquals(0, read.items.size)
         assertEquals(1, read.dropped)
     }
 
     @Test
-    fun `null and blank are an empty list without loss`() {
+    fun `порожнє сховище — порожній список без втрат`() {
         assertEquals(LenientList<Alarm>(emptyList(), 0), json.decodeListLenient<Alarm>(null))
         assertEquals(LenientList<Alarm>(emptyList(), 0), json.decodeListLenient<Alarm>("  "))
     }

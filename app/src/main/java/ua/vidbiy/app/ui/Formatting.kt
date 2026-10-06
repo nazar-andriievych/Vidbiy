@@ -6,7 +6,6 @@ import androidx.compose.ui.res.stringResource
 import ua.vidbiy.app.R
 import ua.vidbiy.app.alarm.nextTriggerAt
 import ua.vidbiy.app.data.Alarm
-import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -74,11 +73,11 @@ fun daysLabel(alarm: Alarm, now: LocalDateTime? = null): String {
 fun nextRingLabel(next: LocalDateTime, now: LocalDateTime = LocalDateTime.now()): String {
     val time = formatTime(next)
     val today = now.toLocalDate()
-    return when (next.toLocalDate()) {
-        today -> stringResource(R.string.next_ring_today, time)
-        today.plusDays(1) -> stringResource(R.string.next_ring_tomorrow, time)
-        in today.plusDays(7)..LocalDate.MAX -> stringResource(R.string.next_ring_day, formatLongDate(next.toLocalDate(), today), time)
-        else -> stringResource(
+    return when (nextRingDay(next, now)) {
+        NextRingDay.TODAY -> stringResource(R.string.next_ring_today, time)
+        NextRingDay.TOMORROW -> stringResource(R.string.next_ring_tomorrow, time)
+        NextRingDay.DATE -> stringResource(R.string.next_ring_day, formatLongDate(next.toLocalDate(), today), time)
+        NextRingDay.WEEKDAY -> stringResource(
             R.string.next_ring_day,
             stringArrayResource(R.array.day_on_names)[next.dayOfWeek.value - 1],
             time,
@@ -86,17 +85,17 @@ fun nextRingLabel(next: LocalDateTime, now: LocalDateTime = LocalDateTime.now())
     }
 }
 
-/** «7 год 20 хв» — скільки лишилося до [target]. */
-@Composable
-fun durationLabel(from: LocalDateTime, target: LocalDateTime): String {
-    val minutes = Duration.between(from, target).toMinutes()
-    val hours = minutes / 60
-    val restMinutes = minutes % 60
-    return when {
-        minutes < 1 -> stringResource(R.string.duration_less_than_minute)
-        hours == 0L -> stringResource(R.string.duration_minutes, restMinutes)
-        restMinutes == 0L -> stringResource(R.string.duration_hours, hours)
-        else -> stringResource(R.string.duration_hours_minutes, hours, restMinutes)
+/** Як назвати день наступного дзвінка в [nextRingLabel]. */
+enum class NextRingDay { TODAY, TOMORROW, WEEKDAY, DATE }
+
+/** День тижня — лише в межах шести днів після сьогодні, де він однозначний; далі — дата. */
+fun nextRingDay(next: LocalDateTime, now: LocalDateTime): NextRingDay {
+    val today = now.toLocalDate()
+    return when (next.toLocalDate()) {
+        today -> NextRingDay.TODAY
+        today.plusDays(1) -> NextRingDay.TOMORROW
+        in today.plusDays(7)..LocalDate.MAX -> NextRingDay.DATE
+        else -> NextRingDay.WEEKDAY
     }
 }
 

@@ -85,17 +85,21 @@ class AlarmReceiver : BroadcastReceiver() {
                 // Відкладення й крайній час нічого не переплановують: свій наступний раз
                 // будильник уже отримав, коли задзвонив уперше.
                 if (isRegularFire) {
-                    if (alarm.days.isEmpty()) {
-                        // Дату теж знімаємо: інакше вимкнений будильник пам'ятав би минулу дату,
-                        // а відкритий для правки (навіть під час очікування) не давав би зберегти.
-                        app.alarmsRepository.updateWhere({ it.id == alarm.id }) { it.copy(enabled = false, date = null) }
+                    val disabled = alarm.afterRegularFire()
+                    if (disabled != null) {
+                        app.alarmsRepository.updateWhere({ it.id == alarm.id }) { it.copy(enabled = disabled.enabled, date = disabled.date) }
                     } else {
                         AlarmScheduler(context).schedule(alarm)
                     }
                 }
 
                 val region = alarm.region
-                val waitForAllClear = isRegularFire && alarm.respectAlerts && region != null
+                val fireKind = when (intent.action) {
+                    ACTION_FIRE_SNOOZE -> FireKind.SNOOZE
+                    ACTION_FIRE_DEADLINE -> FireKind.DEADLINE
+                    else -> FireKind.REGULAR
+                }
+                val action = fireAction(fireKind, alarm, hasWait = wait != null, deadlineMillis = wait?.deadlineMillis, nowMillis = System.currentTimeMillis())
 
                 Log.i(
                     TAG,
@@ -115,7 +119,7 @@ class AlarmReceiver : BroadcastReceiver() {
                     ),
                 )
 
-                if (waitForAllClear) {
+                if (action is FireAction.WaitForAllClear) {
                     // Перша перевірка тривоги — вже всередині служби: якщо тривоги немає,
                     // вона задзвонить одразу, а якщо є — чекатиме відбою.
                     val now = LocalDateTime.now()
@@ -130,18 +134,12 @@ class AlarmReceiver : BroadcastReceiver() {
                 } else {
                     // Регіон не обрано, тривоги не враховуються, відкладений дзвінок
                     // або страховка очікування (крайній час / доба).
-                    val reason = if (intent.action == ACTION_FIRE_DEADLINE && wait != null) {
-                        val placeName = app.placesRepository.current().byId(alarm.placeId)?.name
-                            ?: region?.shortTitle
-                        val deadline = wait.deadlineMillis
-                        // Крайній час — якщо він настав; інакше спрацювала доба очікування (FR-17).
-                        if (deadline != null && System.currentTimeMillis() >= deadline - 60_000L) {
-                            RingReason(RingReason.Kind.DEADLINE, placeName, lastLevel, deadlineMillis = deadline)
-                        } else {
-                            RingReason(RingReason.Kind.TOO_LONG, placeName, lastLevel, oneShot = alarm.id == OneShot.ONE_SHOT_ID)
-                        }
-                    } else {
+                    val kind = (action as FireAction.Ring).reason
+                    val reason = if (kind == RingReason.Kind.PLAIN) {
                         RingReason.Plain
+                    } else {
+                        val placeName = app.placesRepository.current().byId(alarm.placeId)?.name ?: region?.shortTitle
+                        RingReason(kind, placeName, lastLevel, deadlineMillis = wait?.deadlineMillis.takeIf { kind == RingReason.Kind.DEADLINE })
                     }
                     AlarmRingService.startRinging(
                         context,

@@ -435,18 +435,9 @@ class AlarmRingService : Service() {
             val app = context.applicationContext as VidbiyApplication
             val snooze = app.settingsRepository.snoozeMinutes.first()
 
-            val intent = Intent(context, AlarmRingService::class.java).apply {
-                action = ACTION_START
-                putExtra(EXTRA_ALARM_ID, alarm.id)
-                putExtra(EXTRA_HOUR, alarm.hour)
-                putExtra(EXTRA_MINUTE, alarm.minute)
-                putExtra(EXTRA_VIBRATE, alarm.vibrate)
-                putExtra(EXTRA_RINGTONE_URI, alarm.ringtoneUri)
-                putExtra(EXTRA_REASON, json.encodeToString(reason))
-                putExtra(EXTRA_SNOOZE_MINUTES, snooze)
-                putExtra(EXTRA_AUTO_REPEATS, autoRepeats)
-            }
-            context.startForegroundService(intent)
+            context.startForegroundService(
+                startIntent(context, alarm.id, alarm.hour, alarm.minute, alarm.vibrate, alarm.ringtoneUri, reason, snooze, autoRepeats),
+            )
             // Дзвінок і очікування відбою одного будильника взаємно виключні. Очікування зупиняємо лише тепер,
             // коли дзвінок уже запущено: часто нас викликає саме служба очікування, і її зупинка
             // скасовує цю корутину. Зупинка до запуску обривала дзвінок на першому ж `first()`
@@ -454,6 +445,44 @@ class AlarmRingService : Service() {
             // Після `startForegroundService` пауз немає, тож скасуванню тут нема чого обірвати.
             // Зупиняємо лише очікування цього будильника: решта (інші регіони) чекають далі.
             AlarmWaitService.stop(context, alarm.id)
+        }
+
+        /**
+         * Дзвінок після перезавантаження, поки телефон не розблокували ([LockedBoot]): налаштувань
+         * не прочитати, тож без перевірки тривоги й типовим звуком будильника (мелодію не знаємо).
+         */
+        fun startRingingLocked(context: Context, fire: LockedFire, snoozeMinutes: Int) {
+            val oneShot = fire.alarmId == OneShot.ONE_SHOT_ID
+            val reason = when {
+                // Відкладений дзвінок дзвонить незалежно від тривоги (FR-20) — як і завжди, без причини.
+                fire.kind == LockedFire.Kind.SNOOZE || !fire.respectAlerts -> RingReason.Plain
+                else -> RingReason(RingReason.Kind.LOCKED_BOOT)
+            }.copy(oneShot = oneShot)
+            context.startForegroundService(
+                startIntent(context, fire.alarmId, fire.hour, fire.minute, fire.vibrate, null, reason, snoozeMinutes, fire.autoRepeats),
+            )
+        }
+
+        private fun startIntent(
+            context: Context,
+            alarmId: Long,
+            hour: Int,
+            minute: Int,
+            vibrate: Boolean,
+            ringtoneUri: String?,
+            reason: RingReason,
+            snoozeMinutes: Int,
+            autoRepeats: Int,
+        ): Intent = Intent(context, AlarmRingService::class.java).apply {
+            action = ACTION_START
+            putExtra(EXTRA_ALARM_ID, alarmId)
+            putExtra(EXTRA_HOUR, hour)
+            putExtra(EXTRA_MINUTE, minute)
+            putExtra(EXTRA_VIBRATE, vibrate)
+            putExtra(EXTRA_RINGTONE_URI, ringtoneUri)
+            putExtra(EXTRA_REASON, json.encodeToString(reason))
+            putExtra(EXTRA_SNOOZE_MINUTES, snoozeMinutes)
+            putExtra(EXTRA_AUTO_REPEATS, autoRepeats)
         }
 
         fun snoozeIntent(context: Context, alarmId: Long): Intent =

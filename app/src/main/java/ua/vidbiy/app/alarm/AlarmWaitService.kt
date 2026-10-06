@@ -38,7 +38,6 @@ import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlertLevel
 import ua.vidbiy.app.data.AlertsClient
-import ua.vidbiy.app.data.AlertsSnapshot
 import ua.vidbiy.app.data.DecisionEntry
 import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.PendingWait
@@ -108,7 +107,8 @@ class AlarmWaitService : Service() {
         return START_REDELIVER_INTENT
     }
 
-    private fun startWaiting(wait: PendingWait) {
+    private fun startWaiting(requested: PendingWait) {
+        val wait = requested.withKnownStart(System.currentTimeMillis())
         if (wait.alarmId == Alarm.NEW_ID) {
             stopIfIdle()
             return
@@ -180,12 +180,8 @@ class AlarmWaitService : Service() {
         val baseUrl = app.settingsRepository.proxyBaseUrl()
         val client = AlertsClient(baseUrl)
         val startedElapsed = SystemClock.elapsedRealtime()
-        // Остання відповідь, яка хоч щось знала: невдала спроба її не затирає (FR-15).
-        var known: AlertsSnapshot? = null
-        // Чи бачили тривогу: без неї відбій до часу будильника нічого не означає (FR-10).
-        var sawAlert = false
-        var allClearAtElapsed: Long? = null
-        var allClearAtMillis: Long? = null
+        // Усе, що треба пам'ятати між опитуваннями; рішення — у waitTick (WaitLoop.kt).
+        var state = WaitLoopState()
         var previousPollElapsed: Long? = null
         Log.i(TAG, "Чекаємо відбою: будильник=${wait.alarmId}, проксі=$baseUrl")
 
@@ -208,117 +204,97 @@ class AlarmWaitService : Service() {
             val alarm = wait.alarm ?: live
             val region = alarm.region
             val (fetched, attempt) = client.fetchWithAttempt()
-            val snapshot = fetched.orPrevious(known)
-            known = snapshot
+            DebugFailures.throwIfRequested()
             val nowElapsed = SystemClock.elapsedRealtime()
-            val gapSeconds = previousPollElapsed?.let { (nowElapsed - it) / 1000 }
-            previousPollElapsed = nowElapsed
             val nowMillis = System.currentTimeMillis()
-            var decision = decideRing(
-                snapshot = snapshot,
+            val before = state
+            val tick = waitTick(
+                state = state,
+                fetched = fetched,
+                alarm = alarm,
+                deadlineMillis = wait.deadlineMillis,
+                giveUpAtMillis = wait.giveUpAtMillis(nowMillis),
+                startedElapsed = startedElapsed,
                 nowElapsed = nowElapsed,
                 nowMillis = nowMillis,
-                region = region,
-                waitFor = alarm.waitFor,
-                pastDeadline = wait.deadlineMillis?.let { nowMillis >= it } ?: false,
             )
-            if (!decision.shouldRing && nowMillis >= wait.giveUpAtMillis()) {
-                decision = RingDecision.RING_ALERT_TOO_LONG
-            }
+            state = tick.state
+            val snapshot = tick.snapshot
+            val gapSeconds = previousPollElapsed?.let { (nowElapsed - it) / 1000 }
+            previousPollElapsed = nowElapsed
             val age = snapshot.effectiveAgeSeconds(nowElapsed)
-            fun logPoll(step: String) {
-                val entry = DecisionEntry(
-                    at = DecisionLog.now(nowMillis),
-                    event = "poll",
-                    alarmId = alarm.id,
-                    region = region?.uid,
-                    covering = region?.alertUids?.sorted().orEmpty(),
-                    waitFor = alarm.waitFor.name,
-                    pauseMinutes = alarm.pauseMinutes,
-                    ageSeconds = age,
-                    confirmedAt = snapshot.confirmedAt,
-                    levels = DecisionLog.describeLevels(region, snapshot.alerts),
-                    decision = decision.name,
-                    step = step,
-                    fetch = attempt.outcome,
-                    fetchMillis = attempt.durationMillis,
-                    gapSeconds = gapSeconds,
-                )
-                Log.i(TAG, entry.toString())
-                app.decisionLog.log(entry)
-            }
-
-            // FR-8: на старті до 30 с даємо мережі шанс, перш ніж дзвонити через брак даних.
-            val noFreshData = decision == RingDecision.RING_NO_DATA || decision == RingDecision.RING_STALE
-            if (noFreshData && !sawAlert && nowElapsed - startedElapsed < STARTUP_WINDOW_MILLIS) {
-                logPoll("retry")
-                delay(STARTUP_RETRY_MILLIS)
-                continue
-            }
-
-            val step = nextWaitStep(decision, sawAlert, allClearAtElapsed, alarm.pauseMinutes, nowElapsed)
-            logPoll(
-                when {
-                    step is WaitStep.Ring -> "ring"
-                    (step as WaitStep.Wait).allClearAtElapsed != null -> "pause"
-                    else -> "wait"
-                },
-            )
-            // Рішення дзвонити вже ухвалене — жодне скасування (зупинка служби посеред шляху)
-            // не має його обірвати: будильник, що не задзвонив, гірший (NFR-1).
-            if (step is WaitStep.Ring) withContext(NonCancellable) {
-                val strongest = region?.let { r -> snapshot.alerts?.let { r.strongestLevel(it, alarm.waitFor, nowMillis) } }
-                val reason = ringReasonFor(
-                    decision = step.reason,
-                    sawAlert = sawAlert,
-                    placeName = app.placesRepository.current().byId(alarm.placeId)?.name ?: region?.shortTitle,
-                    level = strongest?.level ?: app.settingsRepository.currentWaitStatus(wait.alarmId)?.level,
-                    allClearAtMillis = allClearAtMillis,
-                    pauseMinutes = alarm.pauseMinutes,
-                    deadlineMillis = wait.deadlineMillis,
-                    nowMillis = nowMillis,
-                ).copy(oneShot = alarm.id == OneShot.ONE_SHOT_ID)
-                AlarmScheduler(this@AlarmWaitService).cancelDeadline(wait.alarmId)
-                AlarmRingService.startRinging(this@AlarmWaitService, alarm, reason)
-                app.decisionLog.log(
-                    DecisionEntry(at = DecisionLog.now(), event = "ring", alarmId = alarm.id, region = region?.uid, note = reason.kind.name),
-                )
-                finishWait(wait.alarmId)
-            }
-            if (step is WaitStep.Ring) return
-            step as WaitStep.Wait
-            if (decision == RingDecision.KEEP_WAITING) sawAlert = true
-            if (step.allClearAtElapsed == null) {
-                allClearAtMillis = null
-            } else if (allClearAtElapsed == null) {
-                allClearAtMillis = nowMillis
-            }
-            allClearAtElapsed = step.allClearAtElapsed
-
-            val strongest = region?.let { r -> snapshot.alerts?.let { r.strongestLevel(it, alarm.waitFor, nowMillis) } }
-            val status = WaitStatus(
+            val entry = DecisionEntry(
+                at = DecisionLog.now(nowMillis),
+                event = "poll",
                 alarmId = alarm.id,
-                level = if (allClearAtElapsed == null) strongest?.level else null,
-                reason = if (allClearAtElapsed == null) strongest?.reason?.takeIf { it.isNotBlank() } else null,
-                confirmedAtMillis = age?.let { nowMillis - it * 1000 },
-                allClearAtMillis = allClearAtMillis,
-                ringAtMillis = allClearAtMillis?.plus(alarm.pauseMinutes * 60_000L),
+                region = region?.uid,
+                covering = region?.alertUids?.sorted().orEmpty(),
+                waitFor = alarm.waitFor.name,
+                pauseMinutes = alarm.pauseMinutes,
+                ageSeconds = age,
+                confirmedAt = snapshot.confirmedAt,
+                levels = DecisionLog.describeLevels(region, snapshot.alerts),
+                decision = tick.decision.name,
+                step = tick.logStep,
+                fetch = attempt.outcome,
+                fetchMillis = attempt.durationMillis,
+                gapSeconds = gapSeconds,
             )
-            app.settingsRepository.setWaitStatus(status)
-            // Назва місця, а якщо місця немає (обрано напряму чи видалено) — коротка назва регіону.
-            val placeName = app.placesRepository.current().byId(alarm.placeId)?.name ?: region?.shortTitle
-            publish(
-                alarm.id,
-                buildNotification(alarm, wait, status, app.settingsRepository.snoozeMinutes.first(), placeName),
-            )
+            Log.i(TAG, entry.toString())
+            app.decisionLog.log(entry)
 
-            // Під час паузи будимося рівно до її кінця, якщо він ближчий за звичайне опитування.
-            val untilPauseEnd = allClearAtElapsed?.let { it + alarm.pauseMinutes * 60_000L - nowElapsed }
-            delay(untilPauseEnd?.coerceIn(1_000L, POLL_INTERVAL_MILLIS) ?: POLL_INTERVAL_MILLIS)
+            when (val action = tick.action) {
+                WaitAction.Retry -> {
+                    delay(STARTUP_RETRY_MILLIS)
+                    continue
+                }
+                // Рішення дзвонити вже ухвалене — жодне скасування (зупинка служби посеред шляху)
+                // не має його обірвати: будильник, що не задзвонив, гірший (NFR-1).
+                is WaitAction.Ring -> withContext(NonCancellable) {
+                    val strongest = region?.let { r -> snapshot.alerts?.let { r.strongestLevel(it, alarm.waitFor, nowMillis) } }
+                    val reason = ringReasonFor(
+                        decision = action.decision,
+                        sawAlert = before.sawAlert,
+                        placeName = app.placesRepository.current().byId(alarm.placeId)?.name ?: region?.shortTitle,
+                        level = strongest?.level ?: app.settingsRepository.currentWaitStatus(wait.alarmId)?.level,
+                        allClearAtMillis = before.allClearAtMillis,
+                        pauseMinutes = alarm.pauseMinutes,
+                        deadlineMillis = wait.deadlineMillis,
+                        nowMillis = nowMillis,
+                    ).copy(oneShot = alarm.id == OneShot.ONE_SHOT_ID)
+                    AlarmScheduler(this@AlarmWaitService).cancelDeadline(wait.alarmId)
+                    AlarmRingService.startRinging(this@AlarmWaitService, alarm, reason)
+                    app.decisionLog.log(
+                        DecisionEntry(at = DecisionLog.now(), event = "ring", alarmId = alarm.id, region = region?.uid, note = reason.kind.name),
+                    )
+                    finishWait(wait.alarmId)
+                }
+                is WaitAction.Wait -> {
+                    val pausing = state.allClearAtElapsed != null
+                    val strongest = region?.let { r -> snapshot.alerts?.let { r.strongestLevel(it, alarm.waitFor, nowMillis) } }
+                    val status = WaitStatus(
+                        alarmId = alarm.id,
+                        level = if (!pausing) strongest?.level else null,
+                        reason = if (!pausing) strongest?.reason?.takeIf { it.isNotBlank() } else null,
+                        confirmedAtMillis = age?.let { nowMillis - it * 1000 },
+                        allClearAtMillis = state.allClearAtMillis,
+                        ringAtMillis = state.allClearAtMillis?.plus(alarm.pauseMinutes * 60_000L),
+                    )
+                    app.settingsRepository.setWaitStatus(status)
+                    // Назва місця, а якщо місця немає (обрано напряму чи видалено) — коротка назва регіону.
+                    val placeName = app.placesRepository.current().byId(alarm.placeId)?.name ?: region?.shortTitle
+                    publish(
+                        alarm.id,
+                        buildNotification(alarm, wait, status, app.settingsRepository.snoozeMinutes.first(), placeName),
+                    )
+                    delay(action.delayMillis)
+                    continue
+                }
+            }
+            return
         }
     }
 
-    /** FR-18/FR-20: «Подзвони через X хв» — задзвонить через X хв незалежно від тривоги. */
     private fun snooze(alarmId: Long) {
         scope.launch {
             val minutes = app().settingsRepository.snoozeMinutes.first()
@@ -513,15 +489,8 @@ class AlarmWaitService : Service() {
         private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
         private const val REQUEST_OPEN_ALARMS = 7001
 
-        /** NFR-3 дозволяє до 2 хв затримки після відбою, тож 30 с дають запас. */
-        private const val POLL_INTERVAL_MILLIS = 30_000L
-
         /** Через скільки без «я жива» від служби задзвонить вартовий (десять опитувань підряд пропущено). */
         private const val WATCHDOG_MILLIS = 5 * 60_000L
-
-        /** FR-8: скільки на старті пробуємо отримати свіжі дані, перш ніж дзвонити без них. */
-        private const val STARTUP_WINDOW_MILLIS = 30_000L
-        private const val STARTUP_RETRY_MILLIS = 2_000L
 
         const val ACTION_START = "ua.vidbiy.app.action.START_WAITING"
         const val ACTION_SNOOZE = "ua.vidbiy.app.action.SNOOZE_WAITING"

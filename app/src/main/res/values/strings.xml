@@ -40,10 +40,6 @@
     <string name="days_weekend">Сб, Нд</string>
 
     <string name="next_trigger">Спрацює через %1$s</string>
-    <string name="duration_hours_minutes">%1$d год %2$d хв</string>
-    <string name="duration_hours">%1$d год</string>
-    <string name="duration_minutes">%1$d хв</string>
-    <string name="duration_less_than_minute">менш ніж хвилину</string>
 
 
     <string name="vibrate">Вібрація</string>
@@ -212,6 +208,8 @@
     <string name="ring_stale_text">Свіжих даних немає понад 3 хв — тому дзвоню.</string>
     <string name="ring_app_failure_title">Збій у застосунку</string>
     <string name="ring_app_failure_text">Не вдалося стежити за тривогою — тому дзвоню.</string>
+    <string name="ring_locked_boot_title">Телефон перезавантажився</string>
+    <string name="ring_locked_boot_text">Поки телефон не розблоковано, налаштувань тривоги не видно — тому дзвоню без перевірки.</string>
     <string name="unreadable_banner_title">Не вдалося прочитати частину будильників</string>
     <string name="unreadable_banner_text">Якщо якогось будильника бракує, створіть його знову. Це повідомлення зникне, коли ви додасте або видалите будильник.</string>
     <string name="ring_too_long_title">Тривога триває понад добу</string>

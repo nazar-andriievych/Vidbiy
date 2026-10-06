@@ -23,4 +23,5 @@ node_modules
 # Signing keys
 *.jks
 *.keystore
+*.p12
 keystore.properties

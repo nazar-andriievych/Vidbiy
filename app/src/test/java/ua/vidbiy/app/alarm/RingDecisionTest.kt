@@ -100,10 +100,23 @@ class RingDecisionTest {
     }
 
     @Test
-    fun `лише червона — давня жовта нічого не важить, свіжої червоної немає`() {
-        val alerts = mapOf("8" to listOf(yellow(sinceHoursAgo = 1)))
+    fun `лише червона — червона понад добу не рахується, хоч поруч свіжа жовта`() {
+        // Жовта не важить для «лише червона», а червона триває вже добу (FR-27): дзвонимо.
+        val alerts = mapOf("8" to listOf(red(sinceHoursAgo = 25)), "39" to listOf(yellow(sinceHoursAgo = 1)))
 
-        assertEquals(RingDecision.RING_CLEAR, decide(snapshot(alerts), waitFor = WaitFor.RED_ONLY))
+        assertEquals(RingDecision.RING_ALERT_TOO_LONG, decide(snapshot(alerts), waitFor = WaitFor.RED_ONLY))
+    }
+
+    @Test
+    fun `проксі віддав тривоги без віку даних — свіжість невідома, дзвонимо`() {
+        assertEquals(RingDecision.RING_NO_DATA, decide(snapshot(mapOf("8" to listOf(red())), ageSeconds = null)))
+    }
+
+    @Test
+    fun `час початку тривоги в майбутньому (годинник телефона відстає) — тривога рахується`() {
+        val alerts = mapOf("8" to listOf(ActiveLevel(AlertLevel.RED, nowMillis + 5 * 60_000, null)))
+
+        assertEquals(RingDecision.KEEP_WAITING, decide(snapshot(alerts)))
     }
 
     @Test

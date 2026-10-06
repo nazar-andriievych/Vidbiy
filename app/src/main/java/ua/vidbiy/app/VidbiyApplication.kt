@@ -4,15 +4,19 @@ import android.app.Activity
 import android.app.Application
 import android.os.Bundle
 import android.util.Log
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import ua.vidbiy.app.alarm.AlarmScheduler
+import ua.vidbiy.app.alarm.LockedBoot
+import ua.vidbiy.app.alarm.lockedBootPlan
 import ua.vidbiy.app.alarm.Notifications
 import ua.vidbiy.app.alarm.OneShot
 import ua.vidbiy.app.alarm.Snoozes
@@ -51,8 +55,9 @@ class VidbiyApplication : Application() {
      * читати будильники: інакше в першу хвилину після оновлення будильник міг би
      * побачити себе без регіону й задзвонити як звичайний.
      */
-    lateinit var dataReady: Deferred<Unit>
-        private set
+    val dataReady: Deferred<Unit> get() = _dataReady
+    private val _dataReady = CompletableDeferred<Unit>()
+    private val unlockedWorkStarted = AtomicBoolean(false)
 
     /** Скільки екранів застосунку зараз видно (між onStart і onStop). */
     private var startedActivities = 0
@@ -91,18 +96,40 @@ class VidbiyApplication : Application() {
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
             override fun onActivityDestroyed(activity: Activity) = Unit
         })
-        dataReady = applicationScope.async {
-            runCatching { LegacyMigration.run(settingsRepository, placesRepository, alarmsRepository) }
-            Unit
-        }
+        // Після перезавантаження процес може стартувати ще до розблокування (LockedBoot):
+        // тоді сховища не прочитати, і решту роботи запустить BootReceiver після розблокування.
+        if (!LockedBoot.isLocked(this)) onUserUnlocked()
+    }
 
-        // Перестраховка: спрацювання могли загубитися (примусова зупинка застосунку,
-        // очищення даних виробником, збій після оновлення). Перезапис уже наявного
-        // спрацювання нічого не ламає, тож робимо це на кожному старті.
+    /**
+     * Робота, якій потрібне звичайне сховище. Викликається один раз: зі старту застосунку
+     * або, якщо процес стартував до розблокування, з BootReceiver після нього.
+     */
+    fun onUserUnlocked() {
+        if (!unlockedWorkStarted.compareAndSet(false, true)) return
         applicationScope.launch {
-            dataReady.await()
+            runCatching { LegacyMigration.run(settingsRepository, placesRepository, alarmsRepository) }
+            // Що задзвонило до розблокування — у сховище, перш ніж хтось почне ставити будильники.
+            runCatching { LockedBoot.handOver(this@VidbiyApplication) }
+                .onFailure { Log.e("VidbiyApp", "Не вдалося перенести дзвінки до розблокування", it) }
+            _dataReady.complete(Unit)
+
+            // Перестраховка: спрацювання могли загубитися (примусова зупинка застосунку,
+            // очищення даних виробником, збій після оновлення). Перезапис уже наявного
+            // спрацювання нічого не ламає, тож робимо це на кожному старті.
             alarmScheduler.scheduleAll(alarmsRepository.disableMissed())
             Snoozes.restore(this@VidbiyApplication, afterReset = false)
+        }
+        // Копія розкладу для перезавантаження без розблокування — на кожну зміну.
+        applicationScope.launch {
+            dataReady.await()
+            combine(
+                alarmsRepository.alarms,
+                settingsRepository.pendingSnoozes,
+                settingsRepository.pendingWaits,
+                settingsRepository.snoozeMinutes,
+            ) { alarms, snoozes, waits, snoozeMinutes -> lockedBootPlan(alarms, snoozes, waits, snoozeMinutes) }
+                .collect { LockedBoot.savePlan(this@VidbiyApplication, it) }
         }
     }
 }

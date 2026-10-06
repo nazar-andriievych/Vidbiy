@@ -6,27 +6,27 @@ import org.junit.Test
 class RingTimeoutTest {
 
     @Test
-    fun `first unanswered ring snoozes itself`() {
+    fun `перший дзвінок без відповіді відкладає себе сам`() {
         assertEquals(RingTimeout.AutoSnooze(1), ringTimeout(0))
     }
 
     @Test
-    fun `second unanswered ring snoozes once more`() {
+    fun `другий дзвінок без відповіді відкладає себе ще раз`() {
         assertEquals(RingTimeout.AutoSnooze(2), ringTimeout(1))
     }
 
     @Test
-    fun `third unanswered ring gives up`() {
+    fun `після третього дзвінка будильник здається`() {
         assertEquals(RingTimeout.GiveUp, ringTimeout(MAX_AUTO_SNOOZES))
     }
 
     @Test
-    fun `a broken counter never rings forever`() {
+    fun `зіпсований лічильник не змушує дзвонити вічно`() {
         assertEquals(RingTimeout.GiveUp, ringTimeout(99))
     }
 
     @Test
-    fun `three ring periods in total`() {
+    fun `разом три дзвінки`() {
         var repeats = 0
         var rings = 1
         while (true) {

@@ -8,7 +8,7 @@ class StaleWarningTest {
     private val confirmed = 1_000_000_000_000L
 
     @Test
-    fun `справні дані до 90 с — без попередження`() {
+    fun `справні дані до 120 с включно — без попередження`() {
         // Знімок раз на 60 с + опитування раз на 30 с: звичайний вік до ~90 с.
         assertFalse(showsStaleWarning(confirmed, confirmed + 55_000))
         assertFalse(showsStaleWarning(confirmed, confirmed + 90_000))

@@ -10,7 +10,7 @@ class RegionNamesTest {
     private val kozyn = Hromada("1500", "Козинська територіальна громада")
 
     @Test
-    fun `hromada label goes from narrow to wide with short names`() {
+    fun `підпис громади — від вужчого до ширшого, скорочено`() {
         assertEquals(
             "Козинська громада · Обухівський р-н · Київська обл.",
             kozyn.toSelection(kyivOblast, obukhiv).label,
@@ -18,23 +18,23 @@ class RegionNamesTest {
     }
 
     @Test
-    fun `raion label`() {
+    fun `підпис району`() {
         assertEquals("Обухівський р-н · Київська обл.", obukhiv.toSelection(kyivOblast).label)
     }
 
     @Test
-    fun `city without raions keeps its name`() {
+    fun `місто без районів зберігає назву`() {
         assertEquals("м. Київ", Oblast("31", "м. Київ").toSelection().label)
     }
 
     @Test
-    fun `oblast list drops the word oblast`() {
+    fun `у списку областей слово «область» прибирається`() {
         assertEquals("Київська", RegionNames.inOblastList("Київська область"))
         assertEquals("м. Київ", RegionNames.inOblastList("м. Київ"))
     }
 
     @Test
-    fun `capital first, occupied Crimea and Sevastopol last`() {
+    fun `спершу столиця, окупований Крим і Севастополь — останні`() {
         val ordered = RegionNames.oblastOrder(
             listOf(
                 Oblast("29", "Автономна Республіка Крим"),

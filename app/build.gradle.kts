@@ -38,8 +38,26 @@ android {
         manifestPlaceholders["allowBackup"] = (name != "debug" || backupInDebug).toString()
     }
 
+    // Release-підпис. Ключ і пароль — лише поза репозиторієм, у %USERPROFILE%\.gradle\gradle.properties:
+    //   vidbiy.signing.storeFile=D:/Keys/vidbiy-release.p12
+    //   vidbiy.signing.password=...
+    // Без них release-збірка виходить непідписаною (app-release-unsigned.apk), а тести працюють як звичайно.
+    val signingStoreFile = project.findProperty("vidbiy.signing.storeFile") as String?
+    val signingPassword = project.findProperty("vidbiy.signing.password") as String?
+    val releaseSigning = if (signingStoreFile != null && signingPassword != null) {
+        signingConfigs.create("release") {
+            storeFile = file(signingStoreFile)
+            storeType = "pkcs12"
+            // У PKCS12 пароль сховища й ключа один і той самий.
+            storePassword = signingPassword
+            keyAlias = "vidbiy"
+            keyPassword = signingPassword
+        }
+    } else null
+
     buildTypes {
         release {
+            signingConfig = releaseSigning
             optimization {
                 enable = false
             }
@@ -53,6 +71,12 @@ android {
         buildConfig = true
         compose = true
     }
+}
+
+// Контрактний тест (AlertsContractTest) читає спільний з сервером приклад відповіді:
+// без цього Gradle вважав би тести актуальними після зміни прикладу.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootProject.file("docs/fixtures")).withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 dependencies {

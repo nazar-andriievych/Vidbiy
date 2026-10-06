@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
+import androidx.annotation.StringRes
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -246,15 +247,22 @@ private fun RingList(entries: List<RingEntry>) {
 
 /** Заголовок причини для списку; у звичайного будильника його немає. */
 @Composable
-private fun reasonTitle(reason: RingReason): String? = when (reason.kind) {
-    RingReason.Kind.ALL_CLEAR -> stringResource(R.string.ring_all_clear_title)
-    RingReason.Kind.NO_ALERT -> stringResource(R.string.ring_no_alert_title)
-    RingReason.Kind.DEADLINE -> stringResource(R.string.ring_deadline_title)
-    RingReason.Kind.NO_CONNECTION -> stringResource(R.string.ring_no_connection_title)
-    RingReason.Kind.STALE ->
-        stringResource(if (reason.oneShot) R.string.ring_no_data_title else R.string.ring_no_connection_title)
-    RingReason.Kind.TOO_LONG -> stringResource(R.string.ring_too_long_title)
-    RingReason.Kind.APP_FAILURE -> stringResource(R.string.ring_app_failure_title)
+private fun reasonTitle(reason: RingReason): String? = reasonTitleRes(reason)?.let { stringResource(it) }
+
+/**
+ * Заголовок причини (FR-21): «Тривоги немає», «Відбій тривоги»… Звичайний будильник — без блоку причини.
+ * FR-24: у разовому режимі застарілі дані — «Немає даних», а не «Немає зв'язку».
+ */
+@StringRes
+fun reasonTitleRes(reason: RingReason): Int? = when (reason.kind) {
+    RingReason.Kind.ALL_CLEAR -> R.string.ring_all_clear_title
+    RingReason.Kind.NO_ALERT -> R.string.ring_no_alert_title
+    RingReason.Kind.DEADLINE -> R.string.ring_deadline_title
+    RingReason.Kind.NO_CONNECTION -> R.string.ring_no_connection_title
+    RingReason.Kind.STALE -> if (reason.oneShot) R.string.ring_no_data_title else R.string.ring_no_connection_title
+    RingReason.Kind.TOO_LONG -> R.string.ring_too_long_title
+    RingReason.Kind.APP_FAILURE -> R.string.ring_app_failure_title
+    RingReason.Kind.LOCKED_BOOT -> R.string.ring_locked_boot_title
     RingReason.Kind.PLAIN -> null
 }
 
@@ -286,7 +294,7 @@ private fun ReasonBlock(reason: RingReason) {
         RingReason.Kind.STALE -> Triple(
             R.drawable.ic_cloud_off,
             // FR-24: у разовому режимі — «Немає даних», а не «Немає зв'язку».
-            stringResource(if (reason.oneShot) R.string.ring_no_data_title else R.string.ring_no_connection_title),
+            stringResource(reasonTitleRes(reason)!!),
             stringResource(R.string.ring_stale_text),
         )
         RingReason.Kind.TOO_LONG -> Triple(
@@ -298,6 +306,11 @@ private fun ReasonBlock(reason: RingReason) {
             R.drawable.ic_info,
             stringResource(R.string.ring_app_failure_title),
             stringResource(R.string.ring_app_failure_text),
+        )
+        RingReason.Kind.LOCKED_BOOT -> Triple(
+            R.drawable.ic_info,
+            stringResource(R.string.ring_locked_boot_title),
+            stringResource(R.string.ring_locked_boot_text),
         )
         RingReason.Kind.PLAIN -> return
     }

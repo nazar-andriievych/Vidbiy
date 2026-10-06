@@ -3,13 +3,22 @@ package ua.vidbiy.app.alarm
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import ua.vidbiy.app.data.ActiveLevel
+import ua.vidbiy.app.data.AlertLevel
 import ua.vidbiy.app.data.Hromada
 import ua.vidbiy.app.data.Oblast
 import ua.vidbiy.app.data.Raion
 import ua.vidbiy.app.data.SelectedRegion
 import ua.vidbiy.app.data.toSelection
 
+/**
+ * Яка тривога накриває обраний регіон (таблиця «Регіони й рівні» в requirements, FR-29).
+ * Перевіряємо саме [levelsOver] — його бере [decideRing], тож тест і будильник рахують однаково.
+ */
 class AlertMatchingTest {
+
+    private fun SelectedRegion.isUnderAlert(alertUids: Collection<String>): Boolean =
+        levelsOver(alertUids.associateWith { listOf(ActiveLevel(AlertLevel.RED, 0L, null)) }).isNotEmpty()
 
     private val hromada = Hromada(uid = "225", title = "м. Луцьк та Луцька територіальна громада")
     private val neighbourHromada = Hromada(uid = "218", title = "Боратинська територіальна громада")

@@ -68,7 +68,7 @@ class PlacesRepository(private val context: Context) {
         lateinit var added: Place
         context.placesDataStore.edit { prefs ->
             val places = readForEdit(prefs)
-            val place = Place(id = (places.maxOfOrNull { it.id } ?: 0L) + 1, name = name.clean(), region = region)
+            val place = PlaceRules.newPlace(places, name, region)
             prefs[placesKey] = json.encodeToString(places + place)
             if (places.isEmpty()) prefs[primaryKey] = place.id
             added = place
@@ -76,7 +76,7 @@ class PlacesRepository(private val context: Context) {
         return added
     }
 
-    suspend fun rename(id: Long, name: String) = update(id) { it.copy(name = name.clean()) }
+    suspend fun rename(id: Long, name: String) = update(id) { it.copy(name = PlaceRules.cleanName(name)) }
 
     suspend fun changeRegion(id: Long, region: SelectedRegion) = update(id) { it.copy(region = region) }
 
@@ -89,8 +89,7 @@ class PlacesRepository(private val context: Context) {
         var deleted = false
         context.placesDataStore.edit { prefs ->
             val places = readForEdit(prefs)
-            val primaryId = prefs[primaryKey] ?: places.firstOrNull()?.id
-            if (id == primaryId) return@edit
+            if (!PlaceRules.canDelete(PlacesState(places, prefs[primaryKey]), id)) return@edit
             prefs[placesKey] = json.encodeToString(places.filterNot { it.id == id })
             deleted = true
         }
@@ -103,8 +102,6 @@ class PlacesRepository(private val context: Context) {
             prefs[placesKey] = json.encodeToString(places)
         }
     }
-
-    private fun String.clean() = trim().take(Place.MAX_NAME_LENGTH)
 
     /**
      * Для змін: читає список по одному елементу, нечитабельне викидається назавжди
@@ -130,12 +127,32 @@ class PlacesEditor(
 ) {
     suspend fun changeRegion(placeId: Long, region: SelectedRegion) {
         places.changeRegion(placeId, region)
-        alarms.updateWhere({ it.placeId == placeId }) { it.copy(region = region) }
+        alarms.updateWhere({ it.placeId == placeId }) { it.withPlaceRegion(placeId, region) }
     }
 
     suspend fun delete(placeId: Long) {
         if (places.delete(placeId)) {
-            alarms.updateWhere({ it.placeId == placeId }) { it.copy(placeId = null) }
+            alarms.updateWhere({ it.placeId == placeId }) { it.withoutPlace(placeId) }
         }
     }
 }
+
+/** Правила «Моїх місць» (FR-26a) — окремо від сховища, щоб їх перевіряли тести. */
+object PlaceRules {
+    /** Назва — без пробілів по краях і не довша за [Place.MAX_NAME_LENGTH]. */
+    fun cleanName(name: String): String = name.trim().take(Place.MAX_NAME_LENGTH)
+
+    fun newPlace(existing: List<Place>, name: String, region: SelectedRegion): Place =
+        Place(id = (existing.maxOfOrNull { it.id } ?: 0L) + 1, name = cleanName(name), region = region)
+
+    /** Основне місце не видаляється, доки основним не стане інше. */
+    fun canDelete(state: PlacesState, id: Long): Boolean = id != state.primary?.id
+}
+
+/** Регіон місця змінився — будильник з цим місцем чекає тривог у новому регіоні. */
+fun Alarm.withPlaceRegion(placeId: Long, region: SelectedRegion): Alarm =
+    if (this.placeId == placeId) copy(region = region) else this
+
+/** Місце видалили — будильник зберігає регіон, лише без назви місця. */
+fun Alarm.withoutPlace(placeId: Long): Alarm =
+    if (this.placeId == placeId) copy(placeId = null) else this

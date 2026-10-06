@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -39,11 +40,19 @@ data class PendingWait(
      * Доба випливає з FR-17 — тривога, довша за добу, не рахується, — і страхує очікування
      * без крайнього часу: без неї служба, яку прибила система, не мала б чим задзвонити.
      */
-    fun giveUpAtMillis(): Long {
-        val started = startedAtMillis.takeIf { it > 0 } ?: System.currentTimeMillis()
+    fun giveUpAtMillis(nowMillis: Long = System.currentTimeMillis()): Long {
+        val started = startedAtMillis.takeIf { it > 0 } ?: nowMillis
         val backstop = started + MAX_WAIT_MILLIS
         return deadlineMillis?.coerceAtMost(backstop) ?: backstop
     }
+
+    /**
+     * Запис зі старої версії не знав, коли почалося очікування. Без цього доба очікування
+     * рахувалася б від «зараз» на кожному опитуванні й ніколи б не настала, тож фіксуємо початок
+     * один раз — і далі він зберігається разом з очікуванням.
+     */
+    fun withKnownStart(nowMillis: Long): PendingWait =
+        if (startedAtMillis > 0) this else copy(startedAtMillis = nowMillis)
 
     fun toJson(): String = json.encodeToString(this)
 
@@ -152,6 +161,8 @@ class SettingsRepository(private val context: Context) {
     val themeMode: Flow<ThemeMode> = context.settingsDataStore.data.map { prefs ->
         ThemeMode.entries.firstOrNull { it.name == prefs[themeModeKey] } ?: ThemeMode.System
     }
+        // Екран дзвінка до розблокування після перезавантаження (LockedBoot): сховища ще не прочитати.
+        .catch { emit(ThemeMode.System) }
 
     suspend fun setThemeMode(mode: ThemeMode) {
         context.settingsDataStore.edit { prefs -> prefs[themeModeKey] = mode.name }

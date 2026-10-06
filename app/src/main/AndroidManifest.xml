@@ -44,6 +44,7 @@
         </activity>
         <activity
             android:name=".ui.AlarmRingActivity"
+            android:directBootAware="true"
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleInstance"
@@ -54,6 +55,7 @@
 
         <service
             android:name=".alarm.AlarmRingService"
+            android:directBootAware="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
@@ -77,10 +79,19 @@
             android:name=".alarm.SnoozeCancelReceiver"
             android:exported="false" />
 
+        <!-- Працюють і до першого розблокування після перезавантаження (LockedBoot):
+             на цей час вони не чіпають звичайного сховища. -->
+        <receiver
+            android:name=".alarm.LockedAlarmReceiver"
+            android:directBootAware="true"
+            android:exported="false" />
+
         <receiver
             android:name=".alarm.BootReceiver"
+            android:directBootAware="true"
             android:exported="false">
             <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.TIME_SET" />

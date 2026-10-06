@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import ua.vidbiy.app.MainActivity
 import ua.vidbiy.app.data.Alarm
+import ua.vidbiy.app.data.PendingSnooze
 import java.time.LocalDateTime
 
 /**
@@ -64,6 +65,11 @@ class AlarmScheduler(private val context: Context) {
      * Записати відкладення на диск і показати його — справа [Snoozes]: планувальник у сховище не пише.
      */
     fun snoozeAt(alarmId: Long, atMillis: Long) {
+        // До розблокування після перезавантаження звичайний приймач не запуститься (див. LockedBoot).
+        if (LockedBoot.isLocked(context)) {
+            LockedBoot.snooze(context, PendingSnooze(alarmId, atMillis))
+            return
+        }
         setAtMillis(alarmId, atMillis, Kind.SNOOZE)
     }
 
@@ -132,6 +138,7 @@ class AlarmScheduler(private val context: Context) {
     }
 
     fun cancelSnooze(alarmId: Long) {
+        if (LockedBoot.isLocked(context)) LockedBoot.cancelSnooze(context, alarmId)
         alarmManager.cancel(firePendingIntent(alarmId, Kind.SNOOZE))
     }
 
