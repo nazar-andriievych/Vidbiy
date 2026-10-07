@@ -24,6 +24,12 @@ enum class RingDecision {
     /** Тривога триває понад добу: вона не рахується, будильник більше не чекає (FR-17, FR-27). */
     RING_ALERT_TOO_LONG,
 
+    /**
+     * Проксі каже, що ця версія застосунку застаріла: у ній відомий небезпечний баг, тож
+     * тривогам вона не довіряє й дзвонить як звичайний будильник (docs/proxy-api.md).
+     */
+    RING_OUTDATED,
+
     /** Тривога триває, чекаємо відбою. */
     KEEP_WAITING,
     ;
@@ -56,6 +62,7 @@ fun decideRing(
     pastDeadline: Boolean,
 ): RingDecision {
     if (pastDeadline) return RingDecision.RING_DEADLINE
+    if (snapshot?.outdated == true) return RingDecision.RING_OUTDATED
     // Регіон не обрано — чекати нема на що.
     if (region == null) return RingDecision.RING_NO_DATA
 

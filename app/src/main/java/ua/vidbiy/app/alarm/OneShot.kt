@@ -48,6 +48,9 @@ enum class OneShotCheck {
 
     /** «Немає даних» — режим не вмикається. */
     NO_DATA,
+
+    /** Ця версія застосунку застаріла й тривогам не довіряє — режим не вмикається. */
+    OUTDATED,
 }
 
 /**
@@ -60,6 +63,7 @@ fun oneShotCheck(decision: RingDecision, yellowActive: Boolean = false): OneShot
     RingDecision.KEEP_WAITING -> OneShotCheck.ALERT
     RingDecision.RING_CLEAR -> if (yellowActive) OneShotCheck.ONLY_YELLOW else OneShotCheck.NO_ALERT
     RingDecision.RING_ALERT_TOO_LONG -> OneShotCheck.NO_ALERT
+    RingDecision.RING_OUTDATED -> OneShotCheck.OUTDATED
     else -> OneShotCheck.NO_DATA
 }
 

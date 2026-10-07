@@ -2,10 +2,11 @@ import { isMockScenario } from "./mock";
 import { importPublicKey, parseWebhook, verifyWebhook, WEBHOOK_PUBLIC_KEY_PEM } from "./ukrainealarm";
 import type { AlertsHub } from "./hub";
 import type { AlertsResponse } from "./types";
+import { withUpdate, type UpdateVars } from "./update";
 
 export { AlertsHub } from "./hub";
 
-export interface Env {
+export interface Env extends UpdateVars {
   /** Секрет: `wrangler secret put UKRAINEALARM_TOKEN`. Потрібен лише для початкового знімка. */
   UKRAINEALARM_TOKEN?: string;
   /** `"1"` вмикає підробку стану тривог і маршрут `/mock`. Лише для розробки. */
@@ -49,7 +50,7 @@ export default {
 
     switch (url.pathname) {
       case "/v1/alerts":
-        return json(await getAlerts(env));
+        return json(withUpdate(await getAlerts(env), env));
       case "/stats":
         return json(await hub(env).stats());
       case "/log":

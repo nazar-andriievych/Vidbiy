@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ua.vidbiy.app.BuildConfig
 import ua.vidbiy.app.R
+import ua.vidbiy.app.data.AppUpdate
 import ua.vidbiy.app.data.Place
 import ua.vidbiy.app.data.WaitFor
 import ua.vidbiy.app.data.shortTitle
@@ -56,6 +57,7 @@ fun SettingsTab(
     themeMode: ThemeMode,
     contentPadding: PaddingValues,
     onThemeModeChange: (ThemeMode) -> Unit,
+    appUpdate: AppUpdate? = null,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -102,6 +104,7 @@ fun SettingsTab(
             }
         }
         item { PermissionsRow(onOpen = onOpenPermissions, modifier = Modifier.padding(horizontal = Dimens.ScreenPadding)) }
+        item { VersionRow(appUpdate, modifier = Modifier.padding(horizontal = Dimens.ScreenPadding)) }
         item { PrivacyNote() }
         if (BuildConfig.DEBUG) {
             item { DecisionLogCard(modifier = Modifier.padding(horizontal = Dimens.ScreenPadding)) }

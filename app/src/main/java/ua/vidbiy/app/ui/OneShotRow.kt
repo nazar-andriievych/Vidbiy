@@ -30,7 +30,7 @@ import ua.vidbiy.app.ui.theme.Dimens
 import ua.vidbiy.app.ui.theme.alertColors
 
 /** Стан рядка «Розбуди після відбою» (design-spec 4). */
-enum class OneShotRowState { IDLE, CHECKING, NO_ALERT, ONLY_YELLOW, NO_DATA }
+enum class OneShotRowState { IDLE, CHECKING, NO_ALERT, ONLY_YELLOW, NO_DATA, OUTDATED }
 
 /**
  * Рядок разового режиму вгорі головного екрана (FR-25a): кнопка ⏻, перевірка тривоги
@@ -64,6 +64,7 @@ fun OneShotRow(
                         OneShotRowState.NO_ALERT -> RowIcon(R.drawable.ic_check)
                         OneShotRowState.ONLY_YELLOW -> Box(Modifier.size(12.dp).background(MaterialTheme.alertColors.yellow, CircleShape))
                         OneShotRowState.NO_DATA -> RowIcon(R.drawable.ic_cloud_off)
+                        OneShotRowState.OUTDATED -> RowIcon(R.drawable.ic_info)
                         OneShotRowState.IDLE, OneShotRowState.CHECKING -> Unit
                     }
                 }
@@ -79,6 +80,8 @@ fun OneShotRow(
                     stringResource(R.string.one_shot_only_yellow) to stringResource(R.string.one_shot_only_yellow_sub, place.orEmpty())
                 OneShotRowState.NO_DATA ->
                     stringResource(R.string.one_shot_no_data) to stringResource(R.string.one_shot_no_data_sub)
+                OneShotRowState.OUTDATED ->
+                    stringResource(R.string.one_shot_outdated) to stringResource(R.string.one_shot_outdated_sub)
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, style = MaterialTheme.typography.titleSmall)

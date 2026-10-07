@@ -44,6 +44,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ua.vidbiy.app.ui.AlarmEditScreen
@@ -104,6 +106,10 @@ private enum class Tab(@StringRes val label: Int, @DrawableRes val icon: Int) {
 fun VidbiyApp(viewModel: AlarmsViewModel) {
     val alarms by viewModel.alarms.collectAsStateWithLifecycle()
     val alarmsUnreadable by viewModel.alarmsUnreadable.collectAsStateWithLifecycle()
+    val appUpdate by viewModel.appUpdate.collectAsStateWithLifecycle()
+    val dismissedUpdateCode by viewModel.dismissedUpdateCode.collectAsStateWithLifecycle()
+    // Застосунок вийшов на передній план — спитати проксі про нову версію (не частіше раз на годину).
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.checkForUpdate() }
     val places by viewModel.places.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val overlay by viewModel.overlay.collectAsStateWithLifecycle()
@@ -224,6 +230,9 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                         missingPermissions = missingPermissions,
                         onOpenPermissions = viewModel::openPermissions,
                         alarmsUnreadable = alarmsUnreadable,
+                        appUpdate = appUpdate,
+                        dismissedUpdateCode = dismissedUpdateCode,
+                        onDismissUpdate = viewModel::dismissUpdate,
                         listState = alarmsListState,
                     )
                     Tab.Places -> PlacesTab(
@@ -249,6 +258,7 @@ fun VidbiyApp(viewModel: AlarmsViewModel) {
                         themeMode = themeMode,
                         contentPadding = content,
                         onThemeModeChange = viewModel::setThemeMode,
+                        appUpdate = appUpdate,
                     )
                 }
             }

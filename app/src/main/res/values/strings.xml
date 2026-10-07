@@ -208,6 +208,8 @@
     <string name="ring_stale_text">Свіжих даних немає понад 3 хв — тому дзвоню.</string>
     <string name="ring_app_failure_title">Збій у застосунку</string>
     <string name="ring_app_failure_text">Не вдалося стежити за тривогою — тому дзвоню.</string>
+    <string name="ring_outdated_title">Застаріла версія застосунку</string>
+    <string name="ring_outdated_text">Ця версія не перевіряє тривогу — оновіть застосунок.</string>
     <string name="ring_locked_boot_title">Телефон перезавантажився</string>
     <string name="ring_locked_boot_text">Поки телефон не розблоковано, налаштувань тривоги не видно — тому дзвоню без перевірки.</string>
     <string name="unreadable_banner_title">Не вдалося прочитати частину будильників</string>
@@ -235,6 +237,8 @@
     <string name="one_shot_only_yellow_sub">%1$s · режим чекає лише червону</string>
     <string name="one_shot_no_data">Немає даних</string>
     <string name="one_shot_no_data_sub">Режим не ввімкнено</string>
+    <string name="one_shot_outdated">Застаріла версія застосунку</string>
+    <string name="one_shot_outdated_sub">Оновіть застосунок · режим не ввімкнено</string>
     <string name="one_shot_retry">Повторити</string>
     <string name="one_shot_no_place">Спершу додайте основне місце в «Мої місця»</string>
     <string name="one_shot_banner_title">Розбуджу після відбою</string>
@@ -269,5 +273,17 @@
     <string name="perm_banner_title">Будильник може не задзвонити</string>
     <string name="perm_banner_more">%1$s І ще дозволів: %2$d.</string>
     <string name="perm_banner_action">Надати дозвіл</string>
+
+    <!-- Оновлення застосунку: банер на головному й рядок у налаштуваннях -->
+    <string name="update_banner_title">Доступна версія %1$s</string>
+    <string name="update_banner_text">Зараз у вас %1$s.</string>
+    <string name="update_required_title">Оновіть застосунок</string>
+    <string name="update_required_text">Ця версія застаріла: будильники не чекають тривог і дзвонять у свій час.</string>
+    <string name="update_download">Завантажити</string>
+    <string name="update_dismiss">Закрити</string>
+    <string name="update_no_link">Посилання на завантаження поки немає.</string>
+    <string name="version_title">Версія</string>
+    <string name="version_current">%1$s · актуальна</string>
+    <string name="version_available">%1$s · доступна %2$s</string>
     <string name="perm_row_hint">Сповіщення, точні будильники, екран блокування, робота у фоні</string>
 </resources>

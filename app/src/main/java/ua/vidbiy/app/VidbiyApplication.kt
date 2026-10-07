@@ -22,6 +22,7 @@ import ua.vidbiy.app.alarm.OneShot
 import ua.vidbiy.app.alarm.Snoozes
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlarmsRepository
+import ua.vidbiy.app.data.AlertsClient
 import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.LegacyMigration
 import ua.vidbiy.app.data.PlacesEditor
@@ -39,6 +40,10 @@ class VidbiyApplication : Application() {
     val placesRepository: PlacesRepository by lazy { PlacesRepository(this) }
     val placesEditor: PlacesEditor by lazy { PlacesEditor(placesRepository, alarmsRepository) }
     val decisionLog: DecisionLog by lazy { DecisionLog(this) }
+
+    /** Клієнт проксі, що попутно запам'ятовує останній випуск застосунку (банер оновлення). */
+    fun alertsClient(): AlertsClient =
+        AlertsClient(settingsRepository.proxyBaseUrl(), onUpdate = settingsRepository::setAppUpdate)
 
     /**
      * Живе стільки ж, скільки процес: сюди йде робота, яку не можна кидати посеред шляху.

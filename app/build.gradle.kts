@@ -4,6 +4,25 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Версія застосунку — лише тут, у форматі MAJOR.MINOR.PATCH (див. docs/release.md).
+// versionCode обчислюється з неї, щоб не забути підняти: 1.2.3 → 1_002_003.
+val appVersion = "0.1.0"
+
+/**
+ * Android порівнює лише versionCode (ціле число, не більше 2 100 000 000), тож кожен розряд
+ * займає три цифри: minor і patch — до 999. Збірка падає, якщо назва не схожа на x.y.z,
+ * інакше криве число тихо зламало б оновлення.
+ */
+fun versionCodeOf(name: String): Int {
+    val parts = Regex("""(\d{1,4})\.(\d{1,3})\.(\d{1,3})""").matchEntire(name)?.destructured?.toList()
+        ?.map { it.toInt() }
+        ?: error("Версія застосунку має бути у форматі MAJOR.MINOR.PATCH (minor і patch — до 999): \"$name\"")
+    val (major, minor, patch) = parts
+    val code = major * 1_000_000L + minor * 1_000L + patch
+    require(code in 1..2_100_000_000L) { "versionCode $code для \"$name\" поза межами 1 … 2 100 000 000" }
+    return code.toInt()
+}
+
 android {
     namespace = "ua.vidbiy.app"
     compileSdk {
@@ -14,8 +33,8 @@ android {
         applicationId = "ua.vidbiy.app"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = versionCodeOf(appVersion)
+        versionName = appVersion
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

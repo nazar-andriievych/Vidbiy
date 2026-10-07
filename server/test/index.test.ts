@@ -40,13 +40,23 @@ describe("маршрути воркера", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.json()).toEqual(KNOWN);
+    expect(await response.json()).toEqual({ ...KNOWN, update: null });
+  });
+
+  it("/v1/alerts додає останній випуск — і до відповіді «даних немає» теж", async () => {
+    const { env } = fakeHub({ getAlerts: async () => { throw new Error("DO down"); } });
+    Object.assign(env, { LATEST_VERSION_CODE: "4", LATEST_VERSION_NAME: "1.3", MIN_VERSION_CODE: "2" });
+
+    expect(await (await worker.fetch(get("/v1/alerts"), env)).json()).toEqual({
+      ...UNKNOWN,
+      update: { latest_version_code: 4, latest_version_name: "1.3", min_version_code: 2, url: null },
+    });
   });
 
   it("недосяжний стан — «даних немає», щоб застосунок задзвонив за fail-safe", async () => {
     const { env } = fakeHub({ getAlerts: async () => { throw new Error("DO down"); } });
 
-    expect(await (await worker.fetch(get("/v1/alerts"), env)).json()).toEqual(UNKNOWN);
+    expect(await (await worker.fetch(get("/v1/alerts"), env)).json()).toEqual({ ...UNKNOWN, update: null });
   });
 
   it("/mock без MOCK=1 не існує: на бойовому сервері тривогу не підробити", async () => {

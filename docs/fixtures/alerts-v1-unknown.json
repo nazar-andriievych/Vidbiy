@@ -2,5 +2,6 @@
   "v": 1,
   "alerts": null,
   "confirmed_at": null,
-  "age_seconds": null
+  "age_seconds": null,
+  "update": null
 }

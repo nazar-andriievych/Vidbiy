@@ -24,8 +24,8 @@ import ua.vidbiy.app.alarm.decideRing
 import ua.vidbiy.app.alarm.nextTriggerAt
 import ua.vidbiy.app.alarm.hasFreshYellow
 import ua.vidbiy.app.alarm.oneShotCheck
-import ua.vidbiy.app.data.AlertsClient
 import ua.vidbiy.app.data.AlertsSnapshot
+import ua.vidbiy.app.data.AppUpdate
 import ua.vidbiy.app.data.DecisionEntry
 import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.WaitFor
@@ -145,7 +145,7 @@ class AlarmsViewModel(
         oneShotJob?.cancel()
         _oneShotRow.value = OneShotRowState.CHECKING
         oneShotJob = viewModelScope.launch {
-            val client = AlertsClient(settings.proxyBaseUrl())
+            val client = app.alertsClient()
             val started = SystemClock.elapsedRealtime()
             var known: AlertsSnapshot? = null
             var check: OneShotCheck
@@ -194,10 +194,11 @@ class AlarmsViewModel(
                     _oneShotRow.value = OneShotRowState.IDLE
                     _oneShotEnabled.value = true
                 }
-                OneShotCheck.NO_ALERT, OneShotCheck.ONLY_YELLOW, OneShotCheck.NO_DATA -> {
+                OneShotCheck.NO_ALERT, OneShotCheck.ONLY_YELLOW, OneShotCheck.NO_DATA, OneShotCheck.OUTDATED -> {
                     _oneShotRow.value = when (check) {
                         OneShotCheck.NO_ALERT -> OneShotRowState.NO_ALERT
                         OneShotCheck.ONLY_YELLOW -> OneShotRowState.ONLY_YELLOW
+                        OneShotCheck.OUTDATED -> OneShotRowState.OUTDATED
                         else -> OneShotRowState.NO_DATA
                     }
                     // Відкриті питання requirements: повідомлення тримається ~10 с.
@@ -206,6 +207,34 @@ class AlarmsViewModel(
                 }
             }
         }
+    }
+
+    // ---- Оновлення застосунку ----
+
+    /** Останній випуск, про який сказав проксі (зберігається на телефоні). */
+    val appUpdate: StateFlow<AppUpdate?> = settings.appUpdate
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val dismissedUpdateCode: StateFlow<Int> = settings.dismissedUpdateCode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    fun dismissUpdate(versionCode: Int) {
+        viewModelScope.launch { settings.dismissUpdate(versionCode) }
+    }
+
+    private var lastUpdateCheckElapsed: Long? = null
+
+    /**
+     * Застосунок відкрили: питаємо проксі, чи немає нової версії. Інакше про неї дізналися б лише
+     * ті, чий будильник ходить до сервера (з «враховувати тривоги»). Той самий `/v1/alerts`,
+     * що й у момент будильника, — серверу це нічого нового про телефон не каже. Не частіше
+     * ніж раз на [UPDATE_CHECK_INTERVAL_MILLIS]: перемикання між застосунками — не привід.
+     */
+    fun checkForUpdate() {
+        val now = SystemClock.elapsedRealtime()
+        if (lastUpdateCheckElapsed?.let { now - it < UPDATE_CHECK_INTERVAL_MILLIS } == true) return
+        lastUpdateCheckElapsed = now
+        viewModelScope.launch { app.alertsClient().fetch() }
     }
 
     fun cancelOneShotCheck() {
@@ -383,6 +412,8 @@ class AlarmsViewModel(
         private const val ONE_SHOT_CHECK_MILLIS = 30_000L
         private const val ONE_SHOT_RETRY_MILLIS = 2_000L
         private const val ONE_SHOT_MESSAGE_MILLIS = 10_000L
+        /** Перевірка оновлення під час відкриття застосунку — не частіше. */
+        private const val UPDATE_CHECK_INTERVAL_MILLIS = 60 * 60_000L
 
         val Factory = viewModelFactory {
             initializer {

@@ -12,6 +12,21 @@ export interface AlertsResponse {
   confirmed_at: string | null;
   /** Скільки секунд минуло від `confirmed_at` на момент відповіді. */
   age_seconds: number | null;
+  /**
+   * Останній випуск застосунку (див. `update.ts`). Додає воркер, а не Durable Object;
+   * `null` — не налаштовано. Старі версії застосунку поле ігнорують.
+   */
+  update?: AppUpdate | null;
+}
+
+/** Що застосунок знає про оновлення. Контракт — `docs/proxy-api.md`, «Оновлення застосунку». */
+export interface AppUpdate {
+  latest_version_code: number;
+  latest_version_name: string;
+  /** Нижчі версії не чекають тривог: дзвонять як звичайний будильник і просять оновитися. */
+  min_version_code: number;
+  /** Сторінка завантаження; `null` — канал ще не обрано. */
+  url: string | null;
 }
 
 export interface RegionAlert {

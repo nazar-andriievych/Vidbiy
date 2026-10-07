@@ -15,7 +15,20 @@
   "durable_objects": {
     "bindings": [{ "name": "ALERTS_HUB", "class_name": "AlertsHub" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AlertsHub"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AlertsHub"] }],
+
+  // Останній випуск застосунку — іде в кожну відповідь /v1/alerts (src/update.ts).
+  // Після випуску нової версії: оновити й `npm run deploy` (див. docs/release.md).
+  // Номер — versionCode з app/build.gradle.kts: MAJOR*1000000 + MINOR*1000 + PATCH (0.1.0 → 1000).
+  // MIN_VERSION_CODE підіймати лише заради небезпечного бага: нижчі версії перестануть
+  // чекати тривог і дзвонитимуть як звичайний будильник, доки людина не оновиться.
+  // UPDATE_URL порожній — канал поширення ще не обрано, застосунок покаже банер без кнопки.
+  "vars": {
+    "LATEST_VERSION_CODE": "1000",
+    "LATEST_VERSION_NAME": "0.1.0",
+    "MIN_VERSION_CODE": "0",
+    "UPDATE_URL": ""
+  }
 
   // UKRAINEALARM_TOKEN — це секрет, він тут не зберігається:
   //   у хмарі   → npx wrangler secret put UKRAINEALARM_TOKEN

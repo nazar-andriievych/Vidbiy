@@ -37,7 +37,6 @@ import ua.vidbiy.app.R
 import ua.vidbiy.app.VidbiyApplication
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlertLevel
-import ua.vidbiy.app.data.AlertsClient
 import ua.vidbiy.app.data.DecisionEntry
 import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.PendingWait
@@ -178,7 +177,7 @@ class AlarmWaitService : Service() {
     private suspend fun pollLoop(wait: PendingWait) {
         val app = app()
         val baseUrl = app.settingsRepository.proxyBaseUrl()
-        val client = AlertsClient(baseUrl)
+        val client = app.alertsClient()
         val startedElapsed = SystemClock.elapsedRealtime()
         // Усе, що треба пам'ятати між опитуваннями; рішення — у waitTick (WaitLoop.kt).
         var state = WaitLoopState()

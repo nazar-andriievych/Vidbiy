@@ -25,6 +25,25 @@ object ProxyConfig {
 @Serializable
 enum class AlertLevel { RED, YELLOW }
 
+/**
+ * Останній випуск застосунку з відповіді проксі (docs/proxy-api.md, «Оновлення застосунку»).
+ * Зберігається на телефоні ([SettingsRepository.appUpdate]), щоб банер на головному екрані
+ * знав про нову версію й без мережі.
+ */
+@Serializable
+data class AppUpdate(
+    @SerialName("latest_version_code") val latestVersionCode: Int,
+    @SerialName("latest_version_name") val latestVersionName: String,
+    /** Нижчі версії не чекають тривог: дзвонять як звичайний будильник і просять оновитися. */
+    @SerialName("min_version_code") val minVersionCode: Int = 0,
+    /** Сторінка завантаження; null — канал поширення ще не обрано. */
+    val url: String? = null,
+) {
+    fun isNewerThan(versionCode: Int): Boolean = latestVersionCode > versionCode
+
+    fun isRequiredFor(versionCode: Int): Boolean = minVersionCode > versionCode
+}
+
 /** Один рівень тривоги в регіоні. */
 data class ActiveLevel(
     val level: AlertLevel,
@@ -53,6 +72,13 @@ data class AlertsSnapshot(
     val receivedAtElapsed: Long,
     /** `confirmed_at` з відповіді як є — лише для журналу рішень, щоб звірити з сервером. */
     val confirmedAt: String? = null,
+    /** Останній випуск застосунку, якщо проксі про нього сказав. */
+    val update: AppUpdate? = null,
+    /**
+     * Проксі каже, що ця версія застаріла ([AppUpdate.minVersionCode]): у ній відомий
+     * небезпечний баг, тож тривогам вона не довіряє й дзвонить як звичайний будильник.
+     */
+    val outdated: Boolean = false,
 ) {
     /** Чи є в знімку взагалі на що спиратися. */
     val isKnown: Boolean get() = alerts != null && ageSeconds != null
@@ -73,7 +99,7 @@ data class AlertsSnapshot(
      * будильник задзвонить.
      */
     fun orPrevious(previous: AlertsSnapshot?): AlertsSnapshot =
-        if (isKnown || previous == null || !previous.isKnown) this else previous
+        if (isKnown || outdated || previous == null || !previous.isKnown) this else previous
 
     companion object {
         fun unavailable(nowElapsed: Long = SystemClock.elapsedRealtime()) =
@@ -89,8 +115,16 @@ data class AlertsSnapshot(
  */
 data class FetchAttempt(val outcome: String, val durationMillis: Long)
 
-/** Клієнт проксі. Один запит — один знімок; повтори вирішує той, хто питає. */
-class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
+/**
+ * Клієнт проксі. Один запит — один знімок; повтори вирішує той, хто питає.
+ *
+ * [onUpdate] отримує відомості про випуск з кожної розібраної відповіді (null — проксі
+ * нічого не сказав). Невдала спроба його не викликає: збій мережі не стирає те, що вже відомо.
+ */
+class AlertsClient(
+    private val baseUrl: String = ProxyConfig.BASE_URL,
+    private val onUpdate: (suspend (AppUpdate?) -> Unit)? = null,
+) {
 
     suspend fun fetch(): AlertsSnapshot = fetchWithAttempt().first
 
@@ -100,6 +134,11 @@ class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
         fun took() = SystemClock.elapsedRealtime() - started
         try {
             val (snapshot, outcome) = request()
+            if (outcome == OUTCOME_OK) {
+                // Запам'ятати версію — приємність, а не частина рішення: її збій не має завадити будильнику.
+                runCatching { onUpdate?.invoke(snapshot.update) }
+                    .onFailure { Log.w(TAG, "Не вдалося зберегти відомості про оновлення", it) }
+            }
             snapshot to FetchAttempt(outcome, took())
         } catch (e: Exception) {
             Log.w(TAG, "Проксі недоступний", e)
@@ -132,7 +171,7 @@ class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
             }
 
             val body = connection.inputStream.bufferedReader().use { it.readText() }
-            return parseAlertsResponse(body, received) to "ok"
+            return parseAlertsResponse(body, received) to OUTCOME_OK
         } finally {
             connection.disconnect()
         }
@@ -140,6 +179,7 @@ class AlertsClient(private val baseUrl: String = ProxyConfig.BASE_URL) {
 
     private companion object {
         const val TAG = "AlertsClient"
+        const val OUTCOME_OK = "ok"
         /** FR-8: окрема спроба не довша за ~8 с, щоб за 30 с встигнути кілька. */
         const val TIMEOUT_MS = 4_000
 
@@ -158,8 +198,14 @@ private val json = Json { ignoreUnknownKeys = true }
 /**
  * Розбирає відповідь `/v1/alerts`. Незнайомий рівень вважаємо червоним: тривога з невідомим
  * рівнем — усе одно тривога. Кривий час початку — «щойно», тобто тривога рахується.
+ *
+ * [appVersionCode] — версія цього застосунку, щоб вирішити, чи вона не застаріла.
  */
-internal fun parseAlertsResponse(body: String, receivedAtElapsed: Long): AlertsSnapshot {
+internal fun parseAlertsResponse(
+    body: String,
+    receivedAtElapsed: Long,
+    appVersionCode: Int = BuildConfig.VERSION_CODE,
+): AlertsSnapshot {
     val response = json.decodeFromString<AlertsResponse>(body)
     return AlertsSnapshot(
         alerts = response.alerts?.associate { alert ->
@@ -175,6 +221,8 @@ internal fun parseAlertsResponse(body: String, receivedAtElapsed: Long): AlertsS
         ageSeconds = response.ageSeconds,
         receivedAtElapsed = receivedAtElapsed,
         confirmedAt = response.confirmedAt,
+        update = response.update,
+        outdated = response.update?.isRequiredFor(appVersionCode) == true,
     )
 }
 
@@ -186,6 +234,7 @@ private data class AlertsResponse(
     val alerts: List<RegionAlertDto>? = null,
     @SerialName("age_seconds") val ageSeconds: Long? = null,
     @SerialName("confirmed_at") val confirmedAt: String? = null,
+    val update: AppUpdate? = null,
 )
 
 @Serializable

@@ -39,7 +39,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ua.vidbiy.app.R
+import ua.vidbiy.app.BuildConfig
 import ua.vidbiy.app.data.Alarm
+import ua.vidbiy.app.data.AppUpdate
 import ua.vidbiy.app.alarm.OneShot
 import ua.vidbiy.app.data.PendingSnooze
 import ua.vidbiy.app.data.PendingWait
@@ -78,6 +80,9 @@ fun AlarmsTab(
     missingPermissions: List<Permission>,
     onOpenPermissions: () -> Unit,
     alarmsUnreadable: Boolean = false,
+    appUpdate: AppUpdate? = null,
+    dismissedUpdateCode: Int = 0,
+    onDismissUpdate: (versionCode: Int) -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
 ) {
     LazyColumn(
@@ -92,6 +97,17 @@ fun AlarmsTab(
                 addLabel = stringResource(R.string.action_new_alarm),
                 onAdd = onAdd,
             )
+        }
+        val notice = updateNotice(appUpdate, BuildConfig.VERSION_CODE, dismissedUpdateCode)
+        if (appUpdate != null && notice != UpdateNotice.NONE) {
+            item {
+                UpdateBanner(
+                    update = appUpdate,
+                    notice = notice,
+                    onDismiss = { onDismissUpdate(appUpdate.latestVersionCode) },
+                    modifier = Modifier.padding(horizontal = Dimens.ScreenPadding),
+                )
+            }
         }
         if (alarmsUnreadable) {
             item { UnreadableAlarmsBanner(modifier = Modifier.padding(horizontal = Dimens.ScreenPadding)) }

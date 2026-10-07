@@ -242,4 +242,28 @@ class WaitLoopTest {
 
         assertEquals(WaitAction.Ring(RingDecision.RING_NO_DATA), t.action)
     }
+
+    // --- Застаріла версія застосунку (docs/proxy-api.md, «Оновлення застосунку») ---
+
+    @Test
+    fun `застаріла версія на старті — дзвонимо одразу, хоч тривога й триває`() {
+        val t = tick(WaitLoopState(), answer(red(), 0).copy(outdated = true), 0)
+
+        assertEquals(WaitAction.Ring(RingDecision.RING_OUTDATED), t.action)
+    }
+
+    @Test
+    fun `версія застаріла посеред очікування — дзвонимо, не чекаючи відбою`() {
+        val t = tick(waiting(), answer(red(), 30 * second).copy(outdated = true), 30 * second)
+
+        assertEquals(WaitAction.Ring(RingDecision.RING_OUTDATED), t.action)
+    }
+
+    @Test
+    fun `застарілість видно навіть у відповіді «даних немає» — попередня відома її не перекриває`() {
+        val unknown = AlertsSnapshot(alerts = null, ageSeconds = null, receivedAtElapsed = start + 30 * second, outdated = true)
+        val t = tick(waiting(), unknown, 30 * second)
+
+        assertEquals(WaitAction.Ring(RingDecision.RING_OUTDATED), t.action)
+    }
 }

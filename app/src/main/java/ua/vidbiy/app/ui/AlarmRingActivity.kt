@@ -263,6 +263,7 @@ fun reasonTitleRes(reason: RingReason): Int? = when (reason.kind) {
     RingReason.Kind.TOO_LONG -> R.string.ring_too_long_title
     RingReason.Kind.APP_FAILURE -> R.string.ring_app_failure_title
     RingReason.Kind.LOCKED_BOOT -> R.string.ring_locked_boot_title
+    RingReason.Kind.OUTDATED -> R.string.ring_outdated_title
     RingReason.Kind.PLAIN -> null
 }
 
@@ -311,6 +312,11 @@ private fun ReasonBlock(reason: RingReason) {
             R.drawable.ic_info,
             stringResource(R.string.ring_locked_boot_title),
             stringResource(R.string.ring_locked_boot_text),
+        )
+        RingReason.Kind.OUTDATED -> Triple(
+            R.drawable.ic_info,
+            stringResource(R.string.ring_outdated_title),
+            stringResource(R.string.ring_outdated_text),
         )
         RingReason.Kind.PLAIN -> return
     }

@@ -45,6 +45,9 @@ data class RingReason(
         /** Збій у самому застосунку (служба очікування впала чи замовкла): не плутати з мережею. */
         APP_FAILURE,
 
+        /** Ця версія застосунку застаріла: тривогу не перевіряє, дзвонить у свій час. */
+        OUTDATED,
+
         /** Телефон перезавантажився й ще не розблокований: налаштувань не видно, тривогу не перевірено. */
         LOCKED_BOOT,
     }
@@ -85,5 +88,6 @@ fun ringReasonFor(
         RingReason(RingReason.Kind.TOO_LONG, placeName = placeName, level = level)
     RingDecision.RING_NO_DATA, RingDecision.RING_STALE ->
         RingReason(if (sawAlert) RingReason.Kind.STALE else RingReason.Kind.NO_CONNECTION, placeName = placeName)
+    RingDecision.RING_OUTDATED -> RingReason(RingReason.Kind.OUTDATED, placeName = placeName)
     RingDecision.KEEP_WAITING -> RingReason.Plain
 }

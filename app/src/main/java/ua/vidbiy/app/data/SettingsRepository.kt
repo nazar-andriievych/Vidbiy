@@ -131,6 +131,8 @@ class SettingsRepository(private val context: Context) {
     private val snoozeMinutesKey = intPreferencesKey("snooze_minutes")
     private val oneShotWaitForKey = stringPreferencesKey("one_shot_wait_for")
     private val oneShotPauseKey = intPreferencesKey("one_shot_pause_minutes")
+    private val appUpdateKey = stringPreferencesKey("app_update")
+    private val dismissedUpdateKey = intPreferencesKey("dismissed_update_code")
 
     /** FR-22: рівень для разового режиму, задається один раз у налаштуваннях. */
     val oneShotWaitFor: Flow<WaitFor> = context.settingsDataStore.data.map { prefs ->
@@ -254,6 +256,31 @@ class SettingsRepository(private val context: Context) {
         context.waitDataStore.edit { prefs ->
             writeSnoozes(prefs, WaitState.withoutSnooze(WaitState.decodeSnoozes(prefs[pendingSnoozesKey]), alarmId))
         }
+    }
+
+    /**
+     * Останній випуск, про який сказав проксі. Лежить у файлі очікувань, бо не йде в резервну
+     * копію: на іншому телефоні може стояти інша версія, а проксі й так скаже про випуск
+     * з першою ж відповіддю.
+     */
+    val appUpdate: Flow<AppUpdate?> = context.waitDataStore.data
+        .map { prefs -> prefs[appUpdateKey]?.let { raw -> runCatching { json.decodeFromString<AppUpdate>(raw) }.getOrNull() } }
+        .catch { emit(null) }
+
+    /** null — проксі про випуск не каже (не налаштовано): банер ховається. */
+    suspend fun setAppUpdate(update: AppUpdate?) {
+        context.waitDataStore.edit { prefs ->
+            if (update == null) prefs.remove(appUpdateKey) else prefs[appUpdateKey] = json.encodeToString(update)
+        }
+    }
+
+    /** `versionCode` випуску, банер якого закрили. Наступний випуск покаже банер знову. */
+    val dismissedUpdateCode: Flow<Int> = context.waitDataStore.data
+        .map { prefs -> prefs[dismissedUpdateKey] ?: 0 }
+        .catch { emit(0) }
+
+    suspend fun dismissUpdate(versionCode: Int) {
+        context.waitDataStore.edit { prefs -> prefs[dismissedUpdateKey] = versionCode }
     }
 
     private fun writeSnoozes(prefs: MutablePreferences, snoozes: List<PendingSnooze>) {
