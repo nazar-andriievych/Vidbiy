@@ -56,6 +56,12 @@ android {
     } else null
 
     buildTypes {
+        // Debug — окремий застосунок (ua.vidbiy.app.debug, «Відбій (debug)»): ставиться поруч
+        // із release, зі своїми даними й дозволами. Kotlin-пакет класів лишається ua.vidbiy.app,
+        // тож у adb компонент пишеться повністю: ua.vidbiy.app.debug/ua.vidbiy.app.MainActivity.
+        debug {
+            applicationIdSuffix = ".debug"
+        }
         release {
             signingConfig = releaseSigning
             optimization {

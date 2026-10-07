@@ -10,8 +10,9 @@
 нікуди не надсилається, у резервну копію не потрапляє.
 
 - У debug-збірці: «Налаштування» → внизу «Журнал рішень (debug)».
-- З ПК: `adb exec-out run-as ua.vidbiy.app cat files/decisions.jsonl`
+- З ПК: `adb exec-out run-as ua.vidbiy.app.debug cat files/decisions.jsonl` (лише debug: release не дозволяє `run-as`)
 - Logcat (лише поки свіжий): `adb logcat -s VidbiyWait VidbiyAlarm AlertsClient VidbiyLockedBoot AlarmRingService`
+  — ці теги пише й release, тож коли на телефоні обидві збірки, додай `--pid=$(adb shell pidof ua.vidbiy.app.debug)`
 
 До першого розблокування після перезавантаження журнал не пишеться (сховище недоступне);
 ці дзвінки з'являються в ньому після розблокування як `locked_ring`.
