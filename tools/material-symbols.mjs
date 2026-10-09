@@ -1,4 +1,4 @@
-// Завантажує іконки Material Symbols Rounded (Apache 2.0) і кладе їх у застосунок
+// Завантажує іконки Material Symbols Rounded (Apache 2.0, текст — app/src/main/assets/licenses) і кладе їх у застосунок
 // як vector drawable: res/drawable/ic_<name>.xml.
 //
 // Навіщо не material-icons-extended: бібліотека важить мегабайти, а нам потрібні
