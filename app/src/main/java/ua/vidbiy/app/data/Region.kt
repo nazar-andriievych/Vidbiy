@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * Довідник регіонів із assets/regions.json. Формат збігається з тим, що пише
- * tools/build-regions.mjs із таблиці UID від alerts.in.ua.
+ * tools/build-regions.mjs зі списку регіонів ukrainealarm.
  */
 @Serializable
 data class RegionsAsset(val oblasts: List<Oblast>)
@@ -69,9 +69,9 @@ val SEPARATE_CITIES: Map<String, String> = mapOf(
 )
 
 /**
- * Громади з довідника alerts.in.ua, яких немає в ukrainealarm: UID → UID, під яким ukrainealarm
- * веде цю територію. У Сумському районі дві «Миколаївські» громади, а ukrainealarm знає лише 1180;
- * 1181 з довідника прибрано (tools/build-regions.mjs), а збережені раніше вибори рахуються як 1180.
+ * Громади з попередніх версій довідника, яких немає в ukrainealarm: UID → UID, під яким ukrainealarm
+ * веде цю територію. У Сумському районі колись було дві «Миколаївські» громади, а ukrainealarm знає
+ * лише 1180; збережені раніше вибори 1181 рахуються як 1180.
  */
 val MERGED_UIDS: Map<String, String> = mapOf("1181" to "1180")
 

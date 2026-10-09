@@ -35,8 +35,8 @@ SQIDAQAB
 export const MAX_WEBHOOK_AGE_SECONDS = 5 * 60;
 
 /**
- * ID регіонів у ukrainealarm і в довіднику застосунку (з таблиці alerts.in.ua) збігаються
- * для всіх регіонів, крім АР Крим. Звірено 2026-09-24: 1532 з 1533 спільних назв.
+ * ID регіонів у ukrainealarm і в довіднику застосунку збігаються (довідник будується з їхнього
+ * /regions, tools/build-regions.mjs) для всіх регіонів, крім АР Крим.
  */
 const REGION_ID_MAP: Record<string, string> = { "9999": "29" };
 

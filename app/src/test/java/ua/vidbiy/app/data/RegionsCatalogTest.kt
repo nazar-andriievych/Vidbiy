@@ -8,7 +8,7 @@ import java.io.File
 
 /**
  * Справжній довідник з assets — інваріанти, на які спирається пошук і правила покриття.
- * Звірку з ukrainealarm робить tools/check-regions.mjs (потрібне вивантаження /regions).
+ * Довідник будується зі списку регіонів ukrainealarm (tools/build-regions.mjs).
  */
 class RegionsCatalogTest {
 
@@ -58,5 +58,24 @@ class RegionsCatalogTest {
     fun `пошук знаходить громаду разом з районом і областю`() {
         val bucha = catalog.search("Бучанська").first { it.uid == "702" }
         assertEquals(setOf("702", "75", "14"), bucha.alertUids)
+    }
+
+    @Test
+    fun `пошук не розрізняє апострофи`() {
+        listOf("Кам'янський район", "Кам’янський район", "Камʼянський район").forEach { query ->
+            assertTrue(query, catalog.search(query).any { it.uid == "42" })
+        }
+    }
+
+    @Test
+    fun `чинні назви перейменованих громад, а не ті, що в ukrainealarm`() {
+        assertTrue(catalog.search("Шептицький").any { it.uid == "832" })
+        assertTrue(catalog.search("Червоноград").isEmpty())
+    }
+
+    @Test
+    fun `окупованих районів, на які тривог не оголошують, у довіднику немає`() {
+        val uids = catalog.oblasts.flatMap { o -> listOf(o.uid) + o.raions.flatMap { r -> listOf(r.uid) + r.hromadas.map { it.uid } } }
+        assertTrue(uids.none { it == "30" || it in (1801..1804).map(Int::toString) })
     }
 }

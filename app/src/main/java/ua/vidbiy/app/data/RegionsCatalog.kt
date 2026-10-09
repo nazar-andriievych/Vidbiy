@@ -15,7 +15,7 @@ class RegionsCatalog(val oblasts: List<Oblast>) {
 
     /** Пошук по всіх рівнях одразу: людина частіше знає назву своєї громади, ніж району. */
     fun search(query: String, limit: Int = 60): List<SelectedRegion> {
-        val needle = query.trim()
+        val needle = query.trim().withPlainApostrophes()
         if (needle.isEmpty()) return emptyList()
 
         val found = mutableListOf<SelectedRegion>()
@@ -32,7 +32,13 @@ class RegionsCatalog(val oblasts: List<Oblast>) {
         return found
     }
 
-    private fun String.matches(needle: String) = contains(needle, ignoreCase = true)
+    private fun String.matches(needle: String) = withPlainApostrophes().contains(needle, ignoreCase = true)
+
+    /**
+     * У назвах ukrainealarm трапляються і ', і ’, а клавіатура телефона ставить будь-який з них
+     * (або ʼ). Для пошуку вони однакові: «Кам'янський» має знаходити «Кам’янський».
+     */
+    private fun String.withPlainApostrophes() = replace('’', '\'').replace('ʼ', '\'').replace('`', '\'')
 
     companion object {
         private const val ASSET_NAME = "regions.json"
