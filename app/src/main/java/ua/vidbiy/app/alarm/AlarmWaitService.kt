@@ -40,6 +40,7 @@ import ua.vidbiy.app.data.AlertLevel
 import ua.vidbiy.app.data.DecisionEntry
 import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.PendingWait
+import ua.vidbiy.app.data.WaitFor
 import ua.vidbiy.app.data.WaitStatus
 import ua.vidbiy.app.data.alertUids
 import ua.vidbiy.app.data.shortTitle
@@ -260,6 +261,8 @@ class AlarmWaitService : Service() {
                         pauseMinutes = alarm.pauseMinutes,
                         deadlineMillis = wait.deadlineMillis,
                         nowMillis = nowMillis,
+                        onlyYellow = alarm.waitFor == WaitFor.RED_ONLY &&
+                            region?.hasFreshYellow(snapshot.alerts, nowMillis) == true,
                     ).copy(oneShot = alarm.id == OneShot.ONE_SHOT_ID)
                     AlarmScheduler(this@AlarmWaitService).cancelDeadline(wait.alarmId)
                     AlarmRingService.startRinging(this@AlarmWaitService, alarm, reason)
@@ -488,7 +491,7 @@ class AlarmWaitService : Service() {
         private val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
         private const val REQUEST_OPEN_ALARMS = 7001
 
-        /** Через скільки без «я жива» від служби задзвонить вартовий (десять опитувань підряд пропущено). */
+        /** Через скільки без «я жива» від служби спрацює вартовий (десять опитувань підряд пропущено). */
         private const val WATCHDOG_MILLIS = 5 * 60_000L
 
         const val ACTION_START = "ua.vidbiy.app.action.START_WAITING"

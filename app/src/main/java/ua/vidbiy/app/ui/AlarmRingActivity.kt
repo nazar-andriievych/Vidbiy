@@ -93,12 +93,16 @@ class AlarmRingActivity : ComponentActivity() {
                         entries = ringing.ifEmpty { listOf(fromIntent) },
                         snoozeMinutes = snoozeMinutes,
                         // Служба відкладає й вимикає всіх разом; id потрібен лише як запасний.
+                        // RingState чистимо одразу, не чекаючи служби: інакше головний екран,
+                        // що відкриється під цим, встиг би показати дзвінок ще раз.
                         onSnooze = {
                             startService(AlarmRingService.snoozeIntent(this, alarmId))
+                            RingState.set(emptyList())
                             finish()
                         },
                         onDismiss = {
                             startService(AlarmRingService.dismissIntent(this, alarmId))
+                            RingState.set(emptyList())
                             finish()
                         },
                     )
@@ -144,6 +148,10 @@ class AlarmRingActivity : ComponentActivity() {
             putExtra(EXTRA_REASON, reasonJson)
             putExtra(EXTRA_SNOOZE_MINUTES, snoozeMinutes)
         }
+
+        /** Екран дзвінка, що вже йде (з головного екрана). Решту будильників він візьме з RingState. */
+        fun intent(context: Context, entry: RingEntry, snoozeMinutes: Int): Intent =
+            intent(context, entry.alarmId, entry.hour, entry.minute, json.encodeToString(entry.reason), snoozeMinutes)
     }
 }
 
@@ -256,7 +264,7 @@ private fun reasonTitle(reason: RingReason): String? = reasonTitleRes(reason)?.l
 @StringRes
 fun reasonTitleRes(reason: RingReason): Int? = when (reason.kind) {
     RingReason.Kind.ALL_CLEAR -> R.string.ring_all_clear_title
-    RingReason.Kind.NO_ALERT -> R.string.ring_no_alert_title
+    RingReason.Kind.NO_ALERT -> if (reason.level == AlertLevel.YELLOW) R.string.ring_no_red_title else R.string.ring_no_alert_title
     RingReason.Kind.DEADLINE -> R.string.ring_deadline_title
     RingReason.Kind.NO_CONNECTION -> R.string.ring_no_connection_title
     RingReason.Kind.STALE -> if (reason.oneShot) R.string.ring_no_data_title else R.string.ring_no_connection_title
@@ -279,8 +287,8 @@ private fun ReasonBlock(reason: RingReason) {
         )
         RingReason.Kind.NO_ALERT -> Triple(
             R.drawable.ic_notifications,
-            stringResource(R.string.ring_no_alert_title),
-            null,
+            stringResource(reasonTitleRes(reason)!!),
+            if (reason.level == AlertLevel.YELLOW) stringResource(R.string.ring_no_red_text) else null,
         )
         RingReason.Kind.DEADLINE -> Triple(
             R.drawable.ic_schedule,
@@ -347,13 +355,13 @@ private fun ReasonBlock(reason: RingReason) {
             )
         }
         val level = reason.level
-        if (level != null && (reason.kind == RingReason.Kind.DEADLINE || reason.kind == RingReason.Kind.TOO_LONG)) {
+        if (level != null && reason.kind in setOf(RingReason.Kind.DEADLINE, RingReason.Kind.TOO_LONG, RingReason.Kind.NO_ALERT)) {
             OngoingLevelChip(level)
         }
     }
 }
 
-/** «● Червона тривога триває» — для крайнього часу й тривоги понад добу. */
+/** «● Червона тривога триває» — для крайнього часу, тривоги понад добу й жовтої при «Лише червона». */
 @Composable
 private fun OngoingLevelChip(level: AlertLevel) {
     val colors = MaterialTheme.alertColors

@@ -18,13 +18,19 @@ data class RingEntry(
  * Будильники, що дзвонять просто зараз. Дзвінок один на всіх (як у звичайному годиннику):
  * якщо поки він дзвонить спрацьовує ще один будильник, він долучається сюди, а не замінює перший.
  *
- * Пише служба дзвінка, читає екран дзвінка — вони в одному процесі, тож спільного об'єкта досить.
+ * Пише служба дзвінка, читають екран дзвінка й головний екран (щоб відкрити дзвінок, що вже йде) —
+ * вони в одному процесі, тож спільного об'єкта досить.
  */
 object RingState {
     private val _entries = MutableStateFlow<List<RingEntry>>(emptyList())
     val entries: StateFlow<List<RingEntry>> = _entries.asStateFlow()
 
-    fun set(entries: List<RingEntry>) {
+    /** Тривалість відкладення поточного дзвінка — для кнопки «Відкласти на X хв». */
+    var snoozeMinutes: Int = 0
+        private set
+
+    fun set(entries: List<RingEntry>, snoozeMinutes: Int = this.snoozeMinutes) {
+        this.snoozeMinutes = snoozeMinutes
         _entries.value = entries
     }
 }

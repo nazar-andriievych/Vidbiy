@@ -1,6 +1,7 @@
 package ua.vidbiy.app.ui
 
 import android.Manifest
+import android.app.ActivityManager
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -58,11 +59,23 @@ import ua.vidbiy.app.alarm.AlarmScheduler
 import ua.vidbiy.app.ui.theme.Dimens
 
 /**
- * Чотири системні дозволи, без яких будильник може не задзвонити (NFR-2, FR-33).
+ * Системні дозволи й обмеження, через які будильник може не задзвонити (NFR-2, FR-33).
  * Перевіряємо їх щоразу, коли застосунок повертається на екран: користувач міг
  * змінити їх у системних налаштуваннях, нічого нам не сказавши.
  */
 enum class Permission(val icon: Int, val title: Int, val text: Int, val missing: Int) {
+    /**
+     * Застосунок обмежений у фоні: на Samsung — «Застосунки в глибокому сні», куди One UI кладе
+     * й сам ті, що давно не відкривали. Тоді система не пускає службу дзвінка на передній план:
+     * звук іде, а сповіщення й екрана дзвінка може не бути. Першим у списку, щоб банер назвав
+     * саме цю причину; картку на екрані «Дозволи» показуємо лише коли проблема є.
+     */
+    BACKGROUND(
+        R.drawable.ic_power_settings_new,
+        R.string.perm_background_title,
+        R.string.perm_background_text,
+        R.string.perm_background_missing,
+    ),
     NOTIFICATIONS(
         R.drawable.ic_notifications,
         R.string.perm_notifications_title,
@@ -98,6 +111,7 @@ enum class Permission(val icon: Int, val title: Int, val text: Int, val missing:
 }
 
 fun isGranted(context: Context, permission: Permission): Boolean = when (permission) {
+    Permission.BACKGROUND -> !isBackgroundRestricted(context)
     Permission.NOTIFICATIONS -> NotificationManagerCompat.from(context).areNotificationsEnabled()
     Permission.EXACT_ALARMS -> AlarmScheduler(context).canScheduleExact()
     Permission.FULL_SCREEN ->
@@ -106,6 +120,11 @@ fun isGranted(context: Context, permission: Permission): Boolean = when (permiss
     Permission.BATTERY -> context.getSystemService(PowerManager::class.java)
         ?.isIgnoringBatteryOptimizations(context.packageName) ?: true
 }
+
+/** Чи обмежила система роботу застосунку у фоні (Android 9+; раніше такого обмеження не було). */
+fun isBackgroundRestricted(context: Context): Boolean =
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+        context.getSystemService(ActivityManager::class.java)?.isBackgroundRestricted == true
 
 /** Які дозволи бракують; оновлюється щоразу, коли екран повертається на передній план. */
 @Composable
@@ -123,6 +142,8 @@ fun rememberMissingPermissions(): List<Permission> {
 private fun settingsIntent(context: Context, permission: Permission): Intent? {
     val pkg = Uri.fromParts("package", context.packageName, null)
     return when (permission) {
+        // Прямого екрана для цього немає: у «Про застосунок» → «Батарея» є «Без обмежень».
+        Permission.BACKGROUND -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
         Permission.NOTIFICATIONS -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
             .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         Permission.EXACT_ALARMS -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -135,10 +156,16 @@ private fun settingsIntent(context: Context, permission: Permission): Intent? {
         } else {
             null
         }
-        // Список застосунків в оптимізації батареї: прямий запит «дозволити» потребує
-        // окремого дозволу, який магазини застосунків дозволяють неохоче.
-        Permission.BATTERY -> Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        // Прямий системний запит «Дозволити працювати у фоні?». Google Play пускає його неохоче,
+        // але «Відбій» поширюється поза Play (FR-35). Не відкрився — загальний список нижче.
+        Permission.BATTERY -> Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg)
     }
+}
+
+/** Запасний екран, якщо [settingsIntent] не відкрився (прямого запиту виробник не підтримує). */
+private fun fallbackIntent(permission: Permission): Intent? = when (permission) {
+    Permission.BATTERY -> Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+    else -> null
 }
 
 /**
@@ -239,7 +266,8 @@ fun PermissionsScreen(onBack: () -> Unit) {
         if (needsRuntime) {
             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            settingsIntent(context, permission)?.let { runCatching { context.startActivity(it) } }
+            val opened = settingsIntent(context, permission)?.let { runCatching { context.startActivity(it) }.isSuccess } ?: false
+            if (!opened) fallbackIntent(permission)?.let { runCatching { context.startActivity(it) } }
         }
     }
 
@@ -290,6 +318,8 @@ fun PermissionsScreen(onBack: () -> Unit) {
                 FieldHint(stringResource(R.string.perm_intro))
             }
             for (permission in Permission.entries) {
+                // Глибокий сон — не дозвіл, а стан: у звичайному випадку картки немає (як у макеті).
+                if (permission == Permission.BACKGROUND && permission !in missing) continue
                 PermissionCard(permission, granted = permission !in missing, onRequest = { request(permission) })
             }
             InfoNote(stringResource(R.string.perm_samsung_note))

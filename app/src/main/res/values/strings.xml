@@ -217,6 +217,10 @@
     <string name="ring_too_long_title">Тривога триває понад добу</string>
     <string name="ring_too_long_text">Будильник більше не чекає на відбій.</string>
     <string name="ring_no_alert_title">Тривоги немає</string>
+    <string name="ring_restricted_title">Застосунок приспано</string>
+    <string name="ring_restricted_text">Samsung не дає «Відбою» стежити за тривогою у фоні — тому дзвоню, не чекаючи відбою. Зніміть обмеження в «Акумуляторі».</string>
+    <string name="ring_no_red_title">Червоної тривоги немає</string>
+    <string name="ring_no_red_text">Зараз жовта тривога, а будильник чекає лише червону.</string>
     <string name="level_red_ongoing">Червона тривога триває</string>
     <string name="level_yellow_ongoing">Жовта тривога триває</string>
 
@@ -263,6 +267,9 @@
     <string name="perm_full_screen_title">Показ на екрані блокування</string>
     <string name="perm_full_screen_text">Щоб екран дзвінка відкривався поверх блокування, а не лише як сповіщення.</string>
     <string name="perm_full_screen_missing">Немає дозволу на показ на екрані блокування.</string>
+    <string name="perm_background_title">Застосунок приспано</string>
+    <string name="perm_background_text">Samsung поклав «Відбій» у глибокий сон. Тоді будильник може дзвонити без екрана й кнопок — вимкнути його можна буде, лише відкривши «Відбій», а чекати відбою він буде із запізненням. Відкрийте «Акумулятор» і виберіть «Без обмежень».</string>
+    <string name="perm_background_missing">Застосунок приспано — дзвінок може бути без екрана.</string>
     <string name="perm_battery_title">Робота у фоні без обмежень</string>
     <string name="perm_battery_text">Щоб система не приспала застосунок, поки він чекає на відбій тривоги.</string>
     <string name="perm_battery_missing">Немає дозволу на роботу у фоні без обмежень.</string>

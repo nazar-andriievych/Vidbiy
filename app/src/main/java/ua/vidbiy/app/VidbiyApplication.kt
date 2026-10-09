@@ -23,6 +23,7 @@ import ua.vidbiy.app.alarm.Snoozes
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlarmsRepository
 import ua.vidbiy.app.data.AlertsClient
+import ua.vidbiy.app.data.DecisionEntry
 import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.LegacyMigration
 import ua.vidbiy.app.data.PlacesEditor
@@ -110,6 +111,11 @@ class VidbiyApplication : Application() {
      * Робота, якій потрібне звичайне сховище. Викликається один раз: зі старту застосунку
      * або, якщо процес стартував до розблокування, з BootReceiver після нього.
      */
+    /** FR-1a: будильник з датою проґавив свій час (телефон був вимкнений) і вимкнувся без дзвінка. */
+    suspend fun logMissedDate(alarm: Alarm) {
+        decisionLog.log(DecisionEntry(at = DecisionLog.now(), event = "missed_date", alarmId = alarm.id, note = alarm.date?.toString()))
+    }
+
     fun onUserUnlocked() {
         if (!unlockedWorkStarted.compareAndSet(false, true)) return
         applicationScope.launch {
@@ -122,7 +128,7 @@ class VidbiyApplication : Application() {
             // Перестраховка: спрацювання могли загубитися (примусова зупинка застосунку,
             // очищення даних виробником, збій після оновлення). Перезапис уже наявного
             // спрацювання нічого не ламає, тож робимо це на кожному старті.
-            alarmScheduler.scheduleAll(alarmsRepository.disableMissed())
+            alarmScheduler.scheduleAll(alarmsRepository.disableMissed(onMissed = ::logMissedDate))
             Snoozes.restore(this@VidbiyApplication, afterReset = false)
         }
         // Копія розкладу для перезавантаження без розблокування — на кожну зміну.

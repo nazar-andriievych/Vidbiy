@@ -361,7 +361,7 @@ class AlarmsViewModel(
     }
 
     fun setEnabled(alarm: Alarm, enabled: Boolean) {
-        // schedule() сам скасовує спрацювання вимкненого будильника, разом із відкладенням.
+        // schedule() скасовує спрацювання вимкненого будильника, а відкладення — Snoozes.cancel.
         if (!enabled) Snoozes.cancel(app, alarm.id)
         scheduler.schedule(alarm.copy(enabled = enabled))
         viewModelScope.launch { repository.setEnabled(alarm.id, enabled) }

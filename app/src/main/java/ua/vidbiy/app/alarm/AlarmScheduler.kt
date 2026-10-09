@@ -36,11 +36,17 @@ class AlarmScheduler(private val context: Context) {
      * Ставить будильник на його найближче спрацювання. Вимкнений — скасовує.
      * Будильник з датою, що минула, теж лише скасовує: вимкнути його в сховищі —
      * справа [AlarmsRepository.disableMissed], планувальник у сховище не пише.
+     *
+     * Скасовує лише звичайне спрацювання. Разовий будильник вимикається вже в момент дзвінка,
+     * а його відкладення, страховка автовідкладення (AlarmRingService), крайній час і «вартовий»
+     * очікування мусять пережити звичайне перепланування на старті застосунку. Їх знімають
+     * власники: [Snoozes.cancel] — коли людина вимикає, змінює чи видаляє будильник,
+     * [cancelDeadline] — коли закінчується очікування, [cancel] — коли будильник видаляють.
      */
     fun schedule(alarm: Alarm, now: LocalDateTime = LocalDateTime.now()) {
         val next = alarm.nextTriggerAt(now)
         if (!alarm.enabled || next == null) {
-            cancel(alarm.id)
+            alarmManager.cancel(firePendingIntent(alarm.id, Kind.NORMAL))
             return
         }
         setAt(alarm.id, next, Kind.NORMAL)

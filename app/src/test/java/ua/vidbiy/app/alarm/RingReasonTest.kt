@@ -29,6 +29,17 @@ class RingReasonTest {
     }
 
     @Test
+    fun `«Лише червона» при жовтій — «Тривоги немає» несе жовтий рівень`() {
+        val r = ringReasonFor(
+            RingDecision.RING_CLEAR, sawAlert = false, "Дім", level = null, allClearAtMillis = null,
+            pauseMinutes = 0, deadlineMillis = null, nowMillis = now, onlyYellow = true,
+        )
+        assertEquals(RingReason.Kind.NO_ALERT, r.kind)
+        assertEquals(AlertLevel.YELLOW, r.level)
+        assertEquals(null, reason(RingDecision.RING_CLEAR, sawAlert = false).level)
+    }
+
+    @Test
     fun `немає даних на старті — «Немає зв'язку», під час очікування — застарілі дані`() {
         assertEquals(RingReason.Kind.NO_CONNECTION, reason(RingDecision.RING_NO_DATA, sawAlert = false).kind)
         assertEquals(RingReason.Kind.NO_CONNECTION, reason(RingDecision.RING_STALE, sawAlert = false).kind)

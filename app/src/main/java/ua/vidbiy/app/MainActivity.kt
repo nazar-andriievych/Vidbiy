@@ -48,7 +48,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import ua.vidbiy.app.alarm.RingState
 import ua.vidbiy.app.ui.AlarmEditScreen
+import ua.vidbiy.app.ui.AlarmRingActivity
 import ua.vidbiy.app.ui.AlarmsTab
 import ua.vidbiy.app.ui.AlarmsViewModel
 import ua.vidbiy.app.ui.AddPlaceScreen
@@ -82,6 +84,17 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)
+    }
+
+    /**
+     * Будильник дзвонить, а людина відкрила «Відбій» з іконки: показуємо екран дзвінка, а не список.
+     * Це і єдиний шлях вимкнути дзвінок, якщо система не показала його сповіщення
+     * (Samsung «глибокий сон», немає дозволу на сповіщення) — відкрити застосунок можна завжди.
+     */
+    override fun onResume() {
+        super.onResume()
+        val ringing = RingState.entries.value
+        if (ringing.isNotEmpty()) startActivity(AlarmRingActivity.intent(this, ringing.first(), RingState.snoozeMinutes))
     }
 
     private fun handleIntent(intent: Intent?) {

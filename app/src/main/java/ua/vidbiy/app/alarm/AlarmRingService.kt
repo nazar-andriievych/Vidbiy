@@ -76,6 +76,9 @@ class AlarmRingService : Service() {
     private val ringing = LinkedHashMap<Long, RingEntry>()
     private var snoozeMinutes: Int = SettingsRepository.DEFAULT_SNOOZE_MINUTES
 
+    /** Запис «служба не на передньому плані» — один на дзвінок, а не на кожен будильник у ньому. */
+    private var fallbackLogged = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -115,7 +118,7 @@ class AlarmRingService : Service() {
         // (скажімо, відкладення, що збіглося з дзвінком) просто оновлює свій запис.
         val alreadyRinging = ringing.isNotEmpty()
         ringing[alarmId] = RingEntry(alarmId, hour, minute, reason, autoRepeats)
-        RingState.set(ringing.values.toList())
+        RingState.set(ringing.values.toList(), snoozeMinutes)
         // Будильник дзвонить знову — давнє «Пропущений будильник» уже нічого не каже.
         notificationManager()?.cancel(Notifications.missedNotificationId(alarmId))
         armAutoSnoozeBackstop(alarmId, autoRepeats)
@@ -248,14 +251,32 @@ class AlarmRingService : Service() {
             .addAction(0, getString(R.string.ring_dismiss), servicePendingIntent(ACTION_DISMISS, alarmId))
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                Notifications.ALARM_NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
-            )
-        } else {
-            startForeground(Notifications.ALARM_NOTIFICATION_ID, notification)
+        val started = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    Notifications.ALARM_NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
+                )
+            } else {
+                startForeground(Notifications.ALARM_NOTIFICATION_ID, notification)
+            }
+        }.onFailure { Log.w(TAG, "Служба дзвінка не вийшла на передній план", it) }.isSuccess
+        // Обмеженому у фоні застосунку (Samsung «глибокий сон») система мовчки відмовляє:
+        // без винятку, але й без сповіщення — звук іде, а вимкнути нічим. Тоді показуємо те саме
+        // сповіщення звичайним способом: його кнопки й повноекранний інтент працюють і так.
+        val promoted = started && (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || foregroundServiceType != 0)
+        if (!promoted) {
+            notificationManager()?.notify(Notifications.ALARM_NOTIFICATION_ID, notification)
+            if (!fallbackLogged) {
+                fallbackLogged = true
+                val app = application as VidbiyApplication
+                app.applicationScope.launch {
+                    app.decisionLog.log(
+                        DecisionEntry(at = DecisionLog.now(), event = "ring_not_foreground", alarmId = alarmId),
+                    )
+                }
+            }
         }
     }
 
@@ -390,7 +411,10 @@ class AlarmRingService : Service() {
         wakeLock = null
         ringing.clear()
         RingState.set(emptyList())
+        fallbackLogged = false
         stopForeground(STOP_FOREGROUND_REMOVE)
+        // Якщо служба так і не вийшла на передній план, сповіщення висить окремо від неї.
+        notificationManager()?.cancel(Notifications.ALARM_NOTIFICATION_ID)
         stopSelf()
     }
 

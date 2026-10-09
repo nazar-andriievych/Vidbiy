@@ -148,6 +148,14 @@ fun RegionPickerScreen(
             Surface(color = MaterialTheme.colorScheme.background) {
                 Column(Modifier.navigationBarsPadding()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                // Попередження «які будильники це зачепить» — над кнопкою, як у макеті 05-places:
+                // у кінці довгого списку громад його не видно без прокручування.
+                if (note != null) {
+                    InfoNote(
+                        text = note,
+                        modifier = Modifier.padding(start = Dimens.ScreenPadding, end = Dimens.ScreenPadding, top = 16.dp),
+                    )
+                }
                 Button(
                     onClick = { selected?.let(onConfirm) },
                     enabled = selected != null,
@@ -269,11 +277,13 @@ fun RegionPickerScreen(
                 }
             }
 
-            item {
-                InfoNote(
-                    text = note ?: stringResource(R.string.region_coverage_note),
-                    modifier = Modifier.padding(horizontal = Dimens.ScreenPadding, vertical = 16.dp),
-                )
+            if (note == null) {
+                item {
+                    InfoNote(
+                        text = stringResource(R.string.region_coverage_note),
+                        modifier = Modifier.padding(horizontal = Dimens.ScreenPadding, vertical = 16.dp),
+                    )
+                }
             }
         }
     }

@@ -25,7 +25,10 @@ data class RingReason(
         /** Звичайний будильник або відкладений дзвінок: блоку причини немає. */
         PLAIN,
 
-        /** Тривоги не було в момент будильника — дзвонить вчасно. */
+        /**
+         * Тривоги не було в момент будильника — дзвонить вчасно. З [level] = YELLOW: будильник
+         * чекає лише червону, а зараз жовта.
+         */
         NO_ALERT,
 
         /** Тривога була й закінчилася (плюс пауза). */
@@ -59,7 +62,8 @@ data class RingReason(
 
 /**
  * Причина дзвінка з рішення служби очікування. [sawAlert] — чи бачили тривогу,
- * тобто чи будильник справді чекав.
+ * тобто чи будильник справді чекав. [onlyYellow] — будильник чекає лише червону, а зараз
+ * діє жовта: «Тривоги немає» тоді неправда, на екрані буде «Червоної тривоги немає».
  */
 fun ringReasonFor(
     decision: RingDecision,
@@ -70,6 +74,7 @@ fun ringReasonFor(
     pauseMinutes: Int,
     deadlineMillis: Long?,
     nowMillis: Long,
+    onlyYellow: Boolean = false,
 ): RingReason = when (decision) {
     RingDecision.RING_CLEAR ->
         if (sawAlert) {
@@ -80,7 +85,7 @@ fun ringReasonFor(
                 pauseMinutes = pauseMinutes,
             )
         } else {
-            RingReason(RingReason.Kind.NO_ALERT, placeName = placeName)
+            RingReason(RingReason.Kind.NO_ALERT, placeName = placeName, level = AlertLevel.YELLOW.takeIf { onlyYellow })
         }
     RingDecision.RING_DEADLINE ->
         RingReason(RingReason.Kind.DEADLINE, placeName = placeName, level = level, deadlineMillis = deadlineMillis)

@@ -46,7 +46,7 @@ class BootReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
                 app.dataReady.await()
-                AlarmScheduler(context).scheduleAll(app.alarmsRepository.disableMissed())
+                AlarmScheduler(context).scheduleAll(app.alarmsRepository.disableMissed(onMissed = app::logMissedDate))
                 Snoozes.restore(context, afterReset = true)
                 restoreWaiting(context, app, intent.action)
             } finally {

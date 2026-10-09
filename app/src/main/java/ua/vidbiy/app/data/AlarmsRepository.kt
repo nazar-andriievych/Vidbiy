@@ -74,11 +74,25 @@ class AlarmsRepository(private val context: Context) {
      * сторонні застосунки), вимикається без дзвінка. Повертає список уже після цього —
      * саме його й треба ставити в розклад.
      */
-    suspend fun disableMissed(now: LocalDateTime = LocalDateTime.now()): List<Alarm> {
+    suspend fun disableMissed(
+        now: LocalDateTime = LocalDateTime.now(),
+        /** Увімкнений будильник, якого так і не почули (для журналу рішень). */
+        onMissed: suspend (Alarm) -> Unit = {},
+    ): List<Alarm> {
+        val missed = mutableListOf<Alarm>()
         edit { current ->
+            missed.clear()
             // Вимкнений користувачем будильник теж забуває минулу дату — щоб картка її не показувала.
-            current.map { if (it.date != null && it.nextTriggerAt(now) == null) it.copy(enabled = false, date = null) else it }
+            current.map {
+                if (it.date != null && it.nextTriggerAt(now) == null) {
+                    if (it.enabled) missed += it
+                    it.copy(enabled = false, date = null)
+                } else {
+                    it
+                }
+            }
         }
+        missed.forEach { onMissed(it) }
         return alarms.first()
     }
 
