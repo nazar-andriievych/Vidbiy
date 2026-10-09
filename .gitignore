@@ -28,3 +28,9 @@ keystore.properties
 
 # Security review notes stay local until the findings are fixed
 /docs/SECURITY_REVIEW_*.md
+
+# Local test-run notes and phone helper scripts
+/tools/phone.ps1
+/tools/vidbiy-notifications.ps1
+/docs/test-runs/*
+!/docs/test-runs/TEMPLATE.md
