@@ -22,13 +22,13 @@
   // Номер — versionCode з app/build.gradle.kts: MAJOR*1000000 + MINOR*1000 + PATCH (0.1.0 → 1000).
   // MIN_VERSION_CODE підіймати лише заради небезпечного бага: нижчі версії перестануть
   // чекати тривог і дзвонитимуть як звичайний будильник, доки людина не оновиться.
-  // UPDATE_URL порожній — канал поширення ще не обрано, застосунок покаже банер без кнопки.
-  // LATEST_VERSION_CODE порожній — випуску ще немає: `update: null`, застосунок нічого не показує.
+  // UPDATE_URL — сторінка завантаження (GitHub Pages); порожній — банер без кнопки.
+  // LATEST_VERSION_CODE порожній — випуску немає: `update: null`, застосунок нічого не показує.
   "vars": {
-    "LATEST_VERSION_CODE": "",
-    "LATEST_VERSION_NAME": "",
+    "LATEST_VERSION_CODE": "1000",
+    "LATEST_VERSION_NAME": "0.1.0",
     "MIN_VERSION_CODE": "0",
-    "UPDATE_URL": ""
+    "UPDATE_URL": "https://nazar-andriievych.github.io/Vidbiy/"
   }
 
   // UKRAINEALARM_TOKEN — це секрет, він тут не зберігається:
