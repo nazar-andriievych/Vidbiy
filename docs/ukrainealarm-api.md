@@ -1,8 +1,8 @@
 # ukrainealarm API — конспект
 
 Офіційний API застосунку «Повітряна тривога» (ТзОВ «Стфалкон»). Джерела:
-оферта `docs/contract.pdf`, OpenAPI `docs/swagger.json`,
-https://api.ukrainealarm.com/webhook-signature-validation.html,
+оферта й опис API (OpenAPI) — на https://api.ukrainealarm.com/ (у репозиторії їх не тримаємо: це документи
+«Стфалкон»), https://api.ukrainealarm.com/webhook-signature-validation.html,
 https://api.ukrainealarm.com/webhook-message-model.html (звірено 2026-09-24).
 
 Сторінки документації закриває бот-захист Cloudflare: `curl` отримує 403, браузер проходить.
