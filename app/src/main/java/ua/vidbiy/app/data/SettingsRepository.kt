@@ -99,6 +99,15 @@ data class WaitStatus(
     val allClearAtMillis: Long? = null,
     /** Коли задзвонить, якщо тривога не повернеться. */
     val ringAtMillis: Long? = null,
+    /**
+     * Чи бачило це очікування тривогу. Потрібне, щоб відновлене очікування (вартовий, оновлення,
+     * перезавантаження) не сприйняло відбій за «тривоги не було» й не загубило паузу (FR-10, FR-14).
+     */
+    val sawAlert: Boolean = false,
+    /** Коли служба востаннє почала опитування — вартовий так відрізняє «приспали» від «зламалася». */
+    val polledAtMillis: Long? = null,
+    /** Коли вартовий востаннє будив службу (див. [ua.vidbiy.app.alarm.watchdogAction]). */
+    val revivedAtMillis: Long? = null,
 )
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -224,6 +233,18 @@ class SettingsRepository(private val context: Context) {
     suspend fun setWaitStatus(status: WaitStatus) {
         context.waitDataStore.edit { prefs ->
             writeStatuses(prefs, WaitState.withStatus(readWaits(prefs), readStatuses(prefs), status))
+        }
+    }
+
+    /**
+     * Змінює стан очікування за одну транзакцію (служба й вартовий пишуть у нього з різних місць).
+     * Як і [setWaitStatus], не воскрешає очікування, якого вже немає.
+     */
+    suspend fun updateWaitStatus(alarmId: Long, transform: (WaitStatus) -> WaitStatus) {
+        context.waitDataStore.edit { prefs ->
+            val statuses = readStatuses(prefs)
+            val current = statuses.firstOrNull { it.alarmId == alarmId } ?: WaitStatus(alarmId = alarmId)
+            writeStatuses(prefs, WaitState.withStatus(readWaits(prefs), statuses, transform(current)))
         }
     }
 

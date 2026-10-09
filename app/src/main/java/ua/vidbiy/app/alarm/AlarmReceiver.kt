@@ -15,6 +15,7 @@ import ua.vidbiy.app.data.DecisionLog
 import ua.vidbiy.app.data.PendingWait
 import ua.vidbiy.app.data.alertUids
 import ua.vidbiy.app.data.shortTitle
+import ua.vidbiy.app.ui.isBackgroundRestricted
 import java.time.LocalDateTime
 
 /**
@@ -54,14 +55,32 @@ class AlarmReceiver : BroadcastReceiver() {
                     return@launch
                 }
                 if (isWatchdog) {
-                    // Служба не відсунула вартового: її вбила система. Очікування вже закінчене
-                    // (дзвінок, відкладення, скасування) — таймер просто запізнився, мовчимо.
+                    // Служба не відсунула вартового: її вбила або приспала система. Очікування вже
+                    // закінчене (дзвінок, відкладення, скасування) — таймер просто запізнився, мовчимо.
                     if (wait == null) return@launch
+                    val status = app.settingsRepository.currentWaitStatus(alarmId)
+                    // У «глибокому сні» будити марно: у фоні немає мережі, тож дзвонимо.
+                    val restricted = isBackgroundRestricted(context)
+                    if (!restricted && watchdogAction(status) == WatchdogAction.REVIVE) {
+                        // Samsung «глибокий сон» заморожує застосунок, і опитування стоять, а будильниковий
+                        // таймер його розморожує. Будимо очікування: воно перевірить тривогу й чекатиме
+                        // далі зі збереженого стану. Не запрацює за REVIVE_GRACE_MILLIS — наступний
+                        // вартовий уже дзвонитиме.
+                        val now = System.currentTimeMillis()
+                        app.settingsRepository.updateWaitStatus(alarmId) { it.copy(revivedAtMillis = now) }
+                        AlarmScheduler(context).scheduleWatchdog(alarmId, now + AlarmWaitService.REVIVE_GRACE_MILLIS)
+                        Log.w(TAG, "Вартовий будить очікування: будильник=$alarmId")
+                        AlarmWaitService.startWaiting(context, wait, resume = true)
+                        app.decisionLog.log(
+                            DecisionEntry(at = DecisionLog.now(), event = "restore_wait", alarmId = alarmId, note = "WATCHDOG_REVIVE"),
+                        )
+                        return@launch
+                    }
                     AlarmScheduler(context).cancelDeadline(alarmId)
                     val alarm = wait.alarm ?: live
                     val placeName = app.placesRepository.current().byId(alarm.placeId)?.name ?: alarm.region?.shortTitle
                     val reason = RingReason(
-                        kind = RingReason.Kind.APP_FAILURE,
+                        kind = if (restricted) RingReason.Kind.RESTRICTED else RingReason.Kind.APP_FAILURE,
                         placeName = placeName,
                         level = lastLevel,
                         oneShot = alarm.id == OneShot.ONE_SHOT_ID,
@@ -119,7 +138,17 @@ class AlarmReceiver : BroadcastReceiver() {
                     ),
                 )
 
-                if (action is FireAction.WaitForAllClear) {
+                if (action is FireAction.WaitForAllClear && isBackgroundRestricted(context)) {
+                    // Samsung «глибокий сон»: у фоні мережі немає, а службу дзвінка дозволено запустити
+                    // лише зараз, у вікні будильникового таймера. Чекати відбою не вийде — дзвонимо
+                    // вчасно й чесно кажемо чому (NFR-1). Банер на головному просить зняти обмеження.
+                    val placeName = app.placesRepository.current().byId(alarm.placeId)?.name ?: region?.shortTitle
+                    val reason = RingReason(RingReason.Kind.RESTRICTED, placeName, oneShot = alarm.id == OneShot.ONE_SHOT_ID)
+                    AlarmRingService.startRinging(context, alarm, reason)
+                    app.decisionLog.log(
+                        DecisionEntry(at = DecisionLog.now(), event = "ring", alarmId = alarm.id, region = region?.uid, note = "RESTRICTED"),
+                    )
+                } else if (action is FireAction.WaitForAllClear) {
                     // Перша перевірка тривоги — вже всередині служби: якщо тривоги немає,
                     // вона задзвонить одразу, а якщо є — чекатиме відбою.
                     val now = LocalDateTime.now()

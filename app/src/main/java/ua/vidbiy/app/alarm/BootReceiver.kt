@@ -88,7 +88,7 @@ class BootReceiver : BroadcastReceiver() {
         }
 
         AlarmScheduler(context).scheduleDeadline(alarm.id, restored.giveUpAtMillis())
-        AlarmWaitService.startWaiting(context, restored)
+        AlarmWaitService.startWaiting(context, restored, resume = true)
     }
 
     private companion object {

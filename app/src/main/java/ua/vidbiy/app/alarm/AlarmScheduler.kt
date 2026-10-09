@@ -100,16 +100,21 @@ class AlarmScheduler(private val context: Context) {
 
     /**
      * «Вартовий»: таймер, який служба очікування відсуває вперед при кожному опитуванні.
-     * Поки служба жива, він не встигає спрацювати. Якщо її вбила система, відсувати нікому,
-     * і за [atMillis] будильник задзвонить сам (замість мовчання до крайнього часу чи доби).
+     * Поки служба жива, він не встигає спрацювати. Якщо її вбила чи приспала система, відсувати
+     * нікому, і за [atMillis] спрацює AlarmReceiver: розбудить очікування або задзвонить
+     * (див. [watchdogAction]) — замість мовчання до крайнього часу чи доби.
      *
-     * Окремий PendingIntent з тим самим ключем (будильник + тип) — кожне виставлення замінює
-     * попереднє. Не `setAlarmClock`, щоб у рядку стану не висіло «наступний будильник».
+     * `setAlarmClock`, а не `setExactAndAllowWhileIdle`: застосунку в «глибокому сні» Samsung
+     * система доставляє лише будильникові таймери (перевірено 2026-10-09), а звичайний вартовий
+     * так і лишався в черзі. Ціна — поки будильник чекає відбою, «наступний будильник» у рядку
+     * стану показує час вартового (за кілька хвилин).
+     *
+     * Окремий PendingIntent з тим самим ключем (будильник + тип) — кожне виставлення замінює попереднє.
      */
     fun scheduleWatchdog(alarmId: Long, atMillis: Long) {
         val operation = watchdogPendingIntent(alarmId)
         if (canScheduleExact()) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, operation)
+            alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(atMillis, showAlarmsPendingIntent()), operation)
         } else {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, operation)
         }
@@ -117,6 +122,26 @@ class AlarmScheduler(private val context: Context) {
 
     fun cancelWatchdog(alarmId: Long) {
         alarmManager.cancel(watchdogPendingIntent(alarmId))
+    }
+
+    /**
+     * Запустити службу дзвінка [ringIntent] через будильниковий таймер «за секунду»: AlarmManager
+     * сам стартує її як службу переднього плану у своєму дозволеному вікні. Запасний шлях, коли
+     * Android не дав запустити дзвінок напряму (AlarmRingService.startOrDefer).
+     */
+    fun ringSoon(alarmId: Long, ringIntent: Intent) {
+        val operation = PendingIntent.getForegroundService(
+            context,
+            RING_SOON_REQUEST_BASE + alarmId.toInt(),
+            ringIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val at = System.currentTimeMillis() + 1_000L
+        if (canScheduleExact()) {
+            alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(at, showAlarmsPendingIntent()), operation)
+        } else {
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, operation)
+        }
     }
 
     fun cancel(alarmId: Long) {
@@ -141,6 +166,7 @@ class AlarmScheduler(private val context: Context) {
 
     private companion object {
         const val WATCHDOG_REQUEST_BASE = 1_000_000_000
+        const val RING_SOON_REQUEST_BASE = 1_100_000_000
     }
 
     fun cancelSnooze(alarmId: Long) {

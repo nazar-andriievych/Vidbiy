@@ -92,10 +92,20 @@ class AlarmWaitService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 val wait = intent.getStringExtra(EXTRA_WAIT)?.let(PendingWait::fromJson) ?: PendingWait(alarmId = alarmId)
-                startWaiting(wait)
+                val redelivered = flags and START_FLAG_REDELIVERY != 0
+                startWaiting(wait, resume = redelivered || intent.getBooleanExtra(EXTRA_RESUME, false))
                 // Систему змусили прибити службу, і вона віддає лише останній Intent. Інші
                 // очікування лежать у сховищі — піднімаємо й їх, інакше вони втратили б опитування.
-                if (flags and START_FLAG_REDELIVERY != 0) resumeOtherWaits(except = wait.alarmId)
+                if (redelivered) {
+                    resumeOtherWaits(except = wait.alarmId)
+                    // Без цього запису в журналі перезапуск виглядає як пауза в опитуваннях.
+                    val app = application as VidbiyApplication
+                    app.applicationScope.launch {
+                        app.decisionLog.log(
+                            DecisionEntry(at = DecisionLog.now(), event = "restore_wait", alarmId = wait.alarmId, note = "SERVICE_RESTARTED"),
+                        )
+                    }
+                }
             }
             ACTION_SNOOZE -> snooze(alarmId)
             ACTION_CANCEL -> cancelAlarm(alarmId)
@@ -107,7 +117,11 @@ class AlarmWaitService : Service() {
         return START_REDELIVER_INTENT
     }
 
-    private fun startWaiting(requested: PendingWait) {
+    /**
+     * [resume] — очікування вже йшло (вартовий, перезапуск служби, оновлення, перезавантаження):
+     * стан ([WaitStatus]) лишаємо, і цикл продовжить з нього — з бачену тривогу й паузу.
+     */
+    private fun startWaiting(requested: PendingWait, resume: Boolean) {
         val wait = requested.withKnownStart(System.currentTimeMillis())
         if (wait.alarmId == Alarm.NEW_ID) {
             stopIfIdle()
@@ -121,13 +135,17 @@ class AlarmWaitService : Service() {
         // нового очікування — не те, що тримає службу.
         refreshForeground()
         acquireWakeLock(wait)
-        app().applicationScope.launch {
+        val reset = app().applicationScope.launch {
             app().settingsRepository.setPendingWait(wait)
-            app().settingsRepository.setWaitStatus(WaitStatus(alarmId = wait.alarmId))
+            if (!resume) app().settingsRepository.setWaitStatus(WaitStatus(alarmId = wait.alarmId))
         }
 
         jobs.remove(wait.alarmId)?.cancel()
-        jobs[wait.alarmId] = scope.launch { pollUntilClear(wait) }
+        jobs[wait.alarmId] = scope.launch {
+            // Відновленому циклу потрібен стан з диска, тож читаємо його після запису очікування.
+            reset.join()
+            pollUntilClear(wait, resume)
+        }
     }
 
     private fun resumeOtherWaits(except: Long) {
@@ -135,7 +153,7 @@ class AlarmWaitService : Service() {
             for (saved in app().settingsRepository.currentPendingWaits()) {
                 if (saved.alarmId == except || saved.alarmId in jobs) continue
                 Log.i(TAG, "Відновлюємо очікування після перезапуску служби: будильник=${saved.alarmId}")
-                startWaiting(saved)
+                startWaiting(saved, resume = true)
             }
         }
     }
@@ -145,9 +163,9 @@ class AlarmWaitService : Service() {
      * Без цього необроблений виняток валив би процес, а крайній час у AlarmManager
      * без заданого крайнього часу — це доба.
      */
-    private suspend fun pollUntilClear(wait: PendingWait) {
+    private suspend fun pollUntilClear(wait: PendingWait, resume: Boolean) {
         try {
-            pollLoop(wait)
+            pollLoop(wait, resume)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -175,17 +193,21 @@ class AlarmWaitService : Service() {
         finishWait(wait.alarmId)
     }
 
-    private suspend fun pollLoop(wait: PendingWait) {
+    private suspend fun pollLoop(wait: PendingWait, resume: Boolean) {
         val app = app()
         val baseUrl = app.settingsRepository.proxyBaseUrl()
         val client = app.alertsClient()
         val startedElapsed = SystemClock.elapsedRealtime()
-        // Усе, що треба пам'ятати між опитуваннями; рішення — у waitTick (WaitLoop.kt).
-        var state = WaitLoopState()
         var previousPollElapsed: Long? = null
-        Log.i(TAG, "Чекаємо відбою: будильник=${wait.alarmId}, проксі=$baseUrl")
+        Log.i(TAG, "Чекаємо відбою: будильник=${wait.alarmId}, відновлено=$resume, проксі=$baseUrl")
 
         app.dataReady.await()
+        // Усе, що треба пам'ятати між опитуваннями; рішення — у waitTick (WaitLoop.kt).
+        var state = if (resume) {
+            resumedWaitState(app.settingsRepository.currentWaitStatus(wait.alarmId), startedElapsed, System.currentTimeMillis())
+        } else {
+            WaitLoopState()
+        }
         while (currentCoroutineContext().isActive) {
             val live = app.findAlarm(wait.alarmId)
             if (live == null) {
@@ -199,6 +221,8 @@ class AlarmWaitService : Service() {
             // і за WATCHDOG_MILLIS будильник задзвонить сам.
             AlarmScheduler(this@AlarmWaitService)
                 .scheduleWatchdog(wait.alarmId, System.currentTimeMillis() + WATCHDOG_MILLIS)
+            // Для вартового: служба жива й почала опитування (див. watchdogAction).
+            app.settingsRepository.updateWaitStatus(wait.alarmId) { it.copy(polledAtMillis = System.currentTimeMillis()) }
 
             // Налаштування — ті, з якими очікування почалося (PendingWait.alarm).
             val alarm = wait.alarm ?: live
@@ -281,6 +305,8 @@ class AlarmWaitService : Service() {
                         confirmedAtMillis = age?.let { nowMillis - it * 1000 },
                         allClearAtMillis = state.allClearAtMillis,
                         ringAtMillis = state.allClearAtMillis?.plus(alarm.pauseMinutes * 60_000L),
+                        sawAlert = state.sawAlert,
+                        polledAtMillis = nowMillis,
                     )
                     app.settingsRepository.setWaitStatus(status)
                     // Назва місця, а якщо місця немає (обрано напряму чи видалено) — коротка назва регіону.
@@ -501,16 +527,22 @@ class AlarmWaitService : Service() {
 
         private const val EXTRA_ALARM_ID = "alarm_id"
         private const val EXTRA_WAIT = "wait"
+        private const val EXTRA_RESUME = "resume"
+
+        /** Скільки вартовий після пробудження дає службі, щоб вона почала опитування. */
+        const val REVIVE_GRACE_MILLIS = 90_000L
 
         private fun formatTime(hour: Int, minute: Int): String = LocalTime.of(hour, minute).format(TIME_FORMAT)
 
         private fun formatMillis(millis: Long): String =
             Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalTime().format(TIME_FORMAT)
 
-        fun startWaiting(context: Context, wait: PendingWait) {
+        /** [resume] — очікування вже йшло й продовжується зі збереженого стану (не з нуля). */
+        fun startWaiting(context: Context, wait: PendingWait, resume: Boolean = false) {
             val intent = Intent(context, AlarmWaitService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_ALARM_ID, wait.alarmId)
+                putExtra(EXTRA_RESUME, resume)
                 // Цілим записом, разом зі знімком будильника: START_REDELIVER_INTENT віддасть його
                 // службі наново, якщо систему змусять її прибити.
                 putExtra(EXTRA_WAIT, wait.toJson())

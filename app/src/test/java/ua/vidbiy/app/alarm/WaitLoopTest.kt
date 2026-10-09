@@ -11,6 +11,7 @@ import ua.vidbiy.app.data.AlertLevel
 import ua.vidbiy.app.data.AlertsSnapshot
 import ua.vidbiy.app.data.SelectedRegion
 import ua.vidbiy.app.data.WaitFor
+import ua.vidbiy.app.data.WaitStatus
 
 /**
  * Цикл очікування по кроках, з вигаданим годинником: так перевіряються сценарії розділу Б
@@ -265,5 +266,63 @@ class WaitLoopTest {
         val t = tick(waiting(), unknown, 30 * second)
 
         assertEquals(WaitAction.Ring(RingDecision.RING_OUTDATED), t.action)
+    }
+
+    // --- Відновлене очікування: вартовий, оновлення, перезавантаження ---
+
+    @Test
+    fun `відновлене очікування пам'ятає тривогу — відбій дзвонить «Відбій», а не «Тривоги немає»`() {
+        val status = WaitStatus(alarmId = 1, level = AlertLevel.RED, sawAlert = true)
+        val state = resumedWaitState(status, nowElapsed = start, nowMillis = startMillis)
+
+        val t = tick(state, answer(clear, 0), 0)
+
+        assertTrue(state.sawAlert)
+        assertEquals(WaitAction.Ring(RingDecision.RING_CLEAR), t.action)
+        assertTrue(t.state.sawAlert)
+    }
+
+    @Test
+    fun `відновлене очікування не губить паузу після відбою`() {
+        val paused = alarm.copy(pauseMinutes = 5)
+        // Відбій був 3 хв тому: до кінця паузи лишилося 2 хв.
+        val status = WaitStatus(alarmId = 1, sawAlert = true, allClearAtMillis = startMillis - 3 * minute)
+        val state = resumedWaitState(status, nowElapsed = start, nowMillis = startMillis)
+
+        val t = tick(state, answer(clear, 0), 0, alarm = paused)
+        val end = tick(t.state, answer(clear, 2 * minute), 2 * minute, alarm = paused)
+
+        assertEquals("pause", t.logStep)
+        assertEquals(startMillis - 3 * minute, t.state.allClearAtMillis)
+        assertEquals(WaitAction.Ring(RingDecision.RING_CLEAR), end.action)
+    }
+
+    @Test
+    fun `розбуджене очікування без мережі спершу пробує 30 с, а не дзвонить одразу`() {
+        val status = WaitStatus(alarmId = 1, level = AlertLevel.RED, sawAlert = true)
+        val state = resumedWaitState(status, nowElapsed = start, nowMillis = startMillis)
+
+        val first = tick(state, failed(0), 0)
+        val afterWindow = tick(first.state, failed(31 * second), 31 * second)
+
+        assertEquals(WaitAction.Retry, first.action)
+        assertEquals(WaitAction.Ring(RingDecision.RING_NO_DATA), afterWindow.action)
+    }
+
+    @Test
+    fun `вартовий уперше будить, а якщо після пробудження служба мовчить — дзвонить`() {
+        assertEquals(WatchdogAction.REVIVE, watchdogAction(null))
+        assertEquals(WatchdogAction.REVIVE, watchdogAction(WaitStatus(alarmId = 1, polledAtMillis = startMillis)))
+        // Розбудили, і служба відтоді опитувала — це глибокий сон, будимо знову.
+        assertEquals(
+            WatchdogAction.REVIVE,
+            watchdogAction(WaitStatus(alarmId = 1, revivedAtMillis = startMillis, polledAtMillis = startMillis + second)),
+        )
+        // Розбудили, а опитування так і не почалося — служба зламана.
+        assertEquals(
+            WatchdogAction.RING,
+            watchdogAction(WaitStatus(alarmId = 1, revivedAtMillis = startMillis, polledAtMillis = startMillis - minute)),
+        )
+        assertEquals(WatchdogAction.RING, watchdogAction(WaitStatus(alarmId = 1, revivedAtMillis = startMillis)))
     }
 }

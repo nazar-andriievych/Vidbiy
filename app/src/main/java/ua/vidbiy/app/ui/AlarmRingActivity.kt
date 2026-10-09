@@ -272,6 +272,7 @@ fun reasonTitleRes(reason: RingReason): Int? = when (reason.kind) {
     RingReason.Kind.APP_FAILURE -> R.string.ring_app_failure_title
     RingReason.Kind.LOCKED_BOOT -> R.string.ring_locked_boot_title
     RingReason.Kind.OUTDATED -> R.string.ring_outdated_title
+    RingReason.Kind.RESTRICTED -> R.string.ring_restricted_title
     RingReason.Kind.PLAIN -> null
 }
 
@@ -325,6 +326,11 @@ private fun ReasonBlock(reason: RingReason) {
             R.drawable.ic_info,
             stringResource(R.string.ring_outdated_title),
             stringResource(R.string.ring_outdated_text),
+        )
+        RingReason.Kind.RESTRICTED -> Triple(
+            R.drawable.ic_power_settings_new,
+            stringResource(R.string.ring_restricted_title),
+            stringResource(R.string.ring_restricted_text),
         )
         RingReason.Kind.PLAIN -> return
     }

@@ -459,7 +459,8 @@ class AlarmRingService : Service() {
             val app = context.applicationContext as VidbiyApplication
             val snooze = app.settingsRepository.snoozeMinutes.first()
 
-            context.startForegroundService(
+            startOrDefer(
+                context,
                 startIntent(context, alarm.id, alarm.hour, alarm.minute, alarm.vibrate, alarm.ringtoneUri, reason, snooze, autoRepeats),
             )
             // Дзвінок і очікування відбою одного будильника взаємно виключні. Очікування зупиняємо лише тепер,
@@ -482,9 +483,34 @@ class AlarmRingService : Service() {
                 fire.kind == LockedFire.Kind.SNOOZE || !fire.respectAlerts -> RingReason.Plain
                 else -> RingReason(RingReason.Kind.LOCKED_BOOT)
             }.copy(oneShot = oneShot)
-            context.startForegroundService(
+            startOrDefer(
+                context,
                 startIntent(context, fire.alarmId, fire.hour, fire.minute, fire.vibrate, null, reason, snoozeMinutes, fire.autoRepeats),
             )
+        }
+
+        /**
+         * Запускає службу дзвінка. Android дозволяє це з фону лише в особливих випадках (зокрема
+         * ~10 с після будильникового таймера); служба очікування, яку система перестала вважати
+         * службою переднього плану (Samsung «глибокий сон»), отримує ForegroundServiceStartNotAllowedException —
+         * і будильник мовчав би. Тоді ставимо будильниковий таймер на «зараз»: він запускає ту саму
+         * службу вже у своєму дозволеному вікні.
+         */
+        private fun startOrDefer(context: Context, intent: Intent) {
+            val failure = runCatching { context.startForegroundService(intent) }.exceptionOrNull() ?: return
+            Log.w(TAG, "Службу дзвінка не дали запустити — дзвонимо через будильниковий таймер", failure)
+            AlarmScheduler(context).ringSoon(intent.getLongExtra(EXTRA_ALARM_ID, Alarm.NEW_ID), intent)
+            val app = context.applicationContext as VidbiyApplication
+            app.applicationScope.launch {
+                app.decisionLog.log(
+                    DecisionEntry(
+                        at = DecisionLog.now(),
+                        event = "ring_deferred",
+                        alarmId = intent.getLongExtra(EXTRA_ALARM_ID, Alarm.NEW_ID),
+                        note = failure.javaClass.simpleName,
+                    ),
+                )
+            }
         }
 
         private fun startIntent(

@@ -2,6 +2,7 @@ package ua.vidbiy.app.alarm
 
 import ua.vidbiy.app.data.Alarm
 import ua.vidbiy.app.data.AlertsSnapshot
+import ua.vidbiy.app.data.WaitStatus
 
 /** NFR-3 дозволяє до 2 хв затримки після відбою, тож опитування раз на 30 с дає запас. */
 const val POLL_INTERVAL_MILLIS = 30_000L
@@ -23,7 +24,48 @@ data class WaitLoopState(
     val sawAlert: Boolean = false,
     val allClearAtElapsed: Long? = null,
     val allClearAtMillis: Long? = null,
+    /**
+     * Очікування відновлене (вартовий, оновлення, перезавантаження), а не почате щойно.
+     * Тоді на старті теж даємо мережі [STARTUP_WINDOW_MILLIS]: телефон, який щойно розбудили
+     * з глибокого сну, перші секунди часто без мережі — це не привід дзвонити.
+     */
+    val resumed: Boolean = false,
 )
+
+/**
+ * Стан для відновленого очікування з того, що служба встигла записати ([WaitStatus]).
+ * Пауза після відбою відновлюється за годинником: монотонний лічильник після
+ * перезавантаження починається з нуля.
+ */
+fun resumedWaitState(status: WaitStatus?, nowElapsed: Long, nowMillis: Long): WaitLoopState {
+    val clearAt = status?.allClearAtMillis
+    return WaitLoopState(
+        sawAlert = status != null && (status.sawAlert || status.level != null || clearAt != null),
+        allClearAtElapsed = clearAt?.let { nowElapsed - (nowMillis - it).coerceAtLeast(0) },
+        allClearAtMillis = clearAt,
+        resumed = true,
+    )
+}
+
+/** Що робить вартовий, коли служба очікування давно не відсувала його. */
+enum class WatchdogAction {
+    /** Службу, ймовірно, приспала система (Samsung «глибокий сон»): розбудити й чекати далі. */
+    REVIVE,
+
+    /** Службу вже будили, а вона так і не почала опитування: зламалася — дзвонити (NFR-1). */
+    RING,
+}
+
+/**
+ * Вартовий: служба мовчить. Уперше — будимо її (у глибокому сні Samsung заморожує застосунок,
+ * і лише будильникові таймери його розморожують). Якщо після попереднього пробудження служба
+ * так і не почала опитування — дзвонимо.
+ */
+fun watchdogAction(status: WaitStatus?): WatchdogAction {
+    val revivedAt = status?.revivedAtMillis ?: return WatchdogAction.REVIVE
+    val polledAt = status.polledAtMillis ?: return WatchdogAction.RING
+    return if (polledAt > revivedAt) WatchdogAction.REVIVE else WatchdogAction.RING
+}
 
 /** Що робити після одного опитування. */
 sealed interface WaitAction {
@@ -86,7 +128,7 @@ fun waitTick(
 
     // FR-8: на старті до 30 с даємо мережі шанс, перш ніж дзвонити через брак даних.
     val noFreshData = decision == RingDecision.RING_NO_DATA || decision == RingDecision.RING_STALE
-    if (noFreshData && !state.sawAlert && nowElapsed - startedElapsed < STARTUP_WINDOW_MILLIS) {
+    if (noFreshData && (!state.sawAlert || state.resumed) && nowElapsed - startedElapsed < STARTUP_WINDOW_MILLIS) {
         return WaitTick(withSnapshot, snapshot, decision, WaitAction.Retry)
     }
 
