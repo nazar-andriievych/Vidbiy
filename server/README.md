@@ -67,11 +67,34 @@ npm run typecheck
 
 Одноразово: `npx wrangler login`. Адреса: `https://vidbiy-proxy.nazar-dev.workers.dev`
 
+### Службовий пароль (`/stats`, `/log`, `/mock`)
+
+Ці маршрути відповідають лише з заголовком `Authorization: Bearer <пароль>` (`src/admin.ts`); без нього —
+404, ніби їх немає. Локальний `wrangler dev` на `127.0.0.1` / `localhost` пускає без пароля.
+
+Пароль живе у двох місцях: секретом у Cloudflare (прочитати його звідти неможливо) і в менеджері паролів.
+Задати чи змінити — з власного терміналу, щоб він не потрапив ні в історію команд, ні в чат:
+
+```powershell
+npx wrangler secret put ADMIN_TOKEN    # спитає пароль і відправить прямо в Cloudflare
+```
+
+Користуватися — на одну сесію терміналу (так само читають `tools/check-region.mjs` і приклади нижче):
+
+```powershell
+$s = Read-Host "admin token" -AsSecureString
+$env:VIDBIY_ADMIN_TOKEN = [System.Net.NetworkCredential]::new('', $s).Password
+# ... curl.exe / node tools/check-region.mjs ...
+Remove-Item Env:VIDBIY_ADMIN_TOKEN; Remove-Variable s
+```
+
+Загубили — задати новий тією ж командою. Застосунок цим паролем не користується, телефони нічого не помітять.
+
 ### Крок 1. Сухий прогін: ключа немає, назовні нічого не йде
 
 ```powershell
 npx wrangler deploy --var FAKE_UPSTREAM:1
-curl.exe -A "vidbiy-dev/1" https://vidbiy-proxy.nazar-dev.workers.dev/stats
+curl.exe -A "vidbiy-dev/1" -H "Authorization: Bearer $env:VIDBIY_ADMIN_TOKEN" https://vidbiy-proxy.nazar-dev.workers.dev/stats
 ```
 
 Запити до ukrainealarm лише рахуються (`upstream.recent`). Очікувано: 1 `alerts` на хвилину. Поки ввімкнений
@@ -105,7 +128,7 @@ Remove-Item Env:UA_TOKEN; Remove-Variable s
 
 ```bash
 npx wrangler tail                 # живі запити до воркера
-curl.exe -A "vidbiy-dev/1" https://vidbiy-proxy.nazar-dev.workers.dev/stats
+curl.exe -A "vidbiy-dev/1" -H "Authorization: Bearer $env:VIDBIY_ADMIN_TOKEN" https://vidbiy-proxy.nazar-dev.workers.dev/stats
 ```
 
 У `wrangler tail` мають з'являтися `POST /webhook`. Якщо їх немає зовсім, а подія

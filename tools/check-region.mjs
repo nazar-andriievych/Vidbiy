@@ -9,7 +9,7 @@
  * Бере довідник app/src/main/assets/regions.json, будує ланцюжок «громада → район → область»
  * (як SelectedRegion.coveringUids у застосунку), питає проксі `/v1/alerts`
  * і друкує рішення для «Будь-яка» та «Лише червона», а потім події сервера по цих регіонах
- * за останні години (`/log`). Логіка рішення повторює RingDecision.kt: якщо вони розійдуться,
+ * за останні години (`/log`, потрібен службовий пароль у $env:VIDBIY_ADMIN_TOKEN — server/README.md). Логіка рішення повторює RingDecision.kt: якщо вони розійдуться,
  * вірити треба застосунку.
  */
 import { readFileSync } from "node:fs";
@@ -68,9 +68,14 @@ if (matches.length > 1) {
 const region = matches[0];
 const titleOf = (uid) => entries.find((e) => e.uid === uid)?.title ?? `?${uid}`;
 
+// Службовий пароль для /log (server/README.md, «Службовий пароль»). Лише зі змінної середовища.
+const ADMIN_TOKEN = process.env.VIDBIY_ADMIN_TOKEN;
+
 async function get(path) {
   const started = Date.now();
-  const response = await fetch(`${proxy}${path}`, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" } });
+  const headers = { "User-Agent": USER_AGENT, Accept: "application/json" };
+  if (ADMIN_TOKEN) headers.Authorization = `Bearer ${ADMIN_TOKEN}`;
+  const response = await fetch(`${proxy}${path}`, { headers });
   if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
   return { body: await response.json(), receivedAt: Date.now(), tookMs: Date.now() - started };
 }
@@ -132,5 +137,6 @@ try {
   console.log(unique.length ? `Події на сервері за ${HOURS} год (час київський):` : `Змін по цих регіонах за ${HOURS} год не було.`);
   for (const [at, text] of unique.slice(-30)) console.log(`  ${local(at)}  ${text}`);
 } catch (error) {
-  console.warn(`(/log недоступний: ${error.message})`);
+  const hint = ADMIN_TOKEN ? "" : " — потрібен $env:VIDBIY_ADMIN_TOKEN, див. server/README.md";
+  console.warn(`(/log недоступний: ${error.message}${hint})`);
 }

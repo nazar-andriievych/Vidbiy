@@ -16,7 +16,8 @@ ukrainealarm ──вебхук на кожну зміну───► POST /web
 ```
 
 Версію має лише маршрут, яким користується телефон. Службові маршрути (`/webhook`, `/stats`, `/log`)
-бачимо тільки ми й ukrainealarm, тож вони без версії.
+бачимо тільки ми й ukrainealarm, тож вони без версії. `/stats`, `/log` і `/mock` вимагають службового
+пароля (`Authorization: Bearer …`, див. `server/README.md`); без нього — 404.
 
 ## `GET /v1/alerts`
 

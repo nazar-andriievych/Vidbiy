@@ -1,3 +1,4 @@
+import { isAdmin } from "./admin";
 import { isMockScenario } from "./mock";
 import { importPublicKey, parseWebhook, verifyWebhook, WEBHOOK_PUBLIC_KEY_PEM } from "./ukrainealarm";
 import type { AlertsHub } from "./hub";
@@ -9,6 +10,11 @@ export { AlertsHub } from "./hub";
 export interface Env extends UpdateVars {
   /** Секрет: `wrangler secret put UKRAINEALARM_TOKEN`. Потрібен лише для початкового знімка. */
   UKRAINEALARM_TOKEN?: string;
+  /**
+   * Секрет: `wrangler secret put ADMIN_TOKEN`. Пароль до `/stats`, `/log` і `/mock` (див. `admin.ts`).
+   * Не заданий — у хмарі ці маршрути закриті.
+   */
+  ADMIN_TOKEN?: string;
   /** `"1"` вмикає підробку стану тривог і маршрут `/mock`. Лише для розробки. */
   MOCK?: string;
   /**
@@ -35,7 +41,8 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/mock" && mockEnabled(env)) {
-      return handleMock(url, env);
+      // Навіть з MOCK=1 «оголосити тривогу» може лише той, хто знає пароль.
+      return isAdmin(request, env.ADMIN_TOKEN) ? handleMock(url, env) : json({ error: "not_found" }, 404);
     }
 
     if (url.pathname === "/webhook") {
@@ -51,9 +58,12 @@ export default {
     switch (url.pathname) {
       case "/v1/alerts":
         return json(withUpdate(await getAlerts(env), env));
+      // 404, а не 401: без пароля не підказуємо, що маршрут існує.
       case "/stats":
+        if (!isAdmin(request, env.ADMIN_TOKEN)) return json({ error: "not_found" }, 404);
         return json(await hub(env).stats());
       case "/log":
+        if (!isAdmin(request, env.ADMIN_TOKEN)) return json({ error: "not_found" }, 404);
         return json(await hub(env).log(logHours(url), url.searchParams.get("region") ?? undefined));
       case "/health":
         return json({
