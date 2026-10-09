@@ -41,13 +41,27 @@ SHA-256 у виводі має збігатися з відбитком вище
 - Позначити коміт випуску тегом: `git tag v0.1.0` — щоб за версією з телефона знайти код.
 - Release не ставиться поверх debug-збірки (інший підпис): debug спершу видалити.
 
+## Випуск на GitHub
+
+Сторінка завантаження — `site/` (GitHub Pages, https://nazar-andriievych.github.io/Vidbiy/; публікує
+`.github/workflows/pages.yml` при кожній зміні `site/`). Кнопка на ній веде на
+`releases/latest/download/vidbiy.apk`, тож файл у випуску завжди має називатися **`vidbiy.apk`**:
+
+```
+Copy-Item app\build\outputs\apk\release\app-release.apk app\build\outputs\apk\release\vidbiy.apk
+git push origin v0.1.0
+gh release create v0.1.0 app\build\outputs\apk\release\vidbiy.apk --title "0.1.0" --notes "Що змінилося — людською мовою"
+```
+
+Після цього перевірити, що кнопка на сторінці завантажує нову версію.
+
 ## Після випуску: сказати застосункам
 
 Застосунок дізнається про нову версію від проксі (`docs/proxy-api.md`, «Оновлення застосунку»).
 Коли APK уже лежить там, звідки його завантажують:
 
 1. У `server/wrangler.jsonc` → `vars`: `LATEST_VERSION_NAME` — `appVersion` з `app/build.gradle.kts`,
-   `LATEST_VERSION_CODE` — обчислений з неї `versionCode`; `UPDATE_URL` — сторінка завантаження (лише `https://`).
+   `LATEST_VERSION_CODE` — обчислений з неї `versionCode`; `UPDATE_URL` — сторінка завантаження `https://nazar-andriievych.github.io/Vidbiy/` (лише `https://`).
 2. `MIN_VERSION_CODE` — **лише** якщо в старих версіях небезпечний баг (будильник може не задзвонити
    або задзвонити під час тривоги). Нижчі версії одразу перестануть чекати тривог і дзвонитимуть
    у свій час, доки людину не оновлять.

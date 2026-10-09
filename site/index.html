@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Відбій — будильник, що чекає відбою тривоги</title>
+<meta name="description" content="Android-будильник, який не дзвонить, поки у вашому регіоні триває повітряна тривога, і дзвонить після відбою. Безкоштовно, без реклами й реєстрації.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F7F5F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101318" media="(prefers-color-scheme: dark)">
+<meta property="og:title" content="Відбій — будильник, що чекає відбою тривоги">
+<meta property="og:description" content="Не дзвонить, поки у вашому регіоні триває повітряна тривога, і дзвонить після відбою.">
+<meta property="og:image" content="https://nazar-andriievych.github.io/Vidbiy/assets/og.png">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<style>
+  @font-face { font-family: Onest; src: url(assets/onest_regular.ttf) format("truetype"); font-weight: 400; font-display: swap; }
+  @font-face { font-family: Onest; src: url(assets/onest_semibold.ttf) format("truetype"); font-weight: 600; font-display: swap; }
+
+  /* Токени — з теми застосунку (app/src/main/java/ua/vidbiy/app/ui/theme/Color.kt) */
+  :root {
+    --bg: #F7F5F0; --s1: #EFECE5; --s2: #E6E2DA; --text: #1B1C1F; --text2: #50525A; --outline: #D3CFC5;
+    --primary: #35598F; --on-primary: #FFFFFF; --pc: #D8E3F7; --on-pc: #0F2A4E;
+    --red: #C23A2E; --yellow: #A67C00; --yc: #FBEAB0; --on-yc: #4C3900;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101318; --s1: #1A1E25; --s2: #232830; --text: #E5E3DE; --text2: #AAADB4; --outline: #2C323B;
+      --primary: #A9C6F3; --on-primary: #0D2A4F; --pc: #284470; --on-pc: #D8E3F7;
+      --red: #FF8A7E; --yellow: #EFC845; --yc: #433500; --on-yc: #F8DE86;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 400 17px/1.55 Onest, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  a { color: var(--primary); }
+  main, footer { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+  h1, h2, h3 { font-weight: 600; line-height: 1.2; margin: 0; }
+  h2 { font-size: 28px; margin: 64px 0 20px; }
+  h3 { font-size: 19px; margin-bottom: 6px; }
+  p { margin: 0 0 12px; }
+  .muted { color: var(--text2); }
+  .small { font-size: 15px; }
+
+  /* Перший екран */
+  .hero { padding: 56px 0 8px; text-align: center; }
+  .hero img { width: 112px; height: 112px; }
+  .hero h1 { font-size: 48px; margin: 20px 0 12px; }
+  .hero .lead { font-size: 21px; max-width: 620px; margin: 0 auto 28px; }
+  .button {
+    display: inline-flex; align-items: center; gap: 10px; padding: 16px 28px; border-radius: 999px;
+    background: var(--primary); color: var(--on-primary); font-weight: 600; font-size: 18px; text-decoration: none;
+  }
+  .button:hover { filter: brightness(1.08); }
+  .button svg { width: 22px; height: 22px; }
+  .hero .meta { margin-top: 14px; }
+
+  /* Картки */
+  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
+  .cards.pairs { grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); }
+  .card { background: var(--s1); border-radius: 24px; padding: 22px 22px 18px; }
+  .card p:last-child { margin-bottom: 0; }
+  .step-num {
+    display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+    background: var(--pc); color: var(--on-pc); font-weight: 600; margin-bottom: 12px;
+  }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: 1px; }
+  .dot.red { background: var(--red); }
+  .dot.yellow { background: var(--yellow); }
+
+  .note { background: var(--yc); color: var(--on-yc); border-radius: 24px; padding: 20px 22px; margin-top: 14px; }
+  .note p:last-child { margin-bottom: 0; }
+
+  /* Скріншоти */
+  .shots { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; }
+  .shots figure { margin: 0; flex: 0 0 auto; scroll-snap-align: start; }
+  .shots img { display: block; width: 240px; height: auto; border-radius: 28px; border: 1px solid var(--outline); }
+  .shots figcaption { font-size: 15px; color: var(--text2); margin-top: 8px; max-width: 240px; }
+
+  /* Інструкції */
+  ol.steps { margin: 0; padding-left: 22px; }
+  ol.steps li { margin-bottom: 10px; padding-left: 4px; }
+  .path { font-weight: 600; }
+  code, .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 14px; }
+  .fingerprint { display: block; background: var(--s2); border-radius: 14px; padding: 12px 14px; word-break: break-all; margin: 8px 0 12px; }
+
+  details { background: var(--s1); border-radius: 20px; padding: 16px 22px; margin-bottom: 10px; }
+  details summary { cursor: pointer; font-weight: 600; }
+  details[open] summary { margin-bottom: 10px; }
+
+  footer { margin-top: 72px; padding-top: 24px; padding-bottom: 40px; border-top: 1px solid var(--outline); }
+
+  @media (max-width: 520px) {
+    body { font-size: 16px; }
+    .hero { padding-top: 36px; }
+    .hero h1 { font-size: 38px; }
+    .hero .lead { font-size: 18px; }
+    h2 { font-size: 24px; margin-top: 48px; }
+    .shots img { width: 200px; }
+    .shots figcaption { max-width: 200px; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<section class="hero">
+  <img src="assets/logo.svg" alt="" width="112" height="112">
+  <h1>Відбій</h1>
+  <p class="lead">Будильник, який не дзвонить, поки у вашому регіоні триває повітряна тривога, і&nbsp;дзвонить після відбою.</p>
+  <a class="button" href="https://github.com/nazar-andriievych/Vidbiy/releases/latest/download/vidbiy.apk">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+    Завантажити APK
+  </a>
+  <p class="meta muted small"><span id="release-info">Остання версія</span> · Android 8.0 і новіші · безкоштовно, без реклами й реєстрації<br>
+    <a href="https://github.com/nazar-andriievych/Vidbiy/releases">Усі версії й список змін</a></p>
+</section>
+
+<h2>Як це працює</h2>
+<div class="cards">
+  <div class="card">
+    <div class="step-num">1</div>
+    <h3>Будильник і регіон</h3>
+    <p class="muted">Ставите час, дні тижня й регіон: громаду, район або область. Регіони можна зберегти в «Моїх місцях» — «Дім», «Дача».</p>
+  </div>
+  <div class="card">
+    <div class="step-num">2</div>
+    <h3>Тривоги немає — дзвонить</h3>
+    <p class="muted">У час будильника застосунок перевіряє тривогу. Якщо її немає, будильник дзвонить як звичайний.</p>
+  </div>
+  <div class="card">
+    <div class="step-num">3</div>
+    <h3>Тривога — чекає відбою</h3>
+    <p class="muted">Якщо тривога є, будильник мовчить і дзвонить після відбою. Можна додати паузу після відбою й крайній час, коли дзвонити в будь-якому разі.</p>
+  </div>
+</div>
+
+<div class="note">
+  <p><strong>Сумнів — дзвонить.</strong> Немає інтернету, сервіс не відповідає чи дані старші за 3 хвилини — будильник дзвонить, а на екрані пише чому. Будильник, що задзвонив дарма, кращий за той, що не задзвонив.</p>
+</div>
+
+<h2>Що вміє</h2>
+<div class="cards pairs">
+  <div class="card">
+    <h3><span class="dot red"></span> <span class="dot yellow"></span> Рівень тривоги</h3>
+    <p class="muted">Для кожного будильника: чекати на будь-яку тривогу чи лише на червону (ракетну) — жовту (дронову) тоді не враховує.</p>
+  </div>
+  <div class="card">
+    <h3>Розбуди після відбою</h3>
+    <p class="muted">Разовий режим: одна кнопка на головному екрані — і застосунок розбудить вас, щойно скінчиться тривога, що триває зараз.</p>
+  </div>
+  <div class="card">
+    <h3>Поки чекає</h3>
+    <p class="muted">У сповіщенні видно рівень, причину й час оновлення. Можна попросити задзвонити через кілька хвилин або не дзвонити сьогодні.</p>
+  </div>
+  <div class="card">
+    <h3>Ваш регіон, а не сусідній</h3>
+    <p class="muted">Враховує тривоги у вашій громаді, її районі та області. Тривоги в сусідніх громадах будильник не затримують.</p>
+  </div>
+</div>
+
+<h2>Як виглядає</h2>
+<div class="shots">
+  <figure>
+    <picture>
+      <source srcset="assets/screens/01-alarms--list--dark.png" media="(prefers-color-scheme: dark)">
+      <img src="assets/screens/01-alarms--list--light.png" alt="Список будильників з регіонами й рівнями тривоги" width="390" height="844" loading="lazy">
+    </picture>
+    <figcaption>Будильники з регіоном, рівнем і паузою після відбою</figcaption>
+  </figure>
+  <figure>
+    <picture>
+      <source srcset="assets/screens/09-one-shot--3-main-active-banner--dark.png" media="(prefers-color-scheme: dark)">
+      <img src="assets/screens/09-one-shot--3-main-active-banner--light.png" alt="Банер «Розбуджу після відбою» під час жовтої тривоги" width="390" height="844" loading="lazy">
+    </picture>
+    <figcaption>«Розбуди після відбою» під час тривоги</figcaption>
+  </figure>
+  <figure>
+    <picture>
+      <source srcset="assets/screens/12-ring--all-clear--dark.png" media="(prefers-color-scheme: dark)">
+      <img src="assets/screens/12-ring--all-clear--light.png" alt="Екран дзвінка з причиною «Відбій тривоги»" width="390" height="844" loading="lazy">
+    </picture>
+    <figcaption>Дзвінок завжди пояснює, чому дзвонить</figcaption>
+  </figure>
+</div>
+<p class="muted small">Макети інтерфейсу; у застосунку окремі деталі можуть відрізнятися.</p>
+
+<h2>Встановлення</h2>
+<p>«Відбою» немає в Google Play, тому APK встановлюється вручну. Це хвилина.</p>
+<ol class="steps">
+  <li>Натисніть «Завантажити APK» на телефоні.</li>
+  <li>Відкрийте завантажений файл. Android попросить дозволити встановлення з браузера чи «Файлів» — дозвольте для цього застосунку.</li>
+  <li>Якщо Google Play Захист попередить про невідомого розробника, це через те, що застосунку немає в Google Play. Розгорніть подробиці в попередженні й виберіть «Усе одно встановити».</li>
+  <li>Відкрийте «Відбій» → <span class="path">Налаштування → Дозволи</span> й увімкніть усе, що там є: сповіщення, точні будильники, показ на екрані блокування, роботу у фоні без обмежень.</li>
+</ol>
+
+<div class="note">
+  <p><strong>Samsung.</strong> One UI сам присипляє застосунки, які давно не відкривали, — тоді будильник не зможе перевірити тривогу й дзвонитиме у свій час з написом «Застосунок приспано».</p>
+  <p>Щоб цього не було, у налаштуваннях телефона відкрийте <span class="path">Акумулятор → Обмеження використання у фоні</span>, додайте «Відбій» до застосунків, які ніколи не присипляються, і переконайтеся, що його немає серед застосунків у глибокому сні. Назви пунктів трохи відрізняються в різних версіях One UI; на екрані «Дозволи» в застосунку є кнопка, що відкриває потрібне місце.</p>
+</div>
+
+<h2>Оновлення</h2>
+<p>Застосунок сам скаже про нову версію банером на головному екрані з кнопкою «Завантажити». Новий APK встановлюється поверх старого — будильники, місця й налаштування лишаються.</p>
+<details>
+  <summary>Як перевірити, що APK справжній</summary>
+  <p>Усі версії підписані одним ключем. Android і так не встановить оновлення з іншим підписом, але перший APK можна перевірити вручну. Відбиток сертифіката (SHA-256):</p>
+  <code class="fingerprint">75:58:AD:63:74:C2:52:1F:F3:EF:34:DA:4B:49:33:50:D8:9C:CB:EA:63:E4:01:FC:DE:4D:CF:E2:6B:22:7E:EA</code>
+  <p class="small muted">На комп'ютері з Android SDK: <code>apksigner verify --print-certs vidbiy.apk</code> — рядок «SHA-256 digest» має збігтися (без двокрапок).</p>
+</details>
+
+<h2>Приватність</h2>
+<div class="cards">
+  <div class="card">
+    <h3>Нічого не збирає</h3>
+    <p class="muted">Без реєстрації, геолокації, реклами й аналітики.</p>
+  </div>
+  <div class="card">
+    <h3>Регіон лишається на телефоні</h3>
+    <p class="muted">Сервер віддає стан тривог одразу для всієї України, а телефон сам вибирає ваш регіон. Сервер не знає ні регіону, ні будильників.</p>
+  </div>
+  <div class="card">
+    <h3>Резервна копія — ваша</h3>
+    <p class="muted">Будильники й місця потрапляють лише в стандартну резервну копію Android у вашому Google-акаунті.</p>
+  </div>
+</div>
+
+<h2>Важливо</h2>
+<details open>
+  <summary>«Відбій» не попереджає про тривогу</summary>
+  <p>Його завдання — дати поспати, поки триває тривога, а не розбудити, коли вона почалася. Щоб дізнаватися про тривоги, тримайте офіційний застосунок оповіщення й ухвалюйте рішення про укриття самі.</p>
+</details>
+<details>
+  <summary>Звідки дані</summary>
+  <p>З офіційного API застосунку «Повітряна тривога» (<a href="https://api.ukrainealarm.com/">api.ukrainealarm.com</a>) через наш сервер. Враховуються лише повітряні тривоги. «Відбій» — незалежний некомерційний проєкт і не пов'язаний з розробниками «Повітряної тривоги».</p>
+</details>
+<details>
+  <summary>Тривога триває понад добу</summary>
+  <p>Таку тривогу будильник не враховує, інакше в регіонах з постійною тривогою він не дзвонив би ніколи. Він дзвонить у свій час, як звичайний.</p>
+</details>
+<details>
+  <summary>Телефон перезавантажився вночі</summary>
+  <p>До першого розблокування застосунок не бачить ваших налаштувань (Android шифрує їх до введення PIN). Будильник однаково задзвонить у свій час, але без перевірки тривоги — з написом «Телефон перезавантажився».</p>
+</details>
+
+</main>
+
+<footer class="small muted">
+  <p>«Відбій» — некомерційний проєкт. Код — на <a href="https://github.com/nazar-andriievych/Vidbiy">GitHub</a>.</p>
+  <p>Шрифт <a href="https://github.com/googlefonts/onest">Onest</a> — за ліцензією <a href="assets/OFL.txt">SIL Open Font License 1.1</a>.</p>
+</footer>
+
+<script>
+  // Номер і дата останнього випуску з GitHub. Не вийшло — лишається «Остання версія».
+  fetch("https://api.github.com/repos/nazar-andriievych/Vidbiy/releases/latest")
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function (release) {
+      var apk = (release.assets || []).find(function (a) { return a.name === "vidbiy.apk"; });
+      var date = new Date(release.published_at).toLocaleDateString("uk-UA", { day: "numeric", month: "long", year: "numeric" });
+      var text = "Версія " + release.tag_name.replace(/^v/, "") + " від " + date;
+      if (apk) text += " · " + (apk.size / 1048576).toFixed(1).replace(".", ",") + " МБ";
+      document.getElementById("release-info").textContent = text;
+    })
+    .catch(function () {});
+</script>
+</body>
+</html>

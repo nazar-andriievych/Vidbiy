@@ -66,6 +66,7 @@ Android-будильник, який не дзвонить під час пов�
   `docs/debugging.md` — як розбирати журнал рішень; протоколи прогонів — `docs/test-runs/`.
 - `docs/release.md` — release-підпис (де ключ, відбиток) і як випускати версію.
 - `tools/` — допоміжні скрипти (генерація довідника регіонів).
+- `site/` — сторінка завантаження на GitHub Pages (`.github/workflows/pages.yml`); APK — у GitHub Releases.
 
 ## Команди (Windows)
 
