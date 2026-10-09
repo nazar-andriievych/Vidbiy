@@ -9,12 +9,13 @@
  * Бере довідник app/src/main/assets/regions.json, будує ланцюжок «громада → район → область»
  * (як SelectedRegion.coveringUids у застосунку), питає проксі `/v1/alerts`
  * і друкує рішення для «Будь-яка» та «Лише червона», а потім події сервера по цих регіонах
- * за останні години (`/log`, потрібен службовий пароль у $env:VIDBIY_ADMIN_TOKEN — server/README.md). Логіка рішення повторює RingDecision.kt: якщо вони розійдуться,
+ * за останні години (`/log`, потрібен службовий пароль — server/README.md, «Службовий пароль»). Логіка рішення повторює RingDecision.kt: якщо вони розійдуться,
  * вірити треба застосунку.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { homedir } from "node:os";
 
 const MAX_DATA_AGE_SECONDS = 180;
 const MAX_ALERT_AGE_MS = 24 * 60 * 60 * 1000;
@@ -68,8 +69,18 @@ if (matches.length > 1) {
 const region = matches[0];
 const titleOf = (uid) => entries.find((e) => e.uid === uid)?.title ?? `?${uid}`;
 
-// Службовий пароль для /log (server/README.md, «Службовий пароль»). Лише зі змінної середовища.
-const ADMIN_TOKEN = process.env.VIDBIY_ADMIN_TOKEN;
+// Службовий пароль для /log (server/README.md, «Службовий пароль»): зі змінної середовища,
+// а якщо її немає — з файлу ~/.vidbiy/admin-token поза репозиторієм. Нікуди не друкується.
+const ADMIN_TOKEN_FILE = join(homedir(), ".vidbiy", "admin-token");
+const ADMIN_TOKEN = process.env.VIDBIY_ADMIN_TOKEN || readAdminTokenFile();
+
+function readAdminTokenFile() {
+  try {
+    return readFileSync(ADMIN_TOKEN_FILE, "utf8").trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 async function get(path) {
   const started = Date.now();
@@ -137,6 +148,6 @@ try {
   console.log(unique.length ? `Події на сервері за ${HOURS} год (час київський):` : `Змін по цих регіонах за ${HOURS} год не було.`);
   for (const [at, text] of unique.slice(-30)) console.log(`  ${local(at)}  ${text}`);
 } catch (error) {
-  const hint = ADMIN_TOKEN ? "" : " — потрібен $env:VIDBIY_ADMIN_TOKEN, див. server/README.md";
+  const hint = ADMIN_TOKEN ? "" : ` — немає службового пароля (${ADMIN_TOKEN_FILE}), див. server/README.md`;
   console.warn(`(/log недоступний: ${error.message}${hint})`);
 }

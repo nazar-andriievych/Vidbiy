@@ -71,30 +71,47 @@ npm run typecheck
 
 Ці маршрути відповідають лише з заголовком `Authorization: Bearer <пароль>` (`src/admin.ts`); без нього —
 404, ніби їх немає. Локальний `wrangler dev` на `127.0.0.1` / `localhost` пускає без пароля.
+Застосунок цим паролем не користується — він лише для діагностики.
 
-Пароль живе у двох місцях: секретом у Cloudflare (прочитати його звідти неможливо) і в менеджері паролів.
-Задати чи змінити — з власного терміналу, щоб він не потрапив ні в історію команд, ні в чат:
+Пароль живе в трьох місцях, і жодне з них не в репозиторії:
+
+| Де | Навіщо |
+|---|---|
+| секрет `ADMIN_TOKEN` у Cloudflare | його перевіряє воркер; прочитати звідти неможливо |
+| `%USERPROFILE%\.vidbiy\admin-token` | звідси пароль беруть `tools/check-region.mjs` і приклади нижче |
+| менеджер паролів | запасна копія, якщо файл чи ПК загубляться |
+
+**Задати (або змінити)** — з власного вікна PowerShell, у теці `server`:
 
 ```powershell
-npx wrangler secret put ADMIN_TOKEN    # спитає пароль і відправить прямо в Cloudflare
+# 1. Новий випадковий пароль — одразу у файл (без виводу на екран) і в буфер обміну
+$dir = "$env:USERPROFILE\.vidbiy"; New-Item -ItemType Directory -Force $dir | Out-Null
+$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+$t = [Convert]::ToBase64String($b).TrimEnd('=').Replace('+','-').Replace('/','_')
+[IO.File]::WriteAllText("$dir\admin-token", $t); $t | Set-Clipboard; Remove-Variable t, b
+# 2. Вставити з буфера в менеджер паролів (сайт vidbiy-proxy.nazar-dev.workers.dev, користувач admin)
+# 3. Вставити з буфера, коли спитає:
+npx wrangler secret put ADMIN_TOKEN
+# 4. Очистити буфер
+Set-Clipboard -Value $null
 ```
 
-Користуватися — на одну сесію терміналу (так само читають `tools/check-region.mjs` і приклади нижче):
+**Користуватися:** `node tools/check-region.mjs 702` бере пароль з файлу сам. Для `curl`:
 
 ```powershell
-$s = Read-Host "admin token" -AsSecureString
-$env:VIDBIY_ADMIN_TOKEN = [System.Net.NetworkCredential]::new('', $s).Password
-# ... curl.exe / node tools/check-region.mjs ...
-Remove-Item Env:VIDBIY_ADMIN_TOKEN; Remove-Variable s
+$t = (Get-Content "$env:USERPROFILE\.vidbiy\admin-token" -Raw).Trim()
+curl.exe -A "vidbiy-dev/1" -H "Authorization: Bearer $t" https://vidbiy-proxy.nazar-dev.workers.dev/stats
 ```
 
-Загубили — задати новий тією ж командою. Застосунок цим паролем не користується, телефони нічого не помітять.
+На іншому ПК файлу немає — відновити його з менеджера паролів або задати `$env:VIDBIY_ADMIN_TOKEN`
+на одну сесію (змінна має перевагу над файлом). Загубили всюди — задати новий тими ж командами:
+телефони нічого не помітять.
 
 ### Крок 1. Сухий прогін: ключа немає, назовні нічого не йде
 
 ```powershell
 npx wrangler deploy --var FAKE_UPSTREAM:1
-curl.exe -A "vidbiy-dev/1" -H "Authorization: Bearer $env:VIDBIY_ADMIN_TOKEN" https://vidbiy-proxy.nazar-dev.workers.dev/stats
+curl.exe -A "vidbiy-dev/1" -H "Authorization: Bearer $t" https://vidbiy-proxy.nazar-dev.workers.dev/stats   # $t — див. «Службовий пароль»
 ```
 
 Запити до ukrainealarm лише рахуються (`upstream.recent`). Очікувано: 1 `alerts` на хвилину. Поки ввімкнений
@@ -128,7 +145,7 @@ Remove-Item Env:UA_TOKEN; Remove-Variable s
 
 ```bash
 npx wrangler tail                 # живі запити до воркера
-curl.exe -A "vidbiy-dev/1" -H "Authorization: Bearer $env:VIDBIY_ADMIN_TOKEN" https://vidbiy-proxy.nazar-dev.workers.dev/stats
+curl.exe -A "vidbiy-dev/1" -H "Authorization: Bearer $t" https://vidbiy-proxy.nazar-dev.workers.dev/stats   # $t — див. «Службовий пароль»
 ```
 
 У `wrangler tail` мають з'являтися `POST /webhook`. Якщо їх немає зовсім, а подія
