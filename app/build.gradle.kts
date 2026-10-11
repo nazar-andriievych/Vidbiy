@@ -6,7 +6,7 @@ plugins {
 
 // Версія застосунку — лише тут, у форматі MAJOR.MINOR.PATCH (див. docs/release.md).
 // versionCode обчислюється з неї, щоб не забути підняти: 1.2.3 → 1_002_003.
-val appVersion = "0.1.0"
+val appVersion = "0.1.1"
 
 /**
  * Android порівнює лише versionCode (ціле число, не більше 2 100 000 000), тож кожен розряд
