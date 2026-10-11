@@ -82,13 +82,29 @@ cd server; npm run typecheck
 
 ```
 cd server; npm run dev -- --ip 0.0.0.0          # MOCK=1 у server/.dev.vars
-# debug-збірка з PROXY_URL на адресу ПК (див. app/build.gradle.kts), Windows Firewall — порт 8787
+# Android 17 не пускає застосунки в локальну мережу, тож до ПК — тунелем по USB:
+adb reverse tcp:8787 tcp:8787                   # зникає, коли adb перепідключається — перевіряти `adb reverse --list`
+.\gradlew.bat installDebug "-Pvidbiy.proxyUrl=http://127.0.0.1:8787" "-Pvidbiy.ringMinutes=1"
 curl.exe "http://127.0.0.1:8787/mock?scenario=alert&uid=75"              # червона в районі
 curl.exe "http://127.0.0.1:8787/mock?scenario=alert&uid=75&level=yellow" # жовта
 curl.exe "http://127.0.0.1:8787/mock?scenario=alert&uid=75&started_hours_ago=25"
 curl.exe "http://127.0.0.1:8787/mock?scenario=clear"
 curl.exe "http://127.0.0.1:8787/mock?scenario=down"
 ```
+
+Будильники для сценаріїв ставить і запускає `DebugAlarmReceiver` (лише debug, лише з adb) —
+без прокручування коліс часу. Спрацювання йде через AlarmManager, як уночі:
+
+```
+$R = 'ua.vidbiy.app.debug/ua.vidbiy.app.alarm.DebugAlarmReceiver'
+adb shell am broadcast -n $R --es cmd add --ei in 300 [--es wait RED_ONLY] [--ei pause 2] [--ei deadline 5] [--es days 12345]
+adb shell am broadcast -n $R --es cmd fire --el id 3 --ei sec 1   # «настав час будильника» через 1 с
+adb shell am broadcast -n $R --es cmd list
+adb shell am broadcast -n $R --es cmd delete --el id 3
+```
+
+Чути звук не обов'язково: `adb shell dumpsys audio` показує гравця `usage=USAGE_ALARM state:started`.
+Під USB екран не гасне сам, якщо ввімкнено «Не вимикати екран» розробника, — `adb shell input keyevent 223`.
 
 **Умови за замовчуванням** (якщо в рядку не сказано інше): будильник на найближчу хвилину,
 регіон — громада 702 (Буча: покривають 702, 75, 14), «Будь-яка», пауза 0, без крайнього часу.

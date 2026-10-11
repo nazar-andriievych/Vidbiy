@@ -11,6 +11,12 @@
             android:name=".alarm.DebugFailureReceiver"
             android:exported="true"
             android:permission="android.permission.DUMP" />
+
+        <!-- Ставить і запускає будильники з adb (див. DebugAlarmReceiver), теж лише для adb shell. -->
+        <receiver
+            android:name=".alarm.DebugAlarmReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
     </application>
 
 </manifest>

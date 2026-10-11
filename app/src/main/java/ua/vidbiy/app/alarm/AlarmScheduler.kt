@@ -52,6 +52,15 @@ class AlarmScheduler(private val context: Context) {
         setAt(alarm.id, next, Kind.NORMAL)
     }
 
+    /**
+     * Звичайне спрацювання будильника на довільний момент — лише для перевірки на телефоні
+     * (DebugAlarmReceiver у debug-збірці). Іде тим самим шляхом через AlarmManager, що й уночі;
+     * наступне [schedule] повертає будильник на його власний час.
+     */
+    fun fireAt(alarmId: Long, atMillis: Long) {
+        setAtMillis(alarmId, atMillis, Kind.NORMAL)
+    }
+
     fun scheduleAll(alarms: List<Alarm>, now: LocalDateTime = LocalDateTime.now()) {
         alarms.forEach { schedule(it, now) }
     }

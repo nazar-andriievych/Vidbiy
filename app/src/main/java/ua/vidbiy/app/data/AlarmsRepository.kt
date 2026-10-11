@@ -3,9 +3,11 @@ package ua.vidbiy.app.data
 import android.content.Context
 import android.util.Log
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -30,6 +32,13 @@ class AlarmsRepository(private val context: Context) {
     /** Частину будильників викинуто як нечитабельні, а користувач цього ще не бачив (див. [unreadable]). */
     private val noticeKey = booleanPreferencesKey("alarms_unreadable_notice")
 
+    /**
+     * Найбільший id, який будь-коли видавався. Id видаленого будильника не повторюється:
+     * таймери в AlarmManager (відкладення, страховки) шукають будильник за id, і запізнілий
+     * таймер старого будильника не має дістатися нового з тим самим номером.
+     */
+    private val lastIdKey = longPreferencesKey("last_alarm_id")
+
     val alarms: Flow<List<Alarm>> = context.alarmsDataStore.data.map { prefs ->
         json.decodeListLenient<Alarm>(prefs[key]).items.sortedWith(compareBy({ it.hour }, { it.minute }, { it.id }))
     }
@@ -47,9 +56,10 @@ class AlarmsRepository(private val context: Context) {
     /** Додає новий будильник (id = 0) або оновлює наявний. Повертає збережений — уже з id. */
     suspend fun save(alarm: Alarm): Alarm {
         var saved = alarm
-        edit(acknowledgesLoss = alarm.id == Alarm.NEW_ID) { current ->
+        editWithPrefs(acknowledgesLoss = alarm.id == Alarm.NEW_ID) { prefs, current ->
             if (alarm.id == Alarm.NEW_ID) {
-                val nextId = (current.maxOfOrNull { it.id } ?: 0L) + 1
+                val nextId = maxOf(prefs[lastIdKey] ?: 0L, current.maxOfOrNull { it.id } ?: 0L) + 1
+                prefs[lastIdKey] = nextId
                 saved = alarm.copy(id = nextId)
                 current + saved
             } else {
@@ -107,7 +117,14 @@ class AlarmsRepository(private val context: Context) {
      * для банера. Застосунок не застрягає з незмінним списком. [acknowledgesLoss] — користувач
      * сам додав чи видалив будильник: банер про втрату більше не потрібен.
      */
-    private suspend fun edit(acknowledgesLoss: Boolean = false, block: (List<Alarm>) -> List<Alarm>) {
+    private suspend fun edit(acknowledgesLoss: Boolean = false, block: (List<Alarm>) -> List<Alarm>) =
+        editWithPrefs(acknowledgesLoss) { _, current -> block(current) }
+
+    /** Як [edit], але [block] може ще й записати в те саме сховище (лічильник id) однією транзакцією. */
+    private suspend fun editWithPrefs(
+        acknowledgesLoss: Boolean = false,
+        block: (MutablePreferences, List<Alarm>) -> List<Alarm>,
+    ) {
         context.alarmsDataStore.edit { prefs ->
             val read = json.decodeListLenient<Alarm>(prefs[key])
             if (read.dropped > 0) {
@@ -115,7 +132,7 @@ class AlarmsRepository(private val context: Context) {
                 prefs[noticeKey] = true
             }
             if (acknowledgesLoss) prefs[noticeKey] = false
-            prefs[key] = json.encodeToString(block(read.items))
+            prefs[key] = json.encodeToString(block(prefs, read.items))
         }
     }
 }
