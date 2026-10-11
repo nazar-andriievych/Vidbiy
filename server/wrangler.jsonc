@@ -18,7 +18,9 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AlertsHub"] }],
 
   // Останній випуск застосунку — іде в кожну відповідь /v1/alerts (src/update.ts).
-  // Після випуску нової версії: оновити й `npm run deploy` (див. docs/release.md).
+  // LATEST_* піднімаються в коміті випуску разом з appVersion; деплоїть їх .github/workflows/release.yml
+  // лише після публікації APK (див. docs/release.md). Вручну `npm run deploy` між цими моментами
+  // оголосив би версію, якої ще не можна завантажити.
   // Номер — versionCode з app/build.gradle.kts: MAJOR*1000000 + MINOR*1000 + PATCH (0.1.0 → 1000).
   // MIN_VERSION_CODE підіймати лише заради небезпечного бага: нижчі версії перестануть
   // чекати тривог і дзвонитимуть як звичайний будильник, доки людина не оновиться.

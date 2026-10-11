@@ -1,0 +1,165 @@
+# Release on a version tag:  git tag -a v0.1.1 -m "What changed, in plain words"  →  git push origin v0.1.1
+# The tag message becomes the release notes. Steps (docs/release.md):
+#   1. checks   — tests; tag == appVersion == LATEST_VERSION_* in server/wrangler.jsonc; tag is on main
+#   2. build    — unsigned release APK (Gradle never sees the key)
+#   3. sign     — ⏸ approval #1 (environment release-sign): apksigner signs, the fingerprint is checked
+#   4. draft    — draft GitHub Release with vidbiy.apk; nobody sees it yet — install it on your phone and check
+#   5. publish  — ⏸ approval #2 (environment release-publish): release goes public, then the worker
+#                 announces the version to the apps (APK first, worker second)
+# Secrets live only in the two environments, so each is released to a job only after its approval.
+# Third-party actions are pinned to a commit SHA; the comment names the version.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.ref_name }}
+  # SHA-256 of the release certificate (docs/release.md), lowercase without colons as apksigner prints it.
+  CERT_SHA256: 7558ad6374c2521ff3ef34da4b493350d89ccbea63e401fcde4dcfe26b227eea
+
+jobs:
+  tests:
+    uses: ./.github/workflows/ci.yml
+
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.check.outputs.name }}
+      code: ${{ steps.check.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: check
+        name: Tag matches appVersion and the worker's LATEST_VERSION_*
+        run: |
+          name=$(sed -n 's/^val appVersion = "\(.*\)"$/\1/p' app/build.gradle.kts)
+          [[ "$name" =~ ^([0-9]{1,4})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || { echo "::error::appVersion '$name' is not MAJOR.MINOR.PATCH"; exit 1; }
+          code=$((10#${BASH_REMATCH[1]} * 1000000 + 10#${BASH_REMATCH[2]} * 1000 + 10#${BASH_REMATCH[3]}))
+          worker_name=$(grep -oP '"LATEST_VERSION_NAME":\s*"\K[^"]*' server/wrangler.jsonc)
+          worker_code=$(grep -oP '"LATEST_VERSION_CODE":\s*"\K[^"]*' server/wrangler.jsonc)
+          fail=0
+          [ "$TAG" = "v$name" ] || { echo "::error::tag $TAG != appVersion $name (app/build.gradle.kts)"; fail=1; }
+          [ "$worker_name" = "$name" ] || { echo "::error::LATEST_VERSION_NAME '$worker_name' != $name (server/wrangler.jsonc)"; fail=1; }
+          [ "$worker_code" = "$code" ] || { echo "::error::LATEST_VERSION_CODE '$worker_code' != $code (server/wrangler.jsonc)"; fail=1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$TAG is not on main"; fail=1; }
+          [ $fail = 0 ] || exit 1
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: [tests, version]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+      # No signing properties on the runner → Gradle builds app-release-unsigned.apk.
+      - run: ./gradlew --no-daemon assembleRelease
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  sign:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release-sign
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: unsigned
+      - name: Sign with apksigner and check the certificate
+        env:
+          KEYSTORE_B64: ${{ secrets.VIDBIY_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.VIDBIY_KEYSTORE_PASSWORD }}
+        run: |
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          key="$RUNNER_TEMP/vidbiy-release.p12"
+          trap 'rm -f "$key"' EXIT
+          (umask 077; printf '%s' "$KEYSTORE_B64" | base64 -d > "$key")
+          "$bt/zipalign" -f -p 4 app-release-unsigned.apk aligned.apk
+          "$bt/apksigner" sign --ks "$key" --ks-type PKCS12 --ks-key-alias vidbiy \
+            --ks-pass env:KEYSTORE_PASSWORD --key-pass env:KEYSTORE_PASSWORD \
+            --out vidbiy.apk aligned.apk
+          certs=$("$bt/apksigner" verify --print-certs vidbiy.apk)
+          echo "$certs"
+          [ "$(grep -c 'certificate SHA-256 digest' <<< "$certs")" = 1 ] || { echo "::error::expected exactly one signer"; exit 1; }
+          grep -q "certificate SHA-256 digest: $CERT_SHA256" <<< "$certs" || { echo "::error::wrong signing certificate"; exit 1; }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signed
+          path: vidbiy.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  draft:
+    needs: [version, sign]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: signed
+      - name: Draft release with vidbiy.apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAME: ${{ needs.version.outputs.name }}
+        run: |
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          git tag -l --format='%(contents)' "$TAG" > notes.md
+          gh release create "$TAG" vidbiy.apk --draft --verify-tag --title "$NAME" --notes-file notes.md
+
+  publish:
+    needs: [version, draft]
+    runs-on: ubuntu-latest
+    environment:
+      name: release-publish
+      url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$TAG" --draft=false --latest
+      # Only after the APK is public: the banner must not point at a page without the new version.
+      - name: Deploy the worker with the new LATEST_VERSION_*
+        working-directory: server
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npm ci --ignore-scripts
+          npx wrangler deploy
+      - name: Check that the worker announces the version
+        env:
+          CODE: ${{ needs.version.outputs.code }}
+        run: |
+          for i in 1 2 3 4 5 6; do
+            got=$(curl -fsS -A vidbiy-check https://vidbiy-proxy.nazar-dev.workers.dev/v1/alerts | jq -r '.update.latest_version_code')
+            [ "$got" = "$CODE" ] && { echo "worker announces $CODE"; exit 0; }
+            echo "worker says $got, waiting…"; sleep 10
+          done
+          echo "::error::worker still announces $got instead of $CODE"; exit 1
