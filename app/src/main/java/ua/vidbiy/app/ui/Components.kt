@@ -24,7 +24,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -49,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import ua.vidbiy.app.R
@@ -78,6 +86,33 @@ fun TabHeader(
                 Icon(painterResource(R.drawable.ic_add), contentDescription = addLabel)
             }
         }
+    }
+}
+
+/**
+ * Вкладка-список із закріпленим [TabHeader]: заголовок з «+» не прокручується разом зі списком,
+ * тож додати будильник чи місце можна, не гортаючи вгору (design-spec 2). Роздільника під
+ * заголовком немає: картки, обрізані його краєм, самі показують, що вміст іде вгору.
+ */
+@Composable
+fun PinnedHeaderList(
+    title: String,
+    addLabel: String,
+    onAdd: () -> Unit,
+    contentPadding: PaddingValues,
+    listState: LazyListState = rememberLazyListState(),
+    content: LazyListScope.() -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        TabHeader(title = title, addLabel = addLabel, onAdd = onAdd)
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            state = listState,
+            // Відступ між заголовком і першим елементом — той самий, що між елементами списку.
+            contentPadding = PaddingValues(top = Dimens.ListGap, bottom = contentPadding.calculateBottomPadding()),
+            verticalArrangement = Arrangement.spacedBy(Dimens.ListGap),
+            content = content,
+        )
     }
 }
 
@@ -266,7 +301,12 @@ fun PlaceNameDialog(
                 label = { Text(stringResource(R.string.place_name_label)) },
                 supportingText = { Text(stringResource(R.string.place_name_hint)) },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    imeAction = ImeAction.Done,
+                ),
+                // Enter — те саме, що «Зберегти»; порожню назву не зберігає, як і кнопка.
+                keyboardActions = KeyboardActions(onDone = { if (valid) onSave(name.trim()) }),
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
         },

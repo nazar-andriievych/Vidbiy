@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -46,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -107,6 +109,13 @@ fun RegionPickerScreen(
             oblastUid = oblast
             raionUid = raion
         }
+    }
+
+    // Регіон обрано — клавіатура пошуку більше не потрібна, а під нею ховається кнопка внизу.
+    val focusManager = LocalFocusManager.current
+    fun pick(pick: RegionPick) {
+        selected = pick
+        focusManager.clearFocus()
     }
 
     fun goBack() {
@@ -187,7 +196,7 @@ fun RegionPickerScreen(
                 query.isNotBlank() -> searchResults(
                     results = loaded.search(query),
                     selected = selected,
-                    onSelect = { selected = RegionPick(it) },
+                    onSelect = { pick(RegionPick(it)) },
                 )
 
                 else -> {
@@ -204,7 +213,7 @@ fun RegionPickerScreen(
                                 },
                                 selected = selected?.placeId == place.id,
                                 bold = true,
-                                onClick = { selected = RegionPick(place.region, place.id) },
+                                onClick = { pick(RegionPick(place.region, place.id)) },
                             )
                         }
                     }
@@ -232,7 +241,7 @@ fun RegionPickerScreen(
                                 RadioRow(
                                     title = RegionNames.inOblastList(item.title),
                                     selected = directPick == item.uid,
-                                    onClick = { selected = RegionPick(item.toSelection()) },
+                                    onClick = { pick(RegionPick(item.toSelection())) },
                                 )
                             } else {
                                 NavigateRow(
@@ -248,7 +257,7 @@ fun RegionPickerScreen(
                                     title = stringResource(R.string.region_whole_oblast, oblast.title),
                                     selected = directPick == oblast.uid,
                                     bold = true,
-                                    onClick = { selected = RegionPick(oblast.toSelection()) },
+                                    onClick = { pick(RegionPick(oblast.toSelection())) },
                                 )
                             }
                             items(oblast.raions, key = { it.uid }) { item ->
@@ -262,14 +271,14 @@ fun RegionPickerScreen(
                                     title = stringResource(R.string.region_whole_raion, raion.title),
                                     selected = directPick == raion.uid,
                                     bold = true,
-                                    onClick = { selected = RegionPick(raion.toSelection(oblast)) },
+                                    onClick = { pick(RegionPick(raion.toSelection(oblast))) },
                                 )
                             }
                             items(raion.hromadas, key = { it.uid }) { item ->
                                 RadioRow(
                                     title = RegionNames.short(item.title),
                                     selected = directPick == item.uid,
-                                    onClick = { selected = RegionPick(item.toSelection(oblast, raion)) },
+                                    onClick = { pick(RegionPick(item.toSelection(oblast, raion))) },
                                 )
                             }
                         }
@@ -347,6 +356,7 @@ private fun CurrentRegion(label: String) {
 @Composable
 private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
     val placeholder = stringResource(R.string.region_search)
+    val focusManager = LocalFocusManager.current
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -380,6 +390,8 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    // Результати вже на екрані — «Пошук» лише ховає клавіатуру, щоб їх було видно повністю.
+                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }

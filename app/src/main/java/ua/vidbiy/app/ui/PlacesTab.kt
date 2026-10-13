@@ -6,11 +6,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
@@ -64,21 +62,15 @@ fun PlacesTab(
     var deletingId by rememberSaveable { mutableStateOf<Long?>(null) }
     val primaryId = places.primary?.id
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+    PinnedHeaderList(
+        title = stringResource(R.string.places_title),
+        addLabel = stringResource(R.string.places_add),
+        onAdd = onAdd,
         contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(Dimens.ListGap),
     ) {
-        item {
-            TabHeader(
-                title = stringResource(R.string.places_title),
-                addLabel = stringResource(R.string.places_add),
-                onAdd = onAdd,
-            )
-        }
         if (places.places.isEmpty()) {
             item { EmptyPlaces() }
-            return@LazyColumn
+            return@PinnedHeaderList
         }
         item {
             FieldHint(

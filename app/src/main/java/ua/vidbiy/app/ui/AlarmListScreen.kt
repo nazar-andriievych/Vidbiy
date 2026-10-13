@@ -7,11 +7,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
@@ -55,8 +53,8 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 
 /**
- * Вкладка «Будильники» (design-spec 3.1): заголовок → попередження → рядок разового режиму →
- * картки будильників.
+ * Вкладка «Будильники» (design-spec 3.1): закріплений заголовок, під ним список — попередження →
+ * рядок разового режиму → картки будильників.
  */
 @Composable
 fun AlarmsTab(
@@ -85,19 +83,13 @@ fun AlarmsTab(
     onDismissUpdate: (versionCode: Int) -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        state = listState,
+    PinnedHeaderList(
+        title = stringResource(R.string.alarms_title),
+        addLabel = stringResource(R.string.action_new_alarm),
+        onAdd = onAdd,
         contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(Dimens.ListGap),
+        listState = listState,
     ) {
-        item {
-            TabHeader(
-                title = stringResource(R.string.alarms_title),
-                addLabel = stringResource(R.string.action_new_alarm),
-                onAdd = onAdd,
-            )
-        }
         val notice = updateNotice(appUpdate, BuildConfig.VERSION_CODE, dismissedUpdateCode)
         if (appUpdate != null && notice != UpdateNotice.NONE) {
             item {
